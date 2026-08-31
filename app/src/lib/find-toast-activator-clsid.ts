@@ -1,6 +1,7 @@
 import * as path from 'path'
 import * as os from 'os'
 import { shell } from 'electron'
+import { getCompanyName } from './product-identity'
 
 /**
  * Checks all Windows shortcuts created by Squirrel looking for the toast
@@ -16,10 +17,10 @@ export function findToastActivatorClsid() {
       'Windows',
       'Start Menu',
       'Programs',
-      'GitHub, Inc',
-      'GitHub Desktop.lnk'
+      getCompanyName(),
+      `${__APP_NAME__}.lnk`
     ),
-    path.join(os.homedir(), 'Desktop', 'GitHub Desktop.lnk'),
+    path.join(os.homedir(), 'Desktop', `${__APP_NAME__}.lnk`),
   ]
 
   for (const shortcutPath of shortcutPaths) {

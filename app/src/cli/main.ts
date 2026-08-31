@@ -1,6 +1,7 @@
 import { join, resolve } from 'path'
 import parse from 'minimist'
 import { execFile, spawn } from 'child_process'
+import { getWindowsExecutableName } from '../lib/product-identity'
 
 const run = (...args: Array<string>) => {
   function cb(e: unknown | null, stderr?: string) {
@@ -18,7 +19,7 @@ const run = (...args: Array<string>) => {
   if (process.platform === 'darwin') {
     execFile('open', ['-n', join(__dirname, '../../..'), '--args', ...args], cb)
   } else if (process.platform === 'win32') {
-    const exeName = `GitHubDesktop${__DEV__ ? '-dev' : ''}.exe`
+    const exeName = `${getWindowsExecutableName()}${__DEV__ ? '-dev' : ''}.exe`
     spawn(join(__dirname, `../../${exeName}`), args, {
       detached: true,
       stdio: 'ignore',

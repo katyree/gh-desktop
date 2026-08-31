@@ -151,10 +151,10 @@ jobs:
         with:
           name: ${{matrix.friendlyName}}-${{matrix.arch}}
           path: |
-            dist/GitHub Desktop-${{matrix.arch}}.zip
-            dist/GitHubDesktop-*.nupkg
-            dist/GitHubDesktopSetup-${{matrix.arch}}.exe
-            dist/GitHubDesktopSetup-${{matrix.arch}}.msi
+            dist/WinGit-${{matrix.arch}}.zip
+            dist/WinGit-*.nupkg
+            dist/WinGitSetup-${{matrix.arch}}.exe
+            dist/WinGitSetup-${{matrix.arch}}.msi
             dist/bundle-size.json
             dist/bundle-hash.json
           if-no-files-found: error
@@ -222,9 +222,9 @@ jobs:
       - name: Install app on macOS
         if: runner.os == 'macOS'
         run: |
-          rm -rf "/Applications/GitHub Desktop.app"
-          ditto "dist/GitHub Desktop-darwin-arm64/GitHub Desktop.app" "/Applications/GitHub Desktop.app"
-          echo "DESKTOP_E2E_APP_PATH=/Applications/GitHub Desktop.app/Contents/MacOS/GitHub Desktop" >> "$GITHUB_ENV"
+          rm -rf "/Applications/WinGit.app"
+          ditto "dist/WinGit-darwin-arm64/WinGit.app" "/Applications/WinGit.app"
+          echo "DESKTOP_E2E_APP_PATH=/Applications/WinGit.app/Contents/MacOS/WinGit" >> "$GITHUB_ENV"
       - name: Install app on Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -232,7 +232,7 @@ jobs:
           function Write-SquirrelLogs {
             $logPaths = @(
               "$env:LOCALAPPDATA\SquirrelSetup.log",
-              "$env:LOCALAPPDATA\GitHubDesktop\SquirrelSetup.log"
+              "$env:LOCALAPPDATA\WinGit\SquirrelSetup.log"
             )
 
             foreach ($logPath in $logPaths) {
@@ -243,7 +243,7 @@ jobs:
             }
           }
 
-          $setupExe = "dist/GitHubDesktopSetup-${{ matrix.arch }}.exe"
+          $setupExe = "dist/WinGitSetup-${{ matrix.arch }}.exe"
           $installer = Start-Process -FilePath $setupExe -ArgumentList "/S" -PassThru
 
           try {
@@ -253,11 +253,11 @@ jobs:
             throw "Windows installer timed out after 300 seconds"
           }
 
-          Get-Process GitHubDesktop -ErrorAction SilentlyContinue | Stop-Process -Force
+          Get-Process WinGit -ErrorAction SilentlyContinue | Stop-Process -Force
 
           $installedExe = $null
           for ($attempt = 0; $attempt -lt 30 -and -not $installedExe; $attempt++) {
-            $installedExe = Get-ChildItem "$env:LOCALAPPDATA\GitHubDesktop\app-*\GitHubDesktop.exe" -ErrorAction SilentlyContinue |
+            $installedExe = Get-ChildItem "$env:LOCALAPPDATA\WinGit\app-*\WinGit.exe" -ErrorAction SilentlyContinue |
               Sort-Object FullName -Descending |
               Select-Object -First 1 -ExpandProperty FullName
 

@@ -51,6 +51,7 @@ import {
 import { initializeDesktopNotifications } from './notifications'
 import parseCommandLineArgs from 'minimist'
 import { CLIAction } from '../lib/cli-action'
+import { getWindowsAppUserModelID } from '../lib/product-identity'
 
 app.setAppLogsPath()
 enableSourceMaps()
@@ -115,10 +116,10 @@ if (__DARWIN__) {
   possibleProtocols.add('github-windows')
 }
 
-// On Windows, in order to get notifications properly working for dev builds,
-// we'll want to set the right App User Model ID from production builds.
-if (__WIN32__ && __DEV__) {
-  app.setAppUserModelId('com.squirrel.GitHubDesktop.GitHubDesktop')
+// Squirrel assigns the production ID to installed shortcuts. Development uses
+// a separate ID so that Windows does not group it with the installed app.
+if (__WIN32__) {
+  app.setAppUserModelId(getWindowsAppUserModelID())
 }
 
 app.on('window-all-closed', () => {

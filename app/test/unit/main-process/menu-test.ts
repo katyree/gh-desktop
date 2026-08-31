@@ -205,5 +205,21 @@ describe('main-process menu', () => {
         )
       }
     })
+
+    it('uses the WinGit name in the About menu item', () => {
+      const template = buildDefaultMenuTemplate(baseParams)
+      const aboutLabel = __DARWIN__ ? 'About WinGit' : '&About WinGit'
+
+      assert.ok(
+        template.some(item =>
+          Array.isArray(item.submenu)
+            ? item.submenu.some(
+                submenuItem =>
+                  submenuItem.id === 'about' && submenuItem.label === aboutLabel
+              )
+            : false
+        )
+      )
+    })
   })
 })

@@ -1,7 +1,11 @@
 import * as Path from 'path'
 import * as Fs from 'fs'
 
-import { getProductName, getVersion } from '../app/package-info'
+import {
+  getProductName,
+  getVersion,
+  getWindowsExecutableName,
+} from '../app/package-info'
 import { join } from 'path'
 
 const productName = getProductName()
@@ -95,7 +99,7 @@ export function getWindowsDeltaNugetPackagePath() {
 }
 
 export function getWindowsIdentifierName() {
-  return 'GitHubDesktop'
+  return getWindowsExecutableName()
 }
 
 export function getBundleSizes() {

@@ -201,7 +201,7 @@ function packageApp() {
       new RegExp('/\\.git($|/)'),
       new RegExp('/node_modules/\\.bin($|/)'),
     ],
-    appCopyright: `Copyright © ${new Date().getFullYear()} GitHub, Inc.`,
+    appCopyright: `Copyright © ${new Date().getFullYear()} ${getCompanyName()}`,
 
     // macOS
     appBundleId: getBundleID(),

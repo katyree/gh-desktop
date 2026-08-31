@@ -3,6 +3,7 @@ import HtmlWebpackPlugin from 'html-webpack-plugin'
 import webpack from 'webpack'
 import merge from 'webpack-merge'
 import { getReplacements } from './app-info'
+import { productName } from './package.json'
 
 export const externals = ['7zip']
 
@@ -82,6 +83,7 @@ export const renderer = merge({}, commonConfig, {
   plugins: [
     new HtmlWebpackPlugin({
       template: path.join(__dirname, 'static', 'index.html'),
+      title: productName,
       chunks: ['renderer'],
     }),
     new webpack.NormalModuleReplacementPlugin(/^vscode-jsonrpc$/, resource => {
@@ -110,7 +112,7 @@ export const crash = merge({}, commonConfig, {
   target: 'electron-renderer',
   plugins: [
     new HtmlWebpackPlugin({
-      title: 'GitHub Desktop',
+      title: productName,
       filename: 'crash.html',
       chunks: ['crash'],
     }),
