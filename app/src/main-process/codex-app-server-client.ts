@@ -144,7 +144,7 @@ function sanitizeAccountResponse(
   switch (account.type) {
     case 'chatgpt':
       return {
-        status: response.requiresOpenaiAuth ? 'expired' : 'signed-in',
+        status: 'signed-in',
         type: 'chatgpt',
         email: typeof account.email === 'string' ? account.email : null,
         planType:
@@ -153,7 +153,7 @@ function sanitizeAccountResponse(
       }
     case 'apiKey':
       return {
-        status: response.requiresOpenaiAuth ? 'expired' : 'signed-in',
+        status: 'signed-in',
         type: 'api-key',
         email: null,
         planType: null,
@@ -161,7 +161,7 @@ function sanitizeAccountResponse(
       }
     default:
       return {
-        status: response.requiresOpenaiAuth ? 'expired' : 'signed-in',
+        status: 'signed-in',
         type: 'other',
         email: null,
         planType: null,
@@ -255,8 +255,7 @@ export class CodexAppServerClient {
           ? {
               type: 'chatgpt',
               codexStreamlinedLogin: true,
-              useHostedLoginSuccessPage: true,
-              appBrand: 'codex',
+              useHostedLoginSuccessPage: false,
             }
           : { type: 'chatgptDeviceCode' }
       )
@@ -337,7 +336,6 @@ export class CodexAppServerClient {
           computer_use: false,
           image_generation: false,
         },
-        tools: { web_search: null },
         mcp_servers: {},
       },
     }
@@ -526,7 +524,7 @@ export class CodexAppServerClient {
           title: 'WinGit',
           version: this.clientVersion,
         },
-        capabilities: { experimentalApi: false },
+        capabilities: { experimentalApi: true },
       })
       transport.notify('initialized')
       const connection = { process, transport }

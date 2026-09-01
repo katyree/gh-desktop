@@ -89,7 +89,7 @@ async function waitFor(condition: () => boolean) {
 }
 
 describe('CodexAppServerClient', () => {
-  it('initializes once and returns credential-free account state', async () => {
+  it('treats a returned ChatGPT account as signed in and omits credentials', async () => {
     const lifecycle = new FakeCodexLifecycle()
     const messages = emulateServer(lifecycle.child, message => {
       switch (message.method) {
@@ -125,7 +125,7 @@ describe('CodexAppServerClient', () => {
     const second = await client.readAccount(true)
 
     assert.deepStrictEqual(first, {
-      status: 'expired',
+      status: 'signed-in',
       type: 'chatgpt',
       email: 'test.user@example.invalid',
       planType: 'plus',
@@ -209,6 +209,16 @@ describe('CodexAppServerClient', () => {
       loginId: 'device-login',
       authorizationUrl: 'https://auth.openai.com/codex/device',
       userCode: 'TEST-CODE',
+    })
+    const browserLogin = messages.find(
+      message =>
+        message.method === 'account/login/start' &&
+        (message.params as { type?: string }).type === 'chatgpt'
+    )
+    assert.deepStrictEqual(browserLogin?.params, {
+      type: 'chatgpt',
+      codexStreamlinedLogin: true,
+      useHostedLoginSuccessPage: false,
     })
     await client.cancelAccountLogin('device-login')
 
@@ -372,7 +382,6 @@ describe('CodexAppServerClient', () => {
           computer_use: false,
           image_generation: false,
         },
-        tools: { web_search: null },
         mcp_servers: {},
       },
       model: 'test-model',
@@ -398,6 +407,62 @@ describe('CodexAppServerClient', () => {
     assert.deepStrictEqual(await client.waitForGeneration(handle), {
       outcome: 'cancelled',
     })
+    await client.shutdown()
+  })
+
+  it('uses protocol-compatible isolated thread parameters', async () => {
+    const lifecycle = new FakeCodexLifecycle()
+    let experimentalApiEnabled = false
+    emulateServer(lifecycle.child, message => {
+      switch (message.method) {
+        case 'initialize': {
+          const params = message.params as
+            | { capabilities?: { experimentalApi?: boolean } }
+            | undefined
+          experimentalApiEnabled =
+            params?.capabilities?.experimentalApi === true
+          return {}
+        }
+        case 'thread/start': {
+          if (!experimentalApiEnabled) {
+            return {
+              rpcError: {
+                code: -32600,
+                message:
+                  'thread/start.runtimeWorkspaceRoots requires experimentalApi capability',
+              },
+            }
+          }
+          const params = message.params as
+            | { config?: { tools?: { web_search?: unknown } } }
+            | undefined
+          return params?.config?.tools?.web_search === null
+            ? {
+                rpcError: {
+                  code: -32600,
+                  message: 'invalid tools.web_search configuration',
+                },
+              }
+            : { thread: { id: 'thread-capability' } }
+        }
+        case 'turn/start':
+          return { turn: { id: 'turn-capability' } }
+        default:
+          throw new Error(`Unexpected method: ${String(message.method)}`)
+      }
+    })
+    const client = new CodexAppServerClient(
+      lifecycle,
+      'test-version',
+      TestGenerationWorkingDirectory
+    )
+
+    await client.startGeneration({
+      instructions: 'Return structured output.',
+      prompt: 'Describe a synthetic change.',
+    })
+
+    assert.equal(experimentalApiEnabled, true)
     await client.shutdown()
   })
 

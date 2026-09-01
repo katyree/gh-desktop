@@ -77,7 +77,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
             email: 'test.user@example.invalid',
             planType: 'test',
           },
-          requiresOpenaiAuth: false,
+          requiresOpenaiAuth: true,
         },
       })
       break
