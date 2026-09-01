@@ -10,8 +10,11 @@ import {
   getWindowsIdentifierName,
   getWindowsStandaloneName,
   getWindowsInstallerName,
+  getWindowsFullNugetPackageName,
   shouldMakeDelta,
   getUpdatesURL,
+  getAutomaticUpdatesEnabled,
+  getChannel,
   isPublishable,
   getBundleSizes,
   getDistRoot,
@@ -25,6 +28,8 @@ import { computeBundleHashSync } from '../app/src/lib/compute-bundle-hash'
 import { rename } from 'fs/promises'
 import { join } from 'path'
 import { assertNonNullable } from '../app/src/lib/fatal-error'
+import { WinGitPackageIconURL } from '../app/src/lib/product-links'
+import { getWinGitSigningMetadata } from './release-config'
 
 const distPath = getDistPath()
 const productName = getProductName()
@@ -59,6 +64,32 @@ writeFileSync(
   })
 )
 
+console.log('Writing WinGit release metadata…')
+writeFileSync(
+  path.join(getDistRoot(), 'wingit-release.json'),
+  JSON.stringify(
+    {
+      schemaVersion: 1,
+      product: productName,
+      version: getVersion(),
+      channel: getChannel(),
+      architecture: getDistArchitecture(),
+      updateEndpointConfigured: getUpdatesURL() !== undefined,
+      automaticUpdatesEnabled: getAutomaticUpdatesEnabled(),
+      artifacts:
+        process.platform === 'win32'
+          ? {
+              setupExe: getWindowsStandaloneName(),
+              setupMsi: getWindowsInstallerName(),
+              fullPackage: getWindowsFullNugetPackageName(true),
+            }
+          : { applicationZip: path.basename(getOSXZipPath()) },
+    },
+    null,
+    2
+  )
+)
+
 function packageOSX() {
   const dest = getOSXZipPath()
   rmSync(dest, { recursive: true, force: true })
@@ -71,6 +102,8 @@ function packageOSX() {
 
 function packageWindows() {
   const iconSource = join(getIconDirectory(), 'icon-logo.ico')
+  const updatesURL = shouldMakeDelta() ? getUpdatesURL() : undefined
+  const makeDelta = updatesURL !== undefined
 
   if (!existsSync(iconSource)) {
     console.error(`expected setup icon not found at location: ${iconSource}`)
@@ -89,27 +122,24 @@ function packageWindows() {
     process.exit(1)
   }
 
-  const iconUrl = 'https://desktop.githubusercontent.com/app-icon.ico'
-
   const nugetPkgName = getWindowsIdentifierName()
   const options: electronInstaller.Options = {
     name: nugetPkgName,
     appDirectory: distPath,
     outputDirectory: outputDir,
     authors: getCompanyName(),
-    iconUrl: iconUrl,
+    iconUrl: WinGitPackageIconURL,
     setupIcon: iconSource,
     loadingGif: splashScreenPath,
     exe: `${nugetPkgName}.exe`,
     title: productName,
     setupExe: getWindowsStandaloneName(),
     setupMsi: getWindowsInstallerName(),
+    noDelta: !makeDelta,
   }
 
-  if (shouldMakeDelta()) {
-    const url = new URL(getUpdatesURL())
-    // Make sure Squirrel.Windows isn't affected by partially or completely
-    // disabled releases.
+  if (updatesURL !== undefined) {
+    const url = new URL(updatesURL)
     url.searchParams.set('bypassStaggeredRelease', '1')
     options.remoteReleases = url.toString()
   }
@@ -124,9 +154,7 @@ function packageWindows() {
 
     const metadataPath = join(acsPath, 'metadata.json')
     const acsMetadata = {
-      Endpoint: 'https://wus3.codesigning.azure.net/',
-      CodeSigningAccountName: 'GitHubInc',
-      CertificateProfileName: 'GitHubInc',
+      ...getWinGitSigningMetadata(),
       CorrelationId: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
     }
     writeFileSync(metadataPath, JSON.stringify(acsMetadata))
@@ -146,7 +174,7 @@ function packageWindows() {
       const arch = getDistArchitecture()
       const prefix = `${getWindowsIdentifierName()}-${getVersion()}`
 
-      for (const kind of shouldMakeDelta() ? ['full', 'delta'] : ['full']) {
+      for (const kind of makeDelta ? ['full', 'delta'] : ['full']) {
         const from = join(outputDir, `${prefix}-${kind}.nupkg`)
         const to = join(outputDir, `${prefix}-${arch}-${kind}.nupkg`)
 

@@ -1,4 +1,4 @@
-import { WebContents } from 'electron'
+import { WebContents, WebFrameMain } from 'electron'
 
 // WebContents id of trusted senders of IPC messages. This is used to verify
 // that only IPC messages sent from trusted senders are handled, as recommended
@@ -14,3 +14,12 @@ export const addTrustedIPCSender = (wc: WebContents) => {
 
 /** Returns true if the given WebContents is a trusted sender of IPC messages. */
 export const isTrustedIPCSender = (wc: WebContents) => trustedSenders.has(wc.id)
+
+/**
+ * Accept IPC only from the trusted window's main frame. Sandboxed markdown and
+ * any unexpected subframe must not inherit the main renderer's privileges.
+ */
+export const isTrustedIPCFrameSender = (
+  wc: WebContents,
+  frame: WebFrameMain | null
+) => isTrustedIPCSender(wc) && frame === wc.mainFrame

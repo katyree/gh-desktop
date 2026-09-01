@@ -3,7 +3,6 @@ import { writeFile } from 'fs/promises'
 import {
   AccountsStore,
   CloningRepositoriesStore,
-  CopilotStore,
   GitHubUserStore,
   GitStore,
   IssuesStore,
@@ -13,38 +12,21 @@ import {
   SignInStore,
   UpstreamRemoteName,
 } from '.'
-import type {
-  CopilotFeature,
-  CopilotModelSelections,
-  CopilotModelSelectionsByAccount,
-  CopilotModelsByAccount,
-  CopilotQuotaSnapshots,
-  CopilotQuotaSnapshotsByAccount,
-} from './copilot-store'
+import { CommitMessageGenerationCancelledError } from '../commit-message-generator'
+import { CodexCommitMessageGenerator } from '../codex-commit-message-generator'
 import {
-  CommitMessageGenerationCancelledError,
-  getCopilotAccountCacheKey,
-  migrateCopilotModelSelectionsToAccounts,
-} from './copilot-store'
+  CodexConflictSuggestionCancelledError,
+  CodexConflictSuggestionGenerator,
+} from '../codex-conflict-suggestion-generator'
+import { CodexPrivacyConsentStore } from '../codex-privacy-consent'
 import {
-  IBYOKProvider,
-  loadBYOKProviders,
-  saveBYOKProviders,
-  setBYOKSecret,
-  deleteBYOKSecret,
-  getBYOKSecret,
-  parseModelKey,
-} from '../copilot/byok'
+  CodexAccountStore,
+  getCodexCommitMessageAvailability,
+  ICodexAccountStoreState,
+} from './codex-account-store'
+import type { CodexLoginMethod } from '../codex-ipc'
 import { getConflictResolutionModelDisplay } from '../copilot/conflict-resolution-model'
-import type {
-  CopilotModelRequest,
-  CopilotProviderConfig,
-} from './copilot-store'
-import {
-  Account,
-  CopilotLicenseTypeNoAccess,
-  isDotComAccount,
-} from '../../models/account'
+import { Account, isDotComAccount } from '../../models/account'
 import { AppMenu, IMenu } from '../../models/app-menu'
 import { Author } from '../../models/author'
 import { Branch, BranchType, IAheadBehind } from '../../models/branch'
@@ -134,6 +116,9 @@ import {
   quitApp,
   sendCancelQuittingSync,
   showOpenDialog,
+  startCodexGeneration,
+  waitForCodexGeneration,
+  cancelCodexGeneration,
 } from '../../ui/main-process-proxy'
 import {
   API,
@@ -182,11 +167,8 @@ import {
 import { assertNever, fatalError, forceUnwrap } from '../fatal-error'
 
 import { formatCommitMessage } from '../format-commit-message'
-import {
-  getAccountForCommitMessageGeneration,
-  getAccountForCopilotConflictResolution,
-  getAccountForRepository,
-} from '../get-account-for-repository'
+import { getAccountForRepository } from '../get-account-for-repository'
+import { PreferencesTab } from '../../models/preferences'
 import {
   abortMerge,
   addRemote,
@@ -303,11 +285,9 @@ import { ManualConflictResolution } from '../../models/manual-conflict-resolutio
 import { BranchPruner } from './helpers/branch-pruner'
 import {
   enableCopilotConflictResolution,
-  enableCopilotSdkCommitMessageGeneration,
   enableCustomIntegration,
   enableWorktreeSupport,
 } from '../feature-flag'
-import { isGHES } from '../endpoint-capabilities'
 import { Banner, BannerType } from '../../models/banner'
 import { ComputedAction } from '../../models/computed-action'
 import {
@@ -420,7 +400,8 @@ import {
   ICopilotResolutionSummary,
   IFileResolution,
   ICopilotSkippedFile,
-} from '../copilot-conflict-resolution'
+  getSuggestedResolutionsToApply,
+} from '../conflict-resolution-contract'
 import {
   buildConflictContext,
   gatherCommitContext,
@@ -434,7 +415,6 @@ import {
 } from '../pull-request-refs'
 import { resolveWithin } from '../path'
 import { WorktreeEntry } from '../../models/worktree'
-import type { Model } from '@github/copilot-sdk/dist/generated/rpc'
 
 const LastSelectedRepositoryIDKey = 'last-selected-repository-id'
 
@@ -553,9 +533,6 @@ export const underlineLinksDefault = true
 export const showDiffCheckMarksDefault = true
 export const showDiffCheckMarksKey = 'diff-check-marks-visible'
 
-const commitMessageGenerationDisclaimerLastSeenKey =
-  'commit-message-generation-disclaimer-last-seen'
-
 const commitMessageGenerationButtonClickedKey =
   'commit-message-generation-button-clicked'
 
@@ -572,8 +549,6 @@ export const showChangesFilterKey = 'show-changes-filter'
 
 // TODO: to be removed after the migration period. Now Copilot models are stored
 // per account, not globally.
-const selectedCopilotModelsKey = 'selected-copilot-models'
-const selectedCopilotModelsByAccountKey = 'selected-copilot-models-by-account'
 export const showChangesFilterDefault = true
 
 export class AppStore extends TypedBaseStore<IAppState> {
@@ -733,6 +708,9 @@ export class AppStore extends TypedBaseStore<IAppState> {
   private underlineLinks: boolean = underlineLinksDefault
 
   private commitMessageGenerationDisclaimerLastSeen: number | null = null
+  private readonly codexPrivacyConsentStore = new CodexPrivacyConsentStore(
+    localStorage
+  )
   private commitMessageGenerationButtonClicked: boolean = false
 
   private copilotConflictResolutionDisclaimerLastSeen: number | null = null
@@ -742,12 +720,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
   private showChangesFilter: boolean = false
 
-  private selectedCopilotModelsByAccount: CopilotModelSelectionsByAccount =
-    new Map()
-  private copilotModelsByAccount: CopilotModelsByAccount = new Map()
-  private copilotQuotaSnapshotsByAccount: CopilotQuotaSnapshotsByAccount =
-    new Map()
-  private byokProviders: ReadonlyArray<IBYOKProvider> = []
+  private codexAccount: ICodexAccountStoreState
 
   public constructor(
     private readonly gitHubUserStore: GitHubUserStore,
@@ -761,9 +734,11 @@ export class AppStore extends TypedBaseStore<IAppState> {
     private readonly repositoryStateCache: RepositoryStateCache,
     private readonly apiRepositoriesStore: ApiRepositoriesStore,
     private readonly notificationsStore: NotificationsStore,
-    private readonly copilotStore: CopilotStore
+    private readonly codexAccountStore: CodexAccountStore
   ) {
     super()
+
+    this.codexAccount = codexAccountStore.currentState
 
     this.showWelcomeFlow = !hasShownWelcomeFlow()
 
@@ -1033,10 +1008,6 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
     this.accountsStore.onDidUpdate(accounts => {
       this.accounts = accounts
-      this.syncCopilotModelsFromCache()
-      this.syncCopilotQuotaSnapshotsFromCache()
-      this.updateCopilotModelsForCurrentAccount()
-      this.updateCopilotQuotaSnapshotsForCurrentAccount()
       const endpointTokens = accounts.map<EndpointToken>(
         ({ endpoint, token }) => ({ endpoint, token })
       )
@@ -1074,95 +1045,9 @@ export class AppStore extends TypedBaseStore<IAppState> {
     // UpdateState in the AppState so we need to emit whenever it updates.
     updateStore.onDidChange(() => this.emitUpdate())
 
-    this.copilotStore.onDidUpdate(() => {
-      this.syncCopilotModelsFromCache()
-      this.syncCopilotQuotaSnapshotsFromCache()
+    this.codexAccountStore.onDidUpdate(state => {
+      this.codexAccount = state
       this.emitUpdate()
-    })
-  }
-
-  private getCopilotSettingsAccounts(): ReadonlyArray<Account> {
-    return this.accounts.filter(
-      account =>
-        !isGHES(account.endpoint) &&
-        enableCopilotSdkCommitMessageGeneration(account) &&
-        account.isCopilotDesktopEnabled === true &&
-        account.copilotLicenseType !== undefined &&
-        account.copilotLicenseType !== CopilotLicenseTypeNoAccess
-    )
-  }
-
-  private syncCopilotModelsFromCache(): void {
-    const accounts = this.getCopilotSettingsAccounts()
-    const copilotModelsByAccount = new Map<
-      string,
-      ReadonlyArray<Model> | null
-    >()
-
-    for (const account of accounts) {
-      copilotModelsByAccount.set(
-        getCopilotAccountCacheKey(account),
-        this.copilotStore.getCachedModelList(account)
-      )
-    }
-
-    this.copilotModelsByAccount = copilotModelsByAccount
-  }
-
-  private syncCopilotQuotaSnapshotsFromCache(): void {
-    const accounts = this.getCopilotSettingsAccounts()
-    const copilotQuotaSnapshotsByAccount = new Map<
-      string,
-      CopilotQuotaSnapshots | null
-    >()
-
-    for (const account of accounts) {
-      copilotQuotaSnapshotsByAccount.set(
-        getCopilotAccountCacheKey(account),
-        this.copilotStore.getCachedQuotaSnapshots(account)
-      )
-    }
-
-    this.copilotQuotaSnapshotsByAccount = copilotQuotaSnapshotsByAccount
-  }
-
-  private updateCopilotModelsForCurrentAccount(): void {
-    const accounts = this.getCopilotSettingsAccounts()
-
-    if (
-      accounts.length === 0 ||
-      accounts.every(
-        account => this.copilotStore.getCachedModelList(account) !== null
-      )
-    ) {
-      return
-    }
-
-    this.fetchCopilotModelsForCurrentAccounts().catch(e => {
-      log.warn(
-        'AppStore: Failed to fetch Copilot models after account update',
-        e
-      )
-    })
-  }
-
-  private updateCopilotQuotaSnapshotsForCurrentAccount(): void {
-    const accounts = this.getCopilotSettingsAccounts()
-
-    if (
-      accounts.length === 0 ||
-      accounts.every(
-        account => this.copilotStore.getCachedQuotaSnapshots(account) !== null
-      )
-    ) {
-      return
-    }
-
-    this.fetchCopilotQuotaSnapshotsForCurrentAccounts().catch(e => {
-      log.warn(
-        'AppStore: Failed to fetch Copilot quota snapshots after account update',
-        e
-      )
     })
   }
 
@@ -1355,10 +1240,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       alwaysUseCopilotForConflictResolution:
         this.alwaysUseCopilotForConflictResolution,
       showChangesFilter: this.showChangesFilter,
-      selectedCopilotModelsByAccount: this.selectedCopilotModelsByAccount,
-      copilotModelsByAccount: this.copilotModelsByAccount,
-      copilotQuotaSnapshotsByAccount: this.copilotQuotaSnapshotsByAccount,
-      byokProviders: this.byokProviders,
+      codexAccount: this.codexAccount,
     }
   }
 
@@ -2616,9 +2498,6 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
     this.preferAbsoluteDates = getPreferAbsoluteDates()
 
-    this.commitMessageGenerationDisclaimerLastSeen =
-      getNumber(commitMessageGenerationDisclaimerLastSeenKey) ?? null
-
     this.commitMessageGenerationButtonClicked = getBoolean(
       commitMessageGenerationButtonClickedKey,
       false
@@ -2648,11 +2527,6 @@ export class AppStore extends TypedBaseStore<IAppState> {
       showChangesFilterKey,
       showChangesFilterDefault
     )
-
-    this.selectedCopilotModelsByAccount =
-      this.loadCopilotModelSelectionsByAccount()
-    this.migrateCopilotModelSelections()
-    this.byokProviders = loadBYOKProviders()
 
     this.emitUpdateNow()
 
@@ -3794,7 +3668,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       this.statsStore.increment('partialCommits')
     }
 
-    if (context.messageGeneratedByCopilot === true) {
+    if (context.messageGeneratedByAI === true) {
       this.statsStore.increment('generateCommitMessageUsedVerbatimCount')
     }
 
@@ -6287,12 +6161,15 @@ export class AppStore extends TypedBaseStore<IAppState> {
     })
   }
 
-  public _updateCommitMessageGenerationDisclaimerLastSeen(): void {
+  public _acknowledgeCodexCommitMessagePrivacy(repository: Repository): void {
     this.commitMessageGenerationDisclaimerLastSeen = Date.now()
-    setNumber(
-      commitMessageGenerationDisclaimerLastSeenKey,
-      this.commitMessageGenerationDisclaimerLastSeen
-    )
+    this.codexPrivacyConsentStore.acknowledge(repository.id)
+    this.emitUpdate()
+  }
+
+  public _resetCodexCommitMessagePrivacyAcknowledgements(): void {
+    this.codexPrivacyConsentStore.resetAll()
+    this.commitMessageGenerationDisclaimerLastSeen = null
     this.emitUpdate()
   }
 
@@ -6334,7 +6211,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
     return (
       this.alwaysUseCopilotForConflictResolution &&
       enableCopilotConflictResolution() &&
-      getAccountForCopilotConflictResolution(this.accounts, repository) !== null
+      getCodexCommitMessageAvailability(this.codexAccount) === 'ready'
     )
   }
 
@@ -6350,22 +6227,13 @@ export class AppStore extends TypedBaseStore<IAppState> {
     repository: Repository,
     filesSelected: ReadonlyArray<WorkingDirectoryFileChange>
   ): Promise<boolean> {
-    const account = getAccountForCommitMessageGeneration(
-      this.accounts,
-      repository
-    )
-
-    if (!account) {
+    if (getCodexCommitMessageAvailability(this.codexAccount) !== 'ready') {
       return false
     }
 
     this._setCommitMessageGenerationButtonClicked()
 
-    if (
-      !this.commitMessageGenerationDisclaimerLastSeen ||
-      offsetFromNow(-30, 'days') >
-        this.commitMessageGenerationDisclaimerLastSeen
-    ) {
+    if (!this.codexPrivacyConsentStore.hasFreshConsent(repository.id)) {
       await this._showPopup({
         type: PopupType.GenerateCommitMessageDisclaimer,
         repository,
@@ -6390,29 +6258,26 @@ export class AppStore extends TypedBaseStore<IAppState> {
           return false
         }
 
-        const response = enableCopilotSdkCommitMessageGeneration(account)
-          ? await this.copilotStore.generateCommitMessage(
-              account,
-              diff,
-              repository.path,
-              await this.resolveCopilotModelRequest(
-                this.getSelectedCopilotModels(account)[
-                  'commit-message-generation'
-                ] ?? null
-              ),
-              this.repositoryStateCache
-                .get(repository)
-                ?.changesState.currentRepoRulesInfo?.commitMessagePatterns.getRules() ??
-                [],
-              signal
-            )
-          : await API.fromAccount(account).getDiffChangesCommitMessage(diff)
+        const generator = new CodexCommitMessageGenerator({
+          start: startCodexGeneration,
+          wait: waitForCodexGeneration,
+          cancel: cancelCodexGeneration,
+        })
+        const response = await generator.generateCommitMessage({
+          diff,
+          commitMessageRules:
+            this.repositoryStateCache
+              .get(repository)
+              ?.changesState.currentRepoRulesInfo?.commitMessagePatterns.getRules() ??
+            [],
+          signal,
+        })
 
         this._setCommitMessage(repository, {
           summary: response.title,
           description: response.description,
           timestamp: Date.now(),
-          generatedByCopilot: true,
+          generatedByAI: true,
         })
 
         this.statsStore.increment('generateCommitMessageCount')
@@ -6516,12 +6381,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       return null
     }
 
-    const account = getAccountForCopilotConflictResolution(
-      this.accounts,
-      repository
-    )
-
-    if (!account) {
+    if (this.codexAccount.account.status !== 'signed-in') {
       return null
     }
 
@@ -6569,22 +6429,14 @@ export class AppStore extends TypedBaseStore<IAppState> {
         state
       )
 
-      const resolveTimer = startTimer(
-        'copilotStore.resolveConflicts',
-        repository
-      )
-      const modelRequest = await this.resolveCopilotModelRequest(
-        this.getSelectedCopilotModels(account)['conflict-resolution'] ?? null
-      )
+      const resolveTimer = startTimer('codex conflict suggestions', repository)
       try {
-        const result = await this.copilotStore.resolveConflicts(
-          account,
-          context,
-          repository.path,
-          modelRequest,
-          onProgress,
-          signal
-        )
+        const generator = new CodexConflictSuggestionGenerator({
+          start: startCodexGeneration,
+          wait: waitForCodexGeneration,
+          cancel: cancelCodexGeneration,
+        })
+        const result = await generator.suggest(context, { onProgress, signal })
 
         // The model can only cite data we placed in the prompt, so resolving
         // its references is a simple lookup against the gathered context —
@@ -6595,32 +6447,26 @@ export class AppStore extends TypedBaseStore<IAppState> {
         const references =
           cited.length > 0 ? cited : fallbackReferencedContext(context)
 
-        // Files Copilot declined to resolve (too large, unreadable, no
-        // parseable markers, etc.) so the result dialog can surface them for
-        // manual resolution.
-        const skippedFiles = context.files.flatMap(f =>
-          f.skippedReason !== undefined
-            ? [{ path: f.path, reason: f.skippedReason }]
-            : []
-        )
-
         return {
-          resolutions: result.resolutions,
+          resolutions: result.suggestions,
           summary: {
-            markdown: result.summary,
+            markdown: result.summaryMarkdown,
             ourLabel: labels.ourLabel,
             theirLabel: labels.theirLabel,
             references,
           },
-          skippedFiles,
+          skippedFiles: result.skippedFiles,
         }
       } finally {
         resolveTimer.done()
       }
     } catch (e) {
       // A user-initiated cancellation isn't a failure — don't log it as one.
-      if (signal?.aborted) {
-        log.info('AppStore: Copilot conflict resolution aborted by user')
+      if (
+        signal?.aborted ||
+        e instanceof CodexConflictSuggestionCancelledError
+      ) {
+        log.info('AppStore: Codex conflict suggestions aborted by user')
         return null
       }
       // Propagate real failures so the caller can surface the underlying error
@@ -6846,12 +6692,11 @@ export class AppStore extends TypedBaseStore<IAppState> {
       return
     }
 
-    const account = getAccountForCopilotConflictResolution(
-      this.accounts,
-      repository
-    )
-
-    if (!account) {
+    if (getCodexCommitMessageAvailability(this.codexAccount) !== 'ready') {
+      await this._showPopup({
+        type: PopupType.Preferences,
+        initialSelectedTab: PreferencesTab.Copilot,
+      })
       return
     }
 
@@ -6926,25 +6771,14 @@ export class AppStore extends TypedBaseStore<IAppState> {
     }
 
     const { conflictState } = step
-    const account = getAccountForCopilotConflictResolution(
-      this.accounts,
-      repository
-    )
-    if (!account) {
+    if (getCodexCommitMessageAvailability(this.codexAccount) !== 'ready') {
       return
     }
 
     // Controller used to actually cancel the in-flight SDK turn when the user
     // clicks "Stop" (see _abortCopilotConflictResolution).
     const abortController = new AbortController()
-    const copilotModels =
-      this.copilotModelsByAccount.get(getCopilotAccountCacheKey(account)) ??
-      null
-    const copilotResolutionModel = getConflictResolutionModelDisplay(
-      this.getSelectedCopilotModels(account)['conflict-resolution'] ?? null,
-      copilotModels,
-      this.byokProviders
-    )
+    const copilotResolutionModel = getConflictResolutionModelDisplay()
     this.repositoryStateCache.updateMultiCommitOperationState(
       repository,
       () => ({
@@ -6979,11 +6813,6 @@ export class AppStore extends TypedBaseStore<IAppState> {
             !ownsCurrentRun()
           ) {
             return
-          }
-          if (__DEV__ && progress.reasoningSnippet !== undefined) {
-            log.info(
-              `[Copilot SDK] app-store progress snippet: ${progress.reasoningSnippet}`
-            )
           }
           this.repositoryStateCache.updateMultiCommitOperationState(
             repository,
@@ -7193,11 +7022,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
     const pathsToStage: string[] = []
 
-    for (const resolution of copilotResolutions) {
-      if (manualResolutions.has(resolution.path)) {
-        continue
-      }
-
+    for (const resolution of getSuggestedResolutionsToApply(
+      copilotResolutions,
+      manualResolutions
+    )) {
       // Delete-vs-modify conflicts are resolved by setting a manual
       // resolution (ours/theirs) rather than writing file content.
       // The existing stageManualConflictResolution flow handles the
@@ -7615,7 +7443,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
         if (match === null) {
           this.emitError(
             new ExternalEditorError(
-              `No suitable editors installed for GitHub Desktop to launch. Install ${suggestedExternalEditor.name} for your platform and restart GitHub Desktop to try again.`,
+              `No suitable editors installed for WinGit to launch. Install ${suggestedExternalEditor.name} for your platform and restart WinGit to try again.`,
               { suggestDefaultEditor: true }
             )
           )
@@ -7649,7 +7477,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       if (match === null) {
         this.emitError(
           new ExternalEditorError(
-            `No suitable editors installed for GitHub Desktop to launch. Install ${suggestedExternalEditor.name} for your platform and restart GitHub Desktop to try again.`,
+            `No suitable editors installed for WinGit to launch. Install ${suggestedExternalEditor.name} for your platform and restart WinGit to try again.`,
             { suggestDefaultEditor: true }
           )
         )
@@ -10212,398 +10040,26 @@ export class AppStore extends TypedBaseStore<IAppState> {
   }
 
   /** This shouldn't be called directly. See 'Dispatcher'. */
-  public _setSelectedCopilotModel(
-    account: Account,
-    feature: CopilotFeature,
-    model: string | null
-  ) {
-    const accountKey = getCopilotAccountCacheKey(account)
-    const currentSelections =
-      this.selectedCopilotModelsByAccount.get(accountKey) ?? {}
-    const current = currentSelections[feature] ?? null
-    if (model !== current) {
-      const updatedSelections = { ...currentSelections }
-      if (model === null) {
-        delete updatedSelections[feature]
-      } else {
-        updatedSelections[feature] = model
-      }
-
-      const updatedByAccount = new Map(this.selectedCopilotModelsByAccount)
-      if (Object.keys(updatedSelections).length === 0) {
-        updatedByAccount.delete(accountKey)
-      } else {
-        updatedByAccount.set(accountKey, updatedSelections)
-      }
-      this.selectedCopilotModelsByAccount = updatedByAccount
-      this.saveCopilotModelSelectionsByAccount()
-      this.emitUpdate()
-    }
-  }
-
-  private loadLegacyCopilotModelSelections(): CopilotModelSelections {
-    const raw = localStorage.getItem(selectedCopilotModelsKey)
-    if (raw !== null) {
-      try {
-        const parsed: unknown = JSON.parse(raw)
-        if (typeof parsed === 'object' && parsed !== null) {
-          return parsed as CopilotModelSelections
-        }
-      } catch {
-        // fall through to migration
-      }
-    }
-
-    return {}
-  }
-
-  private loadCopilotModelSelectionsByAccount(): CopilotModelSelectionsByAccount {
-    const raw = localStorage.getItem(selectedCopilotModelsByAccountKey)
-    if (raw === null) {
-      return new Map()
-    }
-
-    try {
-      const parsed: unknown = JSON.parse(raw)
-      if (typeof parsed === 'object' && parsed !== null) {
-        return new Map(Object.entries(parsed))
-      }
-    } catch {
-      // Ignore invalid persisted selections.
-    }
-
-    return new Map()
-  }
-
-  private saveCopilotModelSelectionsByAccount(): void {
-    if (this.selectedCopilotModelsByAccount.size === 0) {
-      localStorage.removeItem(selectedCopilotModelsByAccountKey)
-      return
-    }
-
-    localStorage.setItem(
-      selectedCopilotModelsByAccountKey,
-      JSON.stringify(Object.fromEntries(this.selectedCopilotModelsByAccount))
-    )
-  }
-
-  // TODO: to be removed after the migration period. Now Copilot models are stored
-  // per account, not globally.
-  private migrateCopilotModelSelections(): void {
-    const legacySelections = this.loadLegacyCopilotModelSelections()
-    if (Object.keys(legacySelections).length > 0) {
-      this.selectedCopilotModelsByAccount =
-        migrateCopilotModelSelectionsToAccounts(
-          legacySelections,
-          this.selectedCopilotModelsByAccount,
-          this.accounts
-        )
-      this.saveCopilotModelSelectionsByAccount()
-    }
-
-    localStorage.removeItem(selectedCopilotModelsKey)
-  }
-
-  private getSelectedCopilotModels(account: Account): CopilotModelSelections {
-    return (
-      this.selectedCopilotModelsByAccount.get(
-        getCopilotAccountCacheKey(account)
-      ) ?? {}
-    )
+  public _startCodexAccountLogin(method: CodexLoginMethod): Promise<void> {
+    return this.codexAccountStore.startLogin(method)
   }
 
   /** This shouldn't be called directly. See 'Dispatcher'. */
-  public _setSelectedCopilotModelsByAccount(
-    modelsByAccount: CopilotModelSelectionsByAccount
-  ) {
-    this.selectedCopilotModelsByAccount = new Map(
-      [...modelsByAccount].map(([key, models]) => [key, { ...models }])
-    )
-    // The Preferences dialog keeps its own copy of the selections in
-    // component state. If the user deletes/edits a BYOK provider through
-    // the popup stack while the dialog is open, that local copy can still
-    // reference a model that no longer exists; scrub on save so we never
-    // resurrect a stale selection.
-    this.scrubMissingCopilotModelSelections()
-    this.saveCopilotModelSelectionsByAccount()
-    this.emitUpdate()
-  }
-
-  /**
-   * Resolves a stored account Copilot model selection into a
-   * {@link CopilotModelRequest} suitable for
-   * {@link CopilotStore.generateCommitMessage}. BYOK provider secrets are
-   * read from the OS keychain at call time.
-   */
-  private async resolveCopilotModelRequest(
-    selection: string | null
-  ): Promise<CopilotModelRequest> {
-    if (selection === null) {
-      return { kind: 'copilot', modelId: null }
-    }
-
-    const key = parseModelKey(selection)
-    if (key.kind === 'copilot') {
-      return {
-        kind: 'copilot',
-        modelId: key.modelId === '' ? null : key.modelId,
-      }
-    }
-
-    const provider = this.byokProviders.find(p => p.id === key.providerId)
-    const model = provider?.models.find(m => m.id === key.modelId)
-    if (provider === undefined || model === undefined) {
-      // Selection points at a deleted provider/model; fall back to default.
-      return { kind: 'copilot', modelId: null }
-    }
-
-    let secret: string | null = null
-    if (provider.authKind !== 'none') {
-      try {
-        secret = await getBYOKSecret(provider.id)
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e)
-        throw new Error(
-          `Could not read the credential for the custom Copilot provider ` +
-            `'${provider.name}' from the OS keychain: ${message}`
-        )
-      }
-    }
-
-    if (provider.authKind !== 'none' && (secret === null || secret === '')) {
-      throw new Error(
-        `No ${
-          provider.authKind === 'bearer' ? 'bearer token' : 'API key'
-        } is stored for the custom Copilot provider '${provider.name}'. ` +
-          `Open Settings → Copilot → Providers and re-enter the credential.`
-      )
-    }
-
-    const providerConfig: CopilotProviderConfig = {
-      type: provider.type,
-      baseUrl: provider.baseUrl,
-      ...(provider.wireApi ? { wireApi: provider.wireApi } : {}),
-      ...(provider.type === 'azure' && provider.azureApiVersion
-        ? { azure: { apiVersion: provider.azureApiVersion } }
-        : {}),
-      ...(secret !== null && provider.authKind === 'apiKey'
-        ? { apiKey: secret }
-        : {}),
-      ...(secret !== null && provider.authKind === 'bearer'
-        ? { bearerToken: secret }
-        : {}),
-    }
-
-    return {
-      kind: 'byok',
-      modelId: model.id,
-      provider: providerConfig,
-      ...(model.reasoningEffort !== undefined
-        ? { reasoningEffort: model.reasoningEffort }
-        : {}),
-      ...(provider.requestTimeoutSeconds !== undefined &&
-      provider.requestTimeoutSeconds > 0
-        ? { timeoutMs: provider.requestTimeoutSeconds * 1000 }
-        : {}),
-    }
+  public _cancelCodexAccountLogin(): Promise<void> {
+    return this.codexAccountStore.cancelLogin()
   }
 
   /** This shouldn't be called directly. See 'Dispatcher'. */
-  public async _addCopilotBYOKProvider(
-    provider: IBYOKProvider,
-    secret: string | null
-  ): Promise<void> {
-    // Write the secret first so a keychain failure doesn't leave a provider
-    // in localStorage without its credentials.
-    if (secret !== null && secret.length > 0) {
-      await setBYOKSecret(provider.id, secret)
-    }
-
-    this.byokProviders = [...this.byokProviders, provider]
-    saveBYOKProviders(this.byokProviders)
-
-    this.emitUpdate()
-  }
-
-  /**
-   * Updates a BYOK provider in place. Pass `secret = undefined` to leave the
-   * stored secret untouched, `null` to clear it, or a string to overwrite it.
-   *
-   * This shouldn't be called directly. See 'Dispatcher'.
-   */
-  public async _updateCopilotBYOKProvider(
-    provider: IBYOKProvider,
-    secret: string | null | undefined
-  ): Promise<void> {
-    const idx = this.byokProviders.findIndex(p => p.id === provider.id)
-    if (idx === -1) {
-      // Treat as add to keep the call idempotent from the UI's perspective.
-      return this._addCopilotBYOKProvider(provider, secret ?? null)
-    }
-
-    // Apply the keychain change first; if it throws, the persisted provider
-    // and its in-memory copy stay consistent with the existing secret.
-    if (secret === null) {
-      await deleteBYOKSecret(provider.id)
-    } else if (secret !== undefined && secret.length > 0) {
-      await setBYOKSecret(provider.id, secret)
-    }
-
-    const updated = [...this.byokProviders]
-    updated[idx] = provider
-    this.byokProviders = updated
-    saveBYOKProviders(this.byokProviders)
-
-    // If the user removed the model that was selected for any feature, fall
-    // back to the default for that feature.
-    this.scrubMissingCopilotModelSelections()
-
-    this.emitUpdate()
+  public _logoutCodexAccount(): Promise<void> {
+    return this.codexAccountStore.logout()
   }
 
   /** This shouldn't be called directly. See 'Dispatcher'. */
-  public async _deleteCopilotBYOKProvider(id: string): Promise<void> {
-    if (!this.byokProviders.some(p => p.id === id)) {
-      return
-    }
-
-    // Purge the secret first; on failure we keep the provider visible so the
-    // user can retry rather than ending up with an orphaned keychain entry
-    // and no UI to manage it.
-    await deleteBYOKSecret(id)
-
-    this.byokProviders = this.byokProviders.filter(p => p.id !== id)
-    saveBYOKProviders(this.byokProviders)
-
-    this.scrubMissingCopilotModelSelections()
-
-    this.emitUpdate()
-  }
-
-  /**
-   * Drops any per-feature model selection that points at a BYOK
-   * provider/model that no longer exists, or at a Copilot model that is
-   * no longer offered by the loaded model list. Copilot selections are
-   * only scrubbed once we have a definitive model list (i.e. the list has
-   * been fetched at least once); while still loading we leave them alone
-   * so a transient empty list doesn't downgrade valid selections.
-   */
-  private scrubMissingCopilotModelSelections(): void {
-    const selectionsByAccount = new Map<string, CopilotModelSelections>()
-
-    for (const [accountKey, selections] of this
-      .selectedCopilotModelsByAccount) {
-      const updated = this.scrubCopilotModelSelections(
-        selections,
-        this.copilotModelsByAccount.get(accountKey)
-      )
-      if (Object.keys(updated).length > 0) {
-        selectionsByAccount.set(accountKey, updated)
-      }
-    }
-
-    if (
-      selectionsByAccount.size !== this.selectedCopilotModelsByAccount.size ||
-      [...selectionsByAccount].some(
-        ([key, selections]) =>
-          selections !== this.selectedCopilotModelsByAccount.get(key)
-      )
-    ) {
-      this.selectedCopilotModelsByAccount = selectionsByAccount
-      this.saveCopilotModelSelectionsByAccount()
-    }
-  }
-
-  private scrubCopilotModelSelections(
-    selections: CopilotModelSelections,
-    copilotModels?: ReadonlyArray<Model> | null
-  ): CopilotModelSelections {
-    const updated: CopilotModelSelections = {}
-
-    for (const [feature, raw] of Object.entries(selections)) {
-      if (raw === undefined) {
-        continue
-      }
-      const key = parseModelKey(raw)
-      if (key.kind === 'byok') {
-        const provider = this.byokProviders.find(p => p.id === key.providerId)
-        if (
-          provider === undefined ||
-          !provider.models.some(m => m.id === key.modelId)
-        ) {
-          continue
-        }
-      } else if (
-        key.kind === 'copilot' &&
-        key.modelId !== '' &&
-        copilotModels !== undefined &&
-        copilotModels !== null &&
-        !copilotModels.some(m => m.id === key.modelId)
-      ) {
-        continue
-      }
-      updated[feature as CopilotFeature] = raw
-    }
-
-    return Object.keys(updated).length === Object.keys(selections).length
-      ? selections
-      : updated
-  }
-
-  /** This shouldn't be called directly. See 'Dispatcher'. */
-  public async _fetchCopilotModels(): Promise<void> {
-    return this.fetchCopilotModelsForCurrentAccounts()
-  }
-
-  /** This shouldn't be called directly. See 'Dispatcher'. */
-  public async _fetchCopilotQuotaSnapshots(): Promise<void> {
-    return this.fetchCopilotQuotaSnapshotsForCurrentAccounts()
-  }
-
-  private async fetchCopilotModelsForCurrentAccounts(): Promise<void> {
-    const accounts = this.getCopilotSettingsAccounts()
-    if (accounts.length === 0) {
-      this.copilotModelsByAccount = new Map()
-      this.emitUpdate()
-      return
-    }
-
-    const copilotModelsByAccount = new Map(this.copilotModelsByAccount)
-
-    for (const account of accounts) {
-      const models = await this.copilotStore.listModels(account)
-      const key = getCopilotAccountCacheKey(account)
-      copilotModelsByAccount.set(key, models === null ? null : [...models])
-    }
-
-    this.copilotModelsByAccount = copilotModelsByAccount
-    if ([...copilotModelsByAccount.values()].some(models => models !== null)) {
-      this.scrubMissingCopilotModelSelections()
-    }
-    this.emitUpdate()
-  }
-
-  private async fetchCopilotQuotaSnapshotsForCurrentAccounts(): Promise<void> {
-    const accounts = this.getCopilotSettingsAccounts()
-    if (accounts.length === 0) {
-      this.copilotQuotaSnapshotsByAccount = new Map()
-      this.emitUpdate()
-      return
-    }
-
-    const copilotQuotaSnapshotsByAccount = new Map(
-      this.copilotQuotaSnapshotsByAccount
-    )
-
-    for (const account of accounts) {
-      copilotQuotaSnapshotsByAccount.set(
-        getCopilotAccountCacheKey(account),
-        await this.copilotStore.getQuotaSnapshots(account)
-      )
-    }
-
-    this.copilotQuotaSnapshotsByAccount = copilotQuotaSnapshotsByAccount
-    this.emitUpdate()
+  public _refreshCodexAccount(): Promise<void> {
+    return Promise.all([
+      this.codexAccountStore.refresh(true),
+      this.codexAccountStore.refreshRateLimits(),
+    ]).then(() => undefined)
   }
 
   public _setPreferAbsoluteDates(value: boolean) {

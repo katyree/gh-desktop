@@ -42,16 +42,8 @@ import { Prompts } from './prompts'
 import { Repository } from '../../models/repository'
 import { Notifications } from './notifications'
 import { Accessibility } from './accessibility'
-import { CopilotPreferences } from './copilot'
-import type {
-  CopilotFeature,
-  CopilotModelsByAccount,
-  CopilotModelSelectionsByAccount,
-  CopilotQuotaSnapshotsByAccount,
-} from '../../lib/stores/copilot-store'
-import { getCopilotAccountCacheKey } from '../../lib/stores/copilot-store'
-import type { IBYOKProvider } from '../../lib/copilot/byok'
-import { PopupType } from '../../models/popup'
+import { CodexPreferences } from './codex'
+import type { ICodexAccountStoreState } from '../../lib/stores/codex-account-store'
 import {
   ICustomIntegration,
   TargetPathArgument,
@@ -67,7 +59,6 @@ import {
   setGitHookEnvShell,
   setHooksEnvEnabled,
 } from '../../lib/hooks/config'
-import { enableCopilotSdkCommitMessageGeneration } from '../../lib/feature-flag'
 import {
   DateFormat,
   TimeFormat,
@@ -116,11 +107,8 @@ interface IPreferencesProps {
   readonly onEditGlobalGitConfig: () => void
   readonly underlineLinks: boolean
   readonly showDiffCheckMarks: boolean
-  readonly selectedCopilotModelsByAccount: CopilotModelSelectionsByAccount
-  readonly copilotModelsByAccount: CopilotModelsByAccount
-  readonly copilotQuotaSnapshotsByAccount: CopilotQuotaSnapshotsByAccount
-  readonly byokProviders: ReadonlyArray<IBYOKProvider>
   readonly alwaysUseCopilotForConflictResolution: boolean
+  readonly codexAccount: ICodexAccountStoreState
 }
 
 interface IPreferencesState {
@@ -183,7 +171,6 @@ interface IPreferencesState {
   // Whether the preferences related to Git hooks environment have been changed
   readonly hooksPreferencesDirty: boolean
 
-  readonly selectedCopilotModelsByAccount: CopilotModelSelectionsByAccount
   readonly alwaysUseCopilotForConflictResolution: boolean
   readonly selectedDateFormat?: DateFormat
   readonly selectedTimeFormat?: TimeFormat
@@ -252,7 +239,6 @@ export class Preferences extends React.Component<
       cacheGitHookEnv: getCacheHooksEnv(),
       selectedGitHookEnvShell: getGitHookEnvShell(),
       hooksPreferencesDirty: false,
-      selectedCopilotModelsByAccount: this.props.selectedCopilotModelsByAccount,
       alwaysUseCopilotForConflictResolution:
         this.props.alwaysUseCopilotForConflictResolution,
       selectedDateFormat: getDateFormatPreference(),
@@ -293,12 +279,6 @@ export class Preferences extends React.Component<
       getAvailableShells(),
     ])
 
-    // Kick off Copilot model list fetch (non-blocking)
-    if (this.isCopilotSdkEnabled) {
-      this.props.dispatcher.fetchCopilotModels()
-      this.props.dispatcher.fetchCopilotQuotaSnapshots()
-    }
-
     const availableEditors = editors.map(e => e.editor) ?? null
     const availableShells = shells.map(e => e.shell) ?? null
 
@@ -338,16 +318,6 @@ export class Preferences extends React.Component<
   }
 
   public componentDidUpdate(prevProps: IPreferencesProps) {
-    if (
-      prevProps.selectedCopilotModelsByAccount !==
-      this.props.selectedCopilotModelsByAccount
-    ) {
-      this.setState({
-        selectedCopilotModelsByAccount:
-          this.props.selectedCopilotModelsByAccount,
-      })
-    }
-
     if (
       prevProps.alwaysUseCopilotForConflictResolution !==
       this.props.alwaysUseCopilotForConflictResolution
@@ -393,12 +363,10 @@ export class Preferences extends React.Component<
               <Octicon className="icon" symbol={octicons.person} />
               Integrations
             </span>
-            {this.isCopilotSdkEnabled && (
-              <span id={this.getTabId(PreferencesTab.Copilot)}>
-                <Octicon className="icon" symbol={octicons.copilot} />
-                Copilot
-              </span>
-            )}
+            <span id={this.getTabId(PreferencesTab.Copilot)}>
+              <Octicon className="icon" symbol={octicons.copilot} />
+              Codex
+            </span>
             <span id={this.getTabId(PreferencesTab.Git)}>
               <Octicon className="icon" symbol={octicons.gitCommit} />
               Git
@@ -479,22 +447,6 @@ export class Preferences extends React.Component<
     this.props.dispatcher.showEnterpriseSignInDialog()
   }
 
-  private onCopilotSignIn = () => {
-    this.setState({ selectedIndex: PreferencesTab.Accounts })
-  }
-
-  private onOpenCopilotPlans = () => {
-    this.props.dispatcher.openInBrowser(
-      'https://github.com/features/copilot/plans'
-    )
-  }
-
-  private onOpenCopilotFeatureSettings = () => {
-    this.props.dispatcher.openInBrowser(
-      'https://github.com/settings/copilot/features'
-    )
-  }
-
   private onLogout = (account: Account) => {
     this.props.dispatcher.removeAccount(account)
   }
@@ -564,29 +516,16 @@ export class Preferences extends React.Component<
       }
       case PreferencesTab.Copilot:
         View = (
-          <CopilotPreferences
-            selectedCopilotModelsByAccount={
-              this.state.selectedCopilotModelsByAccount
+          <CodexPreferences
+            state={this.props.codexAccount}
+            onSignIn={this.onCodexSignIn}
+            onDeviceCodeSignIn={this.onCodexDeviceCodeSignIn}
+            onCancelSignIn={this.onCancelCodexSignIn}
+            onSignOut={this.onCodexSignOut}
+            onRetry={this.onRefreshCodexAccount}
+            onResetPrivacyAcknowledgements={
+              this.onResetCodexPrivacyAcknowledgements
             }
-            copilotModelsByAccount={this.props.copilotModelsByAccount}
-            copilotQuotaSnapshotsByAccount={
-              this.props.copilotQuotaSnapshotsByAccount
-            }
-            accounts={this.props.accounts}
-            byokProviders={this.props.byokProviders}
-            showBYOKSettings={this.shouldShowBYOKSettings()}
-            onSignIn={this.onCopilotSignIn}
-            onOpenCopilotPlans={this.onOpenCopilotPlans}
-            onOpenCopilotFeatureSettings={this.onOpenCopilotFeatureSettings}
-            alwaysUseCopilotForConflictResolution={
-              this.state.alwaysUseCopilotForConflictResolution
-            }
-            onSelectedCopilotModelChanged={this.onSelectedCopilotModelChanged}
-            onAlwaysUseCopilotForConflictResolutionChanged={
-              this.onAlwaysUseCopilotForConflictResolutionChanged
-            }
-            onConfigureCustomProviders={this.onConfigureCustomProviders}
-            onConfigureModels={this.onConfigureCopilotModels}
           />
         )
         break
@@ -915,56 +854,28 @@ export class Preferences extends React.Component<
     this.setState({ showDiffCheckMarks })
   }
 
-  private onSelectedCopilotModelChanged = (
-    account: Account,
-    feature: CopilotFeature,
-    model: string | null
-  ) => {
-    this.setState(state => {
-      const accountKey = getCopilotAccountCacheKey(account)
-      const selections = {
-        ...state.selectedCopilotModelsByAccount.get(accountKey),
-      }
-      if (model === null) {
-        delete selections[feature]
-      } else {
-        selections[feature] = model
-      }
-
-      const selectedCopilotModelsByAccount = new Map(
-        state.selectedCopilotModelsByAccount
-      )
-      if (Object.keys(selections).length === 0) {
-        selectedCopilotModelsByAccount.delete(accountKey)
-      } else {
-        selectedCopilotModelsByAccount.set(accountKey, selections)
-      }
-
-      return { selectedCopilotModelsByAccount }
-    })
+  private onCodexSignIn = () => {
+    void this.props.dispatcher.startCodexAccountLogin('browser')
   }
 
-  private onAlwaysUseCopilotForConflictResolutionChanged = (
-    checked: boolean
-  ) => {
-    this.setState({ alwaysUseCopilotForConflictResolution: checked })
+  private onCodexDeviceCodeSignIn = () => {
+    void this.props.dispatcher.startCodexAccountLogin('device-code')
   }
 
-  private shouldShowBYOKSettings(): boolean {
-    return this.props.accounts.some(enableCopilotSdkCommitMessageGeneration)
+  private onCancelCodexSignIn = () => {
+    void this.props.dispatcher.cancelCodexAccountLogin()
   }
 
-  private onConfigureCustomProviders = () => {
-    this.props.dispatcher.showPopup({
-      type: PopupType.CopilotCustomProviders,
-    })
+  private onCodexSignOut = () => {
+    void this.props.dispatcher.logoutCodexAccount()
   }
 
-  private onConfigureCopilotModels = (account: Account) => {
-    this.props.dispatcher.showPopup({
-      type: PopupType.CopilotUserSettings,
-      account,
-    })
+  private onRefreshCodexAccount = () => {
+    void this.props.dispatcher.refreshCodexAccount()
+  }
+
+  private onResetCodexPrivacyAcknowledgements = () => {
+    this.props.dispatcher.resetCodexCommitMessagePrivacyAcknowledgements()
   }
 
   private onSelectedTabSizeChanged = (tabSize: number) => {
@@ -1134,10 +1045,6 @@ export class Preferences extends React.Component<
 
     dispatcher.setDiffCheckMarksSetting(this.state.showDiffCheckMarks)
 
-    dispatcher.setSelectedCopilotModelsByAccount(
-      this.state.selectedCopilotModelsByAccount
-    )
-
     dispatcher.setAlwaysUseCopilotForConflictResolution(
       this.state.alwaysUseCopilotForConflictResolution
     )
@@ -1167,21 +1074,11 @@ export class Preferences extends React.Component<
     this.setState({ selectedIndex: this.visualIndexToTab(visualIndex) })
   }
 
-  private get isCopilotSdkEnabled(): boolean {
-    return this.props.accounts.some(enableCopilotSdkCommitMessageGeneration)
-  }
-
   private tabToVisualIndex(tab: PreferencesTab): number {
-    if (!this.isCopilotSdkEnabled && tab > PreferencesTab.Copilot) {
-      return tab - 1
-    }
     return tab
   }
 
   private visualIndexToTab(index: number): PreferencesTab {
-    if (!this.isCopilotSdkEnabled && index >= PreferencesTab.Copilot) {
-      return index + 1
-    }
     return index
   }
 }

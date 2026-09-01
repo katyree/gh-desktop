@@ -5,14 +5,13 @@ import { Dispatcher } from '../../dispatcher'
 import { Repository } from '../../../models/repository'
 import { MultiCommitOperationStepKind } from '../../../models/multi-commit-operation'
 import { MultiCommitOperationConflictState } from '../../../lib/app-state'
-import { IConflictResolutionProgress } from '../../../lib/copilot-conflict-resolution'
+import { IConflictResolutionProgress } from '../../../lib/conflict-resolution-contract'
 import { Button } from '../../lib/button'
 import { Octicon } from '../../octicons'
 import * as octicons from '../../octicons/octicons.generated'
 import { MultiCommitOperationKind } from '../../../models/multi-commit-operation'
 import { AriaLiveContainer } from '../../accessibility/aria-live-container'
 import { IConflictResolutionModelDisplay } from '../../../lib/copilot/conflict-resolution-model'
-import { formatReasoningEffort } from '../../../lib/stores/copilot-store'
 
 interface ICopilotConflictsLoadingDialogProps {
   readonly repository: Repository
@@ -41,14 +40,8 @@ interface ICopilotConflictsLoadingDialogState {
    */
   readonly displayedMessages: ReadonlyArray<string>
   /**
-   * High-priority messages from the SDK (model reasoning sentences).
-   * Always drained before fauxPending.
-   */
-  readonly realPending: ReadonlyArray<string>
-  /**
-   * Prebuilt fallback messages used to fill space when no real messages
-   * are available. Drained only when realPending is empty. Replaced
-   * wholesale when the theme transitions.
+   * Prebuilt status messages for the current phase. Replaced wholesale when
+   * the phase transitions.
    */
   readonly fauxPending: ReadonlyArray<string>
   /** Elapsed time when the most recent message was shown (for dwell). */
@@ -60,11 +53,6 @@ interface ICopilotConflictsLoadingDialogState {
   readonly currentDwell: number
   /** The current theme — drives the sticky header and faux pool. */
   readonly theme: LoadingTheme
-  /**
-   * Becomes true once we've received a reasoning snippet from the SDK.
-   * Used to flip the theme to 'analyzing' on the first signal.
-   */
-  readonly hasReceivedReasoning: boolean
 }
 
 /** Maximum number of historical messages to keep in the visible log. */
@@ -76,9 +64,8 @@ const MinDwellSeconds = 3
 const MaxDwellSeconds = 5
 
 /**
- * Milliseconds to wait after mount before falling back to the analyzing
- * theme even if no reasoning snippets have arrived. Guards against models
- * that emit no reasoning content.
+ * Milliseconds to wait after mount before falling back to the analyzing theme
+ * if progress delivery is delayed.
  */
 const ThemeFallbackMs = 10000
 
@@ -124,8 +111,7 @@ function buildGatheringPool(
 }
 
 /**
- * Faux messages for the analyzing phase. SDK reasoning snippets always
- * preempt these — these only fill space when the model is silent.
+ * Status messages for the analyzing phase.
  */
 function buildAnalyzingPool(
   filePaths: ReadonlyArray<string>
@@ -144,45 +130,6 @@ function buildAnalyzingPool(
   return pool
 }
 
-/**
- * Filter out reasoning snippets that aren't worth surfacing — markdown
- * structural noise (headers, bullet points, bold-only labels) and
- * fragments that don't read as complete thoughts. Returns the cleaned
- * snippet, or null if it should be skipped.
- */
-function cleanReasoningSnippet(snippet: string): string | null {
-  const trimmed = snippet.trim()
-  if (trimmed.length === 0) {
-    return null
-  }
-  // Markdown headers
-  if (/^#+\s/.test(trimmed)) {
-    return null
-  }
-  // Bullet list items
-  if (/^[-*]\s/.test(trimmed)) {
-    return null
-  }
-  // Pure list-marker remnants like "1." or "2."
-  if (/^\d+\.?$/.test(trimmed)) {
-    return null
-  }
-  // Bold-only label with nothing meaningful after it
-  if (/^\*\*[^*]+\*\*[:.]?\s*$/.test(trimmed)) {
-    return null
-  }
-  // Numbered list items get a more lenient length check so we don't
-  // drop "1. Foo" while keeping "2. Foo bar baz" — losing one item in
-  // an enumerated sequence reads as a glitch.
-  const isNumberedItem = /^\d+\.\s/.test(trimmed)
-  const minLength = isNumberedItem ? 8 : 25
-  if (trimmed.length < minLength) {
-    return null
-  }
-  // Strip surrounding markdown emphasis from the displayed text
-  return trimmed.replace(/\*\*/g, '').replace(/`/g, '')
-}
-
 const CopilotConflictsLoadingDialogId = 'Dialog_Copilot_Conflicts_Loading'
 
 /**
@@ -190,10 +137,8 @@ const CopilotConflictsLoadingDialogId = 'Dialog_Copilot_Conflicts_Loading'
  *
  * The dialog is structured around two themes that mirror our pipeline:
  * 'gathering' (local prep work) and 'analyzing' (the model is reasoning
- * / generating). Each theme has its own pool of faux messages that
- * rotate while the user waits. Live reasoning snippets from the SDK
- * always preempt faux messages so the user sees real model thoughts
- * the moment they arrive.
+ * / generating). Each theme has its own pool of safe, application-authored
+ * messages that rotate while the user waits.
  */
 export class CopilotConflictsLoadingDialog extends React.Component<
   ICopilotConflictsLoadingDialogProps,
@@ -217,12 +162,10 @@ export class CopilotConflictsLoadingDialog extends React.Component<
     this.state = {
       elapsedSeconds: 0,
       displayedMessages: first !== undefined ? [first] : [],
-      realPending: [],
       fauxPending: rest,
       messageShownAt: 0,
       currentDwell: randomDwell(),
       theme: 'gathering',
-      hasReceivedReasoning: false,
     }
   }
 
@@ -251,31 +194,10 @@ export class CopilotConflictsLoadingDialog extends React.Component<
     prevProps: ICopilotConflictsLoadingDialogProps,
     prevState: ICopilotConflictsLoadingDialogState
   ) {
-    const prevSnippet = prevProps.progress?.reasoningSnippet
-    const currentSnippet = this.props.progress?.reasoningSnippet
-
-    if (currentSnippet !== undefined && currentSnippet !== prevSnippet) {
-      const cleaned = cleanReasoningSnippet(currentSnippet)
-      if (__DEV__) {
-        if (cleaned === null) {
-          console.log(
-            `[Copilot SDK] dialog dropped snippet: ${JSON.stringify(
-              currentSnippet
-            )}`
-          )
-        } else {
-          console.log(
-            `[Copilot SDK] dialog kept snippet: ${JSON.stringify(cleaned)}`
-          )
-        }
-      }
-      if (cleaned !== null) {
-        this.setState(prev => ({
-          realPending: [...prev.realPending, cleaned],
-        }))
-      }
-      // First reasoning snippet means Copilot is past gathering —
-      // promote the theme even if cleaning rejected this particular line.
+    if (
+      this.props.progress?.phase === 'generating' &&
+      prevProps.progress?.phase !== 'generating'
+    ) {
       this.advanceToAnalyzing()
     }
 
@@ -299,12 +221,11 @@ export class CopilotConflictsLoadingDialog extends React.Component<
     }
 
     this.setState(prev => {
-      if (prev.hasReceivedReasoning && prev.theme === 'analyzing') {
+      if (prev.theme === 'analyzing') {
         return null
       }
       return {
         theme: 'analyzing',
-        hasReceivedReasoning: true,
         fauxPending: buildAnalyzingPool(this.props.conflictedFilePaths),
       }
     })
@@ -347,7 +268,6 @@ export class CopilotConflictsLoadingDialog extends React.Component<
 
       const appendMessage = (
         next: string,
-        realPending: ReadonlyArray<string>,
         fauxPending: ReadonlyArray<string>
       ) => {
         const merged = [...prev.displayedMessages, next]
@@ -359,23 +279,15 @@ export class CopilotConflictsLoadingDialog extends React.Component<
           ...prev,
           elapsedSeconds: nextElapsed,
           displayedMessages,
-          realPending,
           fauxPending,
           messageShownAt: nextElapsed,
           currentDwell: randomDwell(),
         }
       }
 
-      // Always drain real (SDK) messages first; fall back to faux only
-      // when there's nothing real to show.
-      if (prev.realPending.length > 0) {
-        const [next, ...rest] = prev.realPending
-        return appendMessage(next, rest, prev.fauxPending)
-      }
-
       if (prev.fauxPending.length > 0) {
         const [next, ...rest] = prev.fauxPending
-        return appendMessage(next, prev.realPending, rest)
+        return appendMessage(next, rest)
       }
 
       return { ...prev, elapsedSeconds: nextElapsed }
@@ -407,10 +319,7 @@ export class CopilotConflictsLoadingDialog extends React.Component<
         ? displayedMessages[displayedMessages.length - 1]
         : null
 
-    const modelLabel =
-      model.reasoningEffort !== undefined
-        ? `${model.modelName} · ${formatReasoningEffort(model.reasoningEffort)}`
-        : model.modelName
+    const modelLabel = model.modelName
 
     return (
       <Dialog
@@ -431,7 +340,7 @@ export class CopilotConflictsLoadingDialog extends React.Component<
             <div className="copilot-conflicts-loading-theme">
               <Octicon
                 className="copilot-conflicts-loading-theme-icon"
-                symbol={octicons.copilot}
+                symbol={octicons.sparklesFill}
               />
               <span className="copilot-conflicts-loading-theme-label">
                 {ThemeLabels[theme]}

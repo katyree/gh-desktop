@@ -4,13 +4,15 @@ import assert from 'node:assert'
 import {
   parseCopilotConflictResolution,
   reassembleResolvedFile,
-  reassembleResolutions,
-  validateResolutionPaths,
   extractSymbols,
-  createDependencyAwareChunks,
-  selectReferencedContext,
-  fallbackReferencedContext,
 } from '../../src/lib/copilot-conflict-resolution'
+import {
+  createConflictSuggestionChunks as createDependencyAwareChunks,
+  fallbackReferencedContext,
+  reassembleConflictSuggestions as reassembleResolutions,
+  selectReferencedContext,
+  validateConflictSuggestionPaths as validateResolutionPaths,
+} from '../../src/lib/conflict-resolution-contract'
 import {
   IFileConflictContext,
   IConflictResolutionContext,

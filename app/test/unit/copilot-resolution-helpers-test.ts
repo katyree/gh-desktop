@@ -9,6 +9,11 @@ import {
   getOursTheirsLabels,
 } from '../../src/ui/multi-commit-operation/dialog/copilot-resolution-helpers'
 import {
+  getSuggestedResolutionsToApply,
+  IFileResolution,
+} from '../../src/lib/conflict-resolution-contract'
+import { ManualConflictResolution } from '../../src/models/manual-conflict-resolution'
+import {
   AppFileStatusKind,
   GitStatusEntry,
   ManualConflict,
@@ -19,6 +24,31 @@ import {
 // ---------------------------------------------------------------------------
 // Helpers for creating conflict status objects
 // ---------------------------------------------------------------------------
+
+describe('getSuggestedResolutionsToApply', () => {
+  it('keeps only suggestions the user left selected', () => {
+    const suggestions: ReadonlyArray<IFileResolution> = [
+      {
+        path: 'selected.ts',
+        resolvedContent: 'selected',
+        reasoning: 'Test suggestion',
+      },
+      {
+        path: 'rejected.ts',
+        resolvedContent: 'rejected',
+        reasoning: 'Test suggestion',
+      },
+    ]
+    const manualResolutions = new Map([
+      ['rejected.ts', ManualConflictResolution.ours],
+    ])
+
+    assert.deepEqual(
+      getSuggestedResolutionsToApply(suggestions, manualResolutions),
+      [suggestions[0]]
+    )
+  })
+})
 
 function makeDeletedByUs(): ManualConflict {
   return {
@@ -180,10 +210,10 @@ describe('getDeleteConflictLabels', () => {
 // ---------------------------------------------------------------------------
 
 describe('getDeleteConflictChoiceLabel', () => {
-  it('returns "Copilot" for the copilot choice', () => {
+  it('returns "ChatGPT" for the generated suggestion choice', () => {
     assert.equal(
       getDeleteConflictChoiceLabel('copilot', makeDeletedByUs()),
-      'Copilot'
+      'ChatGPT'
     )
   })
 

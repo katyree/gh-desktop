@@ -5,7 +5,7 @@ import { Emoji } from '../../../lib/emoji'
 import {
   ICopilotResolutionSummary,
   IConflictContextReference,
-} from '../../../lib/copilot-conflict-resolution'
+} from '../../../lib/conflict-resolution-contract'
 import { GitHubRepository } from '../../../models/github-repository'
 import { MultiCommitOperationKind } from '../../../models/multi-commit-operation'
 import { CopyButton } from '../../copy-button'
@@ -120,7 +120,7 @@ export class CopilotConflictsResolutionSummary extends React.Component<ICopilotC
       <div className="copilot-conflicts-summary">
         <h2 className="copilot-conflicts-summary-theme">
           <Octicon
-            symbol={octicons.copilot}
+            symbol={octicons.sparklesFill}
             className="copilot-conflicts-summary-copilot-icon"
           />
           <span className="copilot-conflicts-summary-theme-label">
@@ -150,7 +150,7 @@ export class CopilotConflictsResolutionSummary extends React.Component<ICopilotC
           repository={this.props.gitHubRepository ?? undefined}
           onMarkdownLinkClicked={this.props.onMarkdownLinkClicked}
           underlineLinks={true}
-          ariaLabel="Copilot conflict resolution summary"
+          ariaLabel="ChatGPT conflict suggestion summary"
           customCSS={summaryMarkdownCSS}
         />
       </div>

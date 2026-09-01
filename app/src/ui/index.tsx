@@ -27,7 +27,7 @@ import {
   AppStore,
   GitHubUserStore,
   CloningRepositoriesStore,
-  CopilotStore,
+  CodexAccountStore,
   IssuesStore,
   SignInStore,
   RepositoriesStore,
@@ -292,7 +292,8 @@ const aheadBehindStore = new AheadBehindStore()
 
 const aliveStore = new AliveStore(accountsStore)
 
-const copilotStore = new CopilotStore(accountsStore)
+const codexAccountStore = new CodexAccountStore()
+void codexAccountStore.initialize()
 
 const notificationsStore = new NotificationsStore(
   accountsStore,
@@ -319,7 +320,7 @@ const appStore = new AppStore(
   repositoryStateManager,
   apiRepositoriesStore,
   notificationsStore,
-  copilotStore
+  codexAccountStore
 )
 
 appStore.onDidUpdate(state => {

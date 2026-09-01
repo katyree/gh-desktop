@@ -17,6 +17,16 @@ import { DesktopNotificationPermission } from 'desktop-notifications'
 import { NotificationCallback } from 'desktop-notifications'
 import { DesktopAliveEvent } from './stores/alive-store'
 import { CLIAction } from './cli-action'
+import {
+  CodexLoginMethod,
+  ICodexAccountState,
+  ICodexGenerationCancellation,
+  ICodexGenerationHandle,
+  ICodexGenerationRequest,
+  ICodexGenerationResult,
+  ICodexLoginStart,
+  ICodexRateLimitState,
+} from './codex-ipc'
 
 /**
  * Defines the simplex IPC channel names we use from the renderer
@@ -87,6 +97,8 @@ export type RequestChannels = {
   'show-installing-update': () => void
   'install-windows-cli': () => void
   'uninstall-windows-cli': () => void
+  'codex-account-state-changed': (state: ICodexAccountState) => void
+  'codex-rate-limits-state-changed': (state: ICodexRateLimitState) => void
 }
 
 /**
@@ -135,4 +147,20 @@ export type RequestResponseChannels = {
   ) => Promise<string | null>
   'get-notifications-permission': () => Promise<DesktopNotificationPermission>
   'request-notifications-permission': () => Promise<boolean>
+  'codex-account-read': (refreshToken: boolean) => Promise<ICodexAccountState>
+  'codex-account-login-start': (
+    method: CodexLoginMethod
+  ) => Promise<ICodexLoginStart>
+  'codex-account-login-cancel': (loginId: string) => Promise<void>
+  'codex-account-logout': () => Promise<ICodexAccountState>
+  'codex-rate-limits-read': () => Promise<ICodexRateLimitState>
+  'codex-generation-start': (
+    request: ICodexGenerationRequest
+  ) => Promise<ICodexGenerationHandle>
+  'codex-generation-cancel': (
+    cancellation: ICodexGenerationCancellation
+  ) => Promise<void>
+  'codex-generation-wait': (
+    handle: ICodexGenerationHandle
+  ) => Promise<ICodexGenerationResult>
 }

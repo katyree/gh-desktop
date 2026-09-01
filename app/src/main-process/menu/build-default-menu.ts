@@ -1,4 +1,4 @@
-import { Menu, shell, app, BrowserWindow } from 'electron'
+import { Menu, shell, BrowserWindow } from 'electron'
 import { ensureItemIds } from './ensure-item-ids'
 import { MenuEvent } from './menu-event'
 import { truncateWithEllipsis } from '../../lib/truncate-with-ellipsis'
@@ -9,6 +9,7 @@ import { MenuLabelsEvent } from '../../models/menu-labels'
 import * as ipcWebContents from '../ipc-webcontents'
 import { mkdir } from 'fs/promises'
 import { buildTestMenu } from './build-test-menu'
+import { WinGitDocumentationURL, WinGitIssueURL } from '../../lib/product-links'
 
 const createPullRequestLabel = __DARWIN__
   ? 'Create Pull Request'
@@ -527,27 +528,16 @@ export function buildDefaultMenuTemplate({
     label: __DARWIN__ ? 'Report Issue…' : 'Report issue…',
     click() {
       shell
-        .openExternal('https://github.com/desktop/desktop/issues/new/choose')
+        .openExternal(WinGitIssueURL)
         .catch(err => log.error('Failed opening issue creation page', err))
     },
   }
 
-  const contactSupportItem: Electron.MenuItemConstructorOptions = {
-    label: __DARWIN__ ? 'Contact GitHub Support…' : '&Contact GitHub support…',
-    click() {
-      shell
-        .openExternal(
-          `https://github.com/contact?from_desktop_app=1&app_version=${app.getVersion()}`
-        )
-        .catch(err => log.error('Failed opening contact support page', err))
-    },
-  }
-
   const showUserGuides: Electron.MenuItemConstructorOptions = {
-    label: 'Show User Guides',
+    label: 'Show WinGit Documentation',
     click() {
       shell
-        .openExternal('https://docs.github.com/en/desktop')
+        .openExternal(WinGitDocumentationURL)
         .catch(err => log.error('Failed opening user guides page', err))
     },
   }
@@ -556,9 +546,7 @@ export function buildDefaultMenuTemplate({
     label: __DARWIN__ ? 'Show Keyboard Shortcuts' : 'Show keyboard shortcuts',
     click() {
       shell
-        .openExternal(
-          'https://docs.github.com/en/desktop/installing-and-configuring-github-desktop/overview/keyboard-shortcuts'
-        )
+        .openExternal(WinGitDocumentationURL)
         .catch(err => log.error('Failed opening keyboard shortcuts page', err))
     },
   }
@@ -581,7 +569,6 @@ export function buildDefaultMenuTemplate({
 
   const helpItems = [
     submitIssueItem,
-    contactSupportItem,
     showUserGuides,
     showKeyboardShortcuts,
     showLogsItem,

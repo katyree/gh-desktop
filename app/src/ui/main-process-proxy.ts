@@ -1,5 +1,6 @@
 import { ExecutableMenuItem } from '../models/app-menu'
 import { RequestResponseChannels, RequestChannels } from '../lib/ipc-shared'
+import { ICodexAccountState, ICodexRateLimitState } from '../lib/codex-ipc'
 import * as ipcRenderer from '../lib/ipc-renderer'
 import { stat } from 'fs/promises'
 import { isApplicationBundle } from '../lib/is-application-bundle'
@@ -396,6 +397,62 @@ export const requestNotificationsPermission = invokeProxy(
   'request-notifications-permission',
   0
 )
+
+/** Read credential-free Codex account state from the main process. */
+export const readCodexAccount = invokeProxy('codex-account-read', 1)
+
+/** Begin managed ChatGPT sign-in in the system browser. */
+export const startCodexAccountLogin = invokeProxy(
+  'codex-account-login-start',
+  1
+)
+
+/** Cancel a pending managed ChatGPT sign-in. */
+export const cancelCodexAccountLogin = invokeProxy(
+  'codex-account-login-cancel',
+  1
+)
+
+/** Sign out of Codex without changing GitHub account state. */
+export const logoutCodexAccount = invokeProxy('codex-account-logout', 0)
+
+/** Read sanitized ChatGPT subscription rate limits. */
+export const readCodexRateLimits = invokeProxy('codex-rate-limits-read', 0)
+
+/** Subscribe to sanitized App Server account updates. */
+export function onCodexAccountStateChanged(
+  handler: (state: ICodexAccountState) => void
+) {
+  const listener = (
+    _event: Electron.IpcRendererEvent,
+    state: ICodexAccountState
+  ) => handler(state)
+  ipcRenderer.on('codex-account-state-changed', listener)
+  return () =>
+    ipcRenderer.removeListener('codex-account-state-changed', listener)
+}
+
+/** Subscribe to sanitized ChatGPT subscription rate-limit updates. */
+export function onCodexRateLimitsStateChanged(
+  handler: (state: ICodexRateLimitState) => void
+) {
+  const listener = (
+    _event: Electron.IpcRendererEvent,
+    state: ICodexRateLimitState
+  ) => handler(state)
+  ipcRenderer.on('codex-rate-limits-state-changed', listener)
+  return () =>
+    ipcRenderer.removeListener('codex-rate-limits-state-changed', listener)
+}
+
+/** Start a bounded Codex generation without exposing its process or transport. */
+export const startCodexGeneration = invokeProxy('codex-generation-start', 1)
+
+/** Interrupt a Codex generation by its opaque thread and turn identifiers. */
+export const cancelCodexGeneration = invokeProxy('codex-generation-cancel', 1)
+
+/** Wait for the sanitized terminal result of a started Codex generation. */
+export const waitForCodexGeneration = invokeProxy('codex-generation-wait', 1)
 
 /** Tell the main process to (un)install the CLI on Windows */
 export const installWindowsCLI = sendProxy('install-windows-cli', 0)

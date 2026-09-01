@@ -28,6 +28,7 @@ import {
   getBundleID,
   getCompanyName,
   getProductName,
+  getProtocolSchemes,
 } from '../app/package-info'
 
 import { isGitHubActions } from './build-platforms'
@@ -69,6 +70,11 @@ console.log(`Building for ${getChannel()}…`)
 
 console.log('Removing old distribution…')
 rmSync(getDistRoot(), { recursive: true, force: true })
+
+// A standalone `tsc` validation emits application modules under out/app. They
+// are not runtime inputs—the production bundles are the top-level Webpack
+// outputs—and deleted modules can otherwise survive there and be packaged.
+rmSync(path.resolve(outRoot, 'app'), { recursive: true, force: true })
 
 console.log('Copying dependencies…')
 copyDependencies()
@@ -172,10 +178,12 @@ function packageApp() {
 
   const iconPath = getIconDirectory()
   const assetsCarPath = join(iconPath, 'Assets.car')
-  assert(
-    existsSync(assetsCarPath),
-    `Unable to find Assets.car at ${assetsCarPath}`
-  )
+  if (process.platform === 'darwin') {
+    assert(
+      existsSync(assetsCarPath),
+      `Unable to find Assets.car at ${assetsCarPath}`
+    )
+  }
 
   return packager({
     name: getExecutableName(),
@@ -189,7 +197,7 @@ function packageApp() {
       iconPath,
       process.platform === 'darwin' ? 'icon-logo-legacy.icns' : 'icon-logo'
     ),
-    extraResource: [assetsCarPath],
+    extraResource: process.platform === 'darwin' ? [assetsCarPath] : [],
     dir: outRoot,
     overwrite: true,
     tmpdir: false,
@@ -224,13 +232,7 @@ function packageApp() {
     protocols: [
       {
         name: getBundleID(),
-        schemes: [
-          !isDevelopmentBuild
-            ? 'x-github-desktop-auth'
-            : 'x-github-desktop-dev-auth',
-          'x-github-client',
-          'github-mac',
-        ],
+        schemes: [...getProtocolSchemes(process.env.NODE_ENV)],
       },
     ],
     extendInfo: extendInfoPath,
@@ -349,8 +351,8 @@ function copyDependencies() {
     { recursive: true, verbatimSymlinks: true }
   )
 
-  console.log('  Copying copilot…')
-  copyCopilotDependency()
+  console.log('  Copying Codex runtime…')
+  copyCodexDependency()
 
   // Dev builds for macOS require a SSH wrapper to use SSH_ASKPASS
   if (process.platform === 'darwin' && isDevelopmentBuild) {
@@ -499,150 +501,17 @@ function getNotarizationOptions(): Options['osxNotarize'] {
     : undefined
 }
 
-function copyCopilotDependency() {
-  const currentPlatform = process.platform
-  const currentArch = getDistArchitecture()
+function copyCodexDependency() {
+  // Older WinGit builds copied the GitHub Copilot runtime here. Remove that
+  // exact legacy payload so an incremental build cannot package stale files.
+  rmSync(path.resolve(outRoot, 'copilot'), { recursive: true, force: true })
 
-  // The @github/copilot package now uses platform-specific optional
-  // dependencies (e.g. @github/copilot-darwin-arm64) that already contain only
-  // the binaries for the target platform, so we copy the appropriate one
-  // directly instead of the base @github/copilot package.
-  const copilotPkgDir = path.resolve(
+  const codexPackageDirectory = path.resolve(
     projectRoot,
-    `app/node_modules/@github/copilot-${currentPlatform}-${currentArch}`
+    `app/node_modules/@openai/codex-${
+      process.platform
+    }-${getDistArchitecture()}`
   )
-
-  const copilotDestination = path.resolve(outRoot, 'copilot')
-  removeAndCopy(copilotPkgDir, copilotDestination)
-
-  // Platforms and architectures to remove from prebuild directories. This is
-  // an exhaustive list of all non-current platforms rather than an allowlist,
-  // because some packages (clipboard, pvrecorder) have entries without
-  // standard platform identifiers that we must preserve.
-  const nonValidPlatforms = [
-    'darwin',
-    'linux',
-    'win32',
-    'freebsd',
-    'openbsd',
-    'musl',
-  ].filter(p => p !== currentPlatform)
-  const nonValidArchitectures = [
-    'x64',
-    'arm64',
-    'ia32',
-    'armhf',
-    'riscv64',
-    'loong64',
-  ].filter(a => a !== currentArch)
-
-  // Also map platform names for packages that use non-standard naming
-  // (e.g., pvrecorder uses "mac" and "windows" instead of "darwin"/"win32")
-  const platformAliases: Record<string, string> = {
-    darwin: 'mac',
-    win32: 'windows',
-  }
-  const currentPlatformAlias = platformAliases[currentPlatform]
-  const nonValidPlatformAliases = Object.values(platformAliases).filter(
-    a => a !== currentPlatformAlias
-  )
-
-  // Removing unnecessary prebuild binaries from the copilot package to reduce
-  // bundle size and prevent signing failures on Windows (signtool can't sign
-  // non-PE binaries from other platforms).
-  const prebuildsDirs = [
-    path.join(copilotDestination, 'prebuilds'),
-    path.join(copilotDestination, 'ripgrep', 'bin'),
-    path.join(copilotDestination, 'clipboard', 'node_modules', '@teddyzhu'),
-    path.join(
-      copilotDestination,
-      'clipboard',
-      'node_modules',
-      '@teddyzhu',
-      'clipboard'
-    ),
-    path.join(
-      copilotDestination,
-      'foundry-local-sdk',
-      'node_modules',
-      'foundry-local-sdk',
-      'prebuilds'
-    ),
-    path.join(
-      copilotDestination,
-      'pvrecorder',
-      'node_modules',
-      '@picovoice',
-      'pvrecorder-node',
-      'lib'
-    ),
-  ]
-
-  for (const prebuildsDir of prebuildsDirs) {
-    if (!existsSync(prebuildsDir)) {
-      continue
-    }
-
-    const prebuilds = readdirSync(prebuildsDir)
-    for (const prebuild of prebuilds) {
-      const shouldRemove =
-        nonValidPlatforms.some(p => prebuild.includes(p)) ||
-        nonValidArchitectures.some(a => prebuild.includes(a)) ||
-        nonValidPlatformAliases.some(a => prebuild === a)
-
-      if (shouldRemove) {
-        rmSync(path.join(prebuildsDir, prebuild), {
-          recursive: true,
-          force: true,
-        })
-      }
-    }
-  }
-
-  // mxc cleanup (only if the mxc-bin directory exists in this copilot version)
-  const mxcDir = path.join(copilotDestination, 'mxc-bin')
-  if (!existsSync(mxcDir)) {
-    return
-  }
-  // Read subdirs, delete the one that has a name that is not a valid architecture
-  const mxcSubdirs = readdirSync(mxcDir)
-  for (const subdir of mxcSubdirs) {
-    if (nonValidArchitectures.some(a => subdir.includes(a))) {
-      rmSync(path.join(mxcDir, subdir), {
-        recursive: true,
-        force: true,
-      })
-    }
-  }
-  // Then, read the subdir with the valid architecture and:
-  // - leave only exe and dll files for Windows platforms
-  // - on macOS, delete exe and dll files and also linux-test-proxy and lxc-exec
-  // - on Linux, delete exe and dll files and also mxc-exec-mac
-  const mxcArchSubdirPath = path.join(mxcDir, currentArch)
-  if (!existsSync(mxcArchSubdirPath)) {
-    return
-  }
-  const mxcFiles = readdirSync(mxcArchSubdirPath)
-  const isWindowsBinary = (file: string) =>
-    file.endsWith('.exe') || file.endsWith('.dll')
-  const isMacOSBinary = (file: string) => file === 'mxc-exec-mac'
-  const isLinuxBinary = (file: string) =>
-    file === 'linux-test-proxy' || file === 'lxc-exec'
-
-  for (const file of mxcFiles) {
-    const shouldRemove =
-      (currentPlatform === 'win32' &&
-        (isMacOSBinary(file) || isLinuxBinary(file))) ||
-      (currentPlatform === 'darwin' &&
-        (isWindowsBinary(file) || isLinuxBinary(file))) ||
-      (currentPlatform === 'linux' &&
-        (isWindowsBinary(file) || isMacOSBinary(file)))
-
-    if (shouldRemove) {
-      rmSync(path.join(mxcArchSubdirPath, file), {
-        recursive: true,
-        force: true,
-      })
-    }
-  }
+  const codexDestination = path.resolve(outRoot, 'codex')
+  removeAndCopy(codexPackageDirectory, codexDestination)
 }

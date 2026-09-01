@@ -1,5 +1,5 @@
 import assert from 'node:assert'
-import { afterEach, describe, it } from 'node:test'
+import { describe, it } from 'node:test'
 import * as React from 'react'
 
 import { Account } from '../../../src/models/account'
@@ -14,9 +14,6 @@ import {
   WorkingDirectoryFileChange,
 } from '../../../src/models/status'
 import { CommitMessage } from '../../../src/ui/changes/commit-message'
-
-const PreviewFeaturesEnv = 'GITHUB_DESKTOP_PREVIEW_FEATURES'
-const previousPreviewFeatures = process.env[PreviewFeaturesEnv]
 
 type CommitMessageProps = React.ComponentProps<typeof CommitMessage>
 type CopilotButtonProps = {
@@ -123,6 +120,22 @@ function createProps(
     onStopAmending: () => {},
     onShowCreateForkDialog: () => {},
     accounts: [account],
+    codexAccount: {
+      account: {
+        status: 'signed-in',
+        type: 'chatgpt',
+        email: 'test.user@example.invalid',
+        planType: 'plus',
+        requiresOpenaiAuth: false,
+      },
+      login: null,
+      rateLimits: {
+        status: 'available',
+        primary: null,
+        secondary: null,
+        resetsAt: null,
+      },
+    },
     skipCommitHooks: false,
     signOffCommits: false,
     allowEmptyCommit: false,
@@ -168,42 +181,8 @@ async function clickCopilotButton(component: CommitMessageTestInstance) {
   })
 }
 
-afterEach(() => {
-  if (previousPreviewFeatures === undefined) {
-    delete process.env[PreviewFeaturesEnv]
-  } else {
-    process.env[PreviewFeaturesEnv] = previousPreviewFeatures
-  }
-})
-
 describe('CommitMessage', () => {
-  it('does not allow cancelling commit message generation when the Copilot SDK is disabled', async () => {
-    delete process.env[PreviewFeaturesEnv]
-
-    let cancelCount = 0
-    const component = toTestInstance(
-      new CommitMessage(
-        createProps({
-          onCancelGenerateCommitMessage: () => {
-            cancelCount++
-          },
-        })
-      )
-    )
-
-    const buttonProps = getCopilotButtonProps(component)
-
-    assert.equal(buttonProps.ariaLabel, 'Generating commit details…')
-    assert.equal(buttonProps.disabled, true)
-
-    await clickCopilotButton(component)
-
-    assert.equal(cancelCount, 0)
-  })
-
-  it('allows cancelling commit message generation when the Copilot SDK is enabled', async () => {
-    process.env[PreviewFeaturesEnv] = '1'
-
+  it('allows cancelling an active Codex generation', async () => {
     let cancelCount = 0
     const component = toTestInstance(
       new CommitMessage(
@@ -223,5 +202,83 @@ describe('CommitMessage', () => {
     await clickCopilotButton(component)
 
     assert.equal(cancelCount, 1)
+  })
+
+  it('disables generation when ChatGPT is signed out', () => {
+    const component = toTestInstance(
+      new CommitMessage(
+        createProps({
+          isGeneratingCommitMessage: false,
+          accounts: [],
+          codexAccount: {
+            account: {
+              status: 'signed-out',
+              type: 'signed-out',
+              email: null,
+              planType: null,
+              requiresOpenaiAuth: true,
+            },
+            login: null,
+            rateLimits: {
+              status: 'unavailable',
+              primary: null,
+              secondary: null,
+              resetsAt: null,
+            },
+          },
+        })
+      )
+    )
+
+    const buttonProps = getCopilotButtonProps(component)
+    assert.equal(buttonProps.disabled, true)
+    assert.match(buttonProps.ariaLabel ?? '', /Sign in to ChatGPT/)
+  })
+
+  it('enables local generation without a GitHub account when usage is unknown', () => {
+    const component = toTestInstance(
+      new CommitMessage(
+        createProps({
+          isGeneratingCommitMessage: false,
+          accounts: [],
+          codexAccount: {
+            ...createProps().codexAccount!,
+            rateLimits: {
+              status: 'unavailable',
+              primary: null,
+              secondary: null,
+              resetsAt: null,
+            },
+          },
+        })
+      )
+    )
+
+    const buttonProps = getCopilotButtonProps(component)
+    assert.equal(buttonProps.disabled, false)
+    assert.equal(buttonProps.ariaLabel, 'Generate commit message with Codex')
+  })
+
+  it('disables generation when subscription usage is exhausted', () => {
+    const component = toTestInstance(
+      new CommitMessage(
+        createProps({
+          isGeneratingCommitMessage: false,
+          codexAccount: {
+            ...createProps().codexAccount!,
+            rateLimits: {
+              status: 'exhausted',
+              primary: { usedPercent: 100, resetsAt: null },
+              secondary: null,
+              resetsAt: null,
+            },
+          },
+        })
+      )
+    )
+
+    const buttonProps = getCopilotButtonProps(component)
+    assert.equal(buttonProps.disabled, true)
+    assert.match(buttonProps.ariaLabel ?? '', /usage is exhausted/)
   })
 })

@@ -18,6 +18,7 @@ import { encodePathAsUrl } from '../../lib/path'
 import { isOSNoLongerSupportedByElectron } from '../../lib/get-os'
 import { AriaLiveContainer } from '../accessibility/aria-live-container'
 import { formatDate } from '../../lib/format-date'
+import { WinGitDocumentationURL, WinGitIssueURL } from '../../lib/product-links'
 
 const logoPath = __DARWIN__
   ? 'static/logo-64x64@2x.png'
@@ -90,8 +91,10 @@ class UpdateInfo extends React.Component<IUpdateInfoProps> {
 export class About extends React.Component<IAboutProps> {
   private get canCheckForUpdates() {
     return (
-      __RELEASE_CHANNEL__ !== 'development' ||
-      this.props.allowDevelopment === true
+      __UPDATES_URL__ !== undefined &&
+      __UPDATES_URL__.length > 0 &&
+      (__RELEASE_CHANNEL__ !== 'development' ||
+        this.props.allowDevelopment === true)
     )
   }
 
@@ -149,8 +152,8 @@ export class About extends React.Component<IAboutProps> {
     if (!this.canCheckForUpdates) {
       return (
         <p>
-          The application is currently running in development and will not
-          receive any updates.
+          Updates are disabled until a WinGit-owned, signed update channel is
+          configured.
         </p>
       )
     }
@@ -210,7 +213,7 @@ export class About extends React.Component<IAboutProps> {
         <DialogError>
           This operating system is no longer supported. Software updates have
           been disabled.{' '}
-          <LinkButton uri="https://docs.github.com/en/desktop/installing-and-configuring-github-desktop/overview/supported-operating-systems">
+          <LinkButton uri={WinGitDocumentationURL}>
             Supported operating systems
           </LinkButton>
         </DialogError>
@@ -222,7 +225,8 @@ export class About extends React.Component<IAboutProps> {
         <DialogError>
           Couldn't determine the last time an update check was performed. You
           may be running an old version. Please try manually checking for
-          updates and contact GitHub Support if the problem persists
+          updates. If the problem persists,{' '}
+          <LinkButton uri={WinGitIssueURL}>report a WinGit issue</LinkButton>.
         </DialogError>
       )
     }
@@ -231,7 +235,7 @@ export class About extends React.Component<IAboutProps> {
   }
 
   private renderBetaLink() {
-    if (__RELEASE_CHANNEL__ === 'beta') {
+    if (!this.canCheckForUpdates || __RELEASE_CHANNEL__ === 'beta') {
       return
     }
 
@@ -240,9 +244,7 @@ export class About extends React.Component<IAboutProps> {
         <p className="no-padding">Looking for the latest features?</p>
         <p className="no-padding">
           Check out the{' '}
-          <LinkButton uri="https://desktop.github.com/beta">
-            Beta Channel
-          </LinkButton>
+          <LinkButton uri={ReleaseNotesUri}>WinGit releases</LinkButton>
         </p>
       </div>
     )
@@ -289,11 +291,6 @@ export class About extends React.Component<IAboutProps> {
             <p className="no-padding terms-and-license">
               <LinkButton onClick={this.props.onShowAcknowledgements}>
                 License and Open Source Notices
-              </LinkButton>
-            </p>
-            <p className="terms-and-license">
-              <LinkButton uri="https://gh.io/copilot-for-desktop-transparency">
-                Responsible use of Copilot in GitHub Desktop
               </LinkButton>
             </p>
           </div>

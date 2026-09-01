@@ -3,7 +3,7 @@ import * as Path from 'path'
 import { AppFileStatusKind, CommittedFileChange } from '../../../models/status'
 import { IDiff, ImageDiffType } from '../../../models/diff'
 import { WorkingDirectoryFileChange } from '../../../models/status'
-import { IFileResolution } from '../../../lib/copilot-conflict-resolution'
+import { IFileResolution } from '../../../lib/conflict-resolution-contract'
 import { ManualConflictResolution } from '../../../models/manual-conflict-resolution'
 import { FileList } from '../../history/file-list'
 import { SeamlessDiffSwitcher } from '../../diff/seamless-diff-switcher'
@@ -339,9 +339,9 @@ export class CopilotConflictsChanges extends React.Component<
     }
     const resolution = this.props.copilotResolutions?.find(r => r.path === path)
     if (resolution === undefined) {
-      return 'No Copilot resolution available'
+      return 'No ChatGPT suggestion available'
     }
-    return resolution.reasoning ?? "Using Copilot's merged resolution"
+    return resolution.reasoning ?? "Using ChatGPT's merged suggestion"
   }
 
   public render() {
@@ -466,7 +466,7 @@ export class CopilotConflictsChanges extends React.Component<
             )}
             {selectedFile !== null && noResolution && (
               <div className="copilot-changes-no-diff">
-                No Copilot resolution available for this file.
+                No ChatGPT suggestion is available for this file.
               </div>
             )}
             {selectedFile !== null && !noResolution && diffError && (

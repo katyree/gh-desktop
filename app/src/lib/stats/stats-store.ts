@@ -41,10 +41,7 @@ import { isInApplicationFolder } from '../../ui/main-process-proxy'
 import { getRendererGUID } from '../get-renderer-guid'
 import { ValidNotificationPullRequestReviewState } from '../valid-notification-pull-request-review'
 import { useExternalCredentialHelperKey } from '../trampoline/use-external-credential-helper'
-import { getUserAgent } from '../http'
 import { getHooksEnvEnabled } from '../hooks/config'
-import { parseModelKey } from '../copilot/byok'
-import { DefaultCopilotModel } from '../stores/copilot-store'
 
 type PullRequestReviewStatFieldInfix =
   | 'Approved'
@@ -59,10 +56,8 @@ type PullRequestReviewStatFieldSuffix =
 type PullRequestReviewStatField =
   `pullRequestReview${PullRequestReviewStatFieldInfix}${PullRequestReviewStatFieldSuffix}`
 
-const StatsEndpoint = 'https://central.github.com/api/usage/desktop'
-
-/** The URL to the stats samples page. */
-export const SamplesURL = 'https://desktop.github.com/usage-data/'
+/** WinGit has no telemetry endpoint. Keep reporting disabled until it owns one. */
+export const StatsReportingEnabled = false
 
 const LastDailyStatsReportKey = 'last-daily-stats-report'
 
@@ -469,15 +464,10 @@ export interface IStatsStore {
   increment: (k: keyof NumericMeasures, n?: number) => Promise<void>
 }
 
-const defaultPostImplementation = (body: Record<string, any>) =>
-  fetch(StatsEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'user-agent': getUserAgent(),
-    },
-    body: JSON.stringify(body),
-  })
+const defaultPostImplementation = (
+  _body: Record<string, any>
+): Promise<Response> =>
+  Promise.reject(new Error('WinGit usage reporting is disabled'))
 
 /** The store for the app's stats. */
 export class StatsStore implements IStatsStore {
@@ -497,7 +487,7 @@ export class StatsStore implements IStatsStore {
 
     // If the user has set an opt out value but we haven't sent the ping yet,
     // give it a shot now.
-    if (!getBoolean(HasSentOptInPingKey, false)) {
+    if (StatsReportingEnabled && !getBoolean(HasSentOptInPingKey, false)) {
       this.sendOptInStatusPing(this.optOut, storedValue)
     }
 
@@ -524,7 +514,7 @@ export class StatsStore implements IStatsStore {
     accounts: ReadonlyArray<Account>,
     repositories: ReadonlyArray<Repository>
   ) {
-    if (this.optOut) {
+    if (!StatsReportingEnabled || this.optOut) {
       return
     }
 
@@ -670,38 +660,9 @@ export class StatsStore implements IStatsStore {
       useExternalCredentialHelper,
       filteringChangesEnabled,
       gitHooksEnvEnabled: getHooksEnvEnabled(),
-      copilotConflictResolutionModel:
-        this.getSelectedCopilotConflictResolutionModel(),
+      // Retain the existing wire field while reporting the new provider.
+      copilotConflictResolutionModel: 'codex',
     }
-  }
-
-  /**
-   * Reads the user's selected Copilot conflict resolution model from
-   * localStorage and resolves it to the actual model ID string.
-   */
-  private getSelectedCopilotConflictResolutionModel(): string {
-    try {
-      const raw = localStorage.getItem('selected-copilot-models-by-account')
-      if (raw !== null) {
-        const parsed: unknown = JSON.parse(raw)
-        if (typeof parsed === 'object' && parsed !== null) {
-          for (const selections of Object.values(parsed)) {
-            if (typeof selections === 'object' && selections !== null) {
-              const selection = (selections as Record<string, unknown>)[
-                'conflict-resolution'
-              ]
-              if (typeof selection === 'string' && selection.length > 0) {
-                const key = parseModelKey(selection)
-                return key.modelId || DefaultCopilotModel
-              }
-            }
-          }
-        }
-      }
-    } catch {
-      // Fall through to default
-    }
-    return DefaultCopilotModel
   }
 
   private getOnboardingStats(): IOnboardingStats {
@@ -876,7 +837,7 @@ export class StatsStore implements IStatsStore {
 
     setBoolean(StatsOptOutKey, optOut)
 
-    if (changed || userViewedPrompt) {
+    if (StatsReportingEnabled && (changed || userViewedPrompt)) {
       await this.sendOptInStatusPing(optOut, previousValue)
     }
   }

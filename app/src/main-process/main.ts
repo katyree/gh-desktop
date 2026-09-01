@@ -10,6 +10,7 @@ import {
   nativeTheme,
 } from 'electron'
 import * as Fs from 'fs'
+import * as Path from 'path'
 
 import { AppWindow } from './app-window'
 import { buildDefaultMenu, getAllMenuItems } from './menu'
@@ -33,6 +34,7 @@ import { now } from './now'
 import { showUncaughtException } from './show-uncaught-exception'
 import { buildContextMenu } from './menu/build-context-menu'
 import { OrderedWebRequest } from './ordered-webrequest'
+import { installProductServiceIsolation } from './product-service-isolation'
 import { installAuthenticatedImageFilter } from './authenticated-image-filter'
 import { installAliveOriginFilter } from './alive-origin-filter'
 import { installSameOriginFilter } from './same-origin-filter'
@@ -51,12 +53,97 @@ import {
 import { initializeDesktopNotifications } from './notifications'
 import parseCommandLineArgs from 'minimist'
 import { CLIAction } from '../lib/cli-action'
-import { getWindowsAppUserModelID } from '../lib/product-identity'
+import {
+  getProtocolSchemes,
+  getWindowsAppUserModelID,
+} from '../lib/product-identity'
+import {
+  CodexAppServerSupervisor,
+  getBundledCodexExecutablePath,
+} from './codex-app-server-supervisor'
+import { CodexAppServerClient } from './codex-app-server-client'
+import { validateCodexAuthorizationURL } from './codex-authorization'
 
 app.setAppLogsPath()
 enableSourceMaps()
 
+const e2eCodexServerScript = app.isPackaged
+  ? undefined
+  : process.env.DESKTOP_E2E_CODEX_APP_SERVER_SCRIPT
+const e2eNodeExecutable = app.isPackaged
+  ? undefined
+  : process.env.DESKTOP_E2E_NODE_EXECUTABLE
+
+const codexAppServerSupervisor = __WIN32__
+  ? new CodexAppServerSupervisor({
+      executablePath:
+        e2eCodexServerScript !== undefined && e2eNodeExecutable !== undefined
+          ? e2eNodeExecutable
+          : getBundledCodexExecutablePath(__dirname),
+      ...(e2eCodexServerScript !== undefined && e2eNodeExecutable !== undefined
+        ? {
+            args: [e2eCodexServerScript],
+            workingDirectory: Path.dirname(e2eCodexServerScript),
+          }
+        : {}),
+      codexHomePath: Path.join(app.getPath('userData'), 'codex'),
+      log: (level, message) => writeLog(level, message),
+    })
+  : undefined
+const codexAppServerClient = codexAppServerSupervisor
+  ? (() => {
+      const generationWorkingDirectory = Path.join(
+        app.getPath('userData'),
+        'codex',
+        'empty-workspace'
+      )
+      // The isolated working directory must exist before renderer IPC can
+      // start a generation request during application startup.
+      // eslint-disable-next-line no-sync
+      Fs.mkdirSync(generationWorkingDirectory, { recursive: true })
+      return new CodexAppServerClient(
+        codexAppServerSupervisor,
+        app.getVersion(),
+        generationWorkingDirectory,
+        (level, message) => writeLog(level, message)
+      )
+    })()
+  : undefined
+
+function requireCodexAppServerClient() {
+  if (codexAppServerClient === undefined) {
+    throw new Error('Codex App Server is available only in WinGit for Windows')
+  }
+  return codexAppServerClient
+}
+
+async function startCodexAccountLogin(method: 'browser' | 'device-code') {
+  const client = requireCodexAppServerClient()
+  const login = await client.startAccountLogin(method)
+  const authorizationURL = validateCodexAuthorizationURL(login.authorizationUrl)
+
+  try {
+    await shell.openExternal(authorizationURL)
+  } catch {
+    await client.cancelAccountLogin(login.loginId).catch(() => undefined)
+    throw new Error('WinGit could not open ChatGPT sign-in in your browser.')
+  }
+
+  return {
+    method: login.method,
+    loginId: login.loginId,
+    ...(login.userCode === undefined ? {} : { userCode: login.userCode }),
+  }
+}
+
 let mainWindow: AppWindow | null = null
+
+codexAppServerClient?.onAccountStateChanged(state =>
+  mainWindow?.sendCodexAccountState(state)
+)
+codexAppServerClient?.onRateLimitStateChanged(state =>
+  mainWindow?.sendCodexRateLimitState(state)
+)
 
 const launchTime = now()
 
@@ -103,18 +190,9 @@ function getExtraErrorContext(): Record<string, string> {
 /** Extra argument for the protocol launcher on Windows */
 const protocolLauncherArg = '--protocol-launcher'
 
-const possibleProtocols = new Set(['x-github-client'])
-if (__DEV_SECRETS__) {
-  possibleProtocols.add('x-github-desktop-dev-auth')
-} else {
-  possibleProtocols.add('x-github-desktop-auth')
-}
-// Also support Desktop Classic's protocols.
-if (__DARWIN__) {
-  possibleProtocols.add('github-mac')
-} else if (__WIN32__) {
-  possibleProtocols.add('github-windows')
-}
+const possibleProtocols = new Set(
+  getProtocolSchemes(__DEV_SECRETS__ ? 'development' : 'production')
+)
 
 // Squirrel assigns the production ID to installed shortcuts. Development uses
 // a separate ID so that Windows does not group it with the installed app.
@@ -130,6 +208,17 @@ app.on('window-all-closed', () => {
   //
   // If we don't subscribe to this and change the default behavior we break
   // the crash process window which is shown after the main window is closed.
+})
+
+app.on('before-quit', () => {
+  void codexAppServerClient
+    ?.shutdown()
+    .catch(error =>
+      writeLog(
+        'error',
+        `Failed to stop Codex App Server during shutdown: ${String(error)}`
+      )
+    )
 })
 
 process.on('uncaughtException', (error: Error) => {
@@ -248,7 +337,7 @@ async function handleCommandLineArguments(argv: string[]) {
 
   if (__WIN32__ && args['protocol-launcher'] === true) {
     // On Windows we'll end up getting called with something like
-    // `--protocol-launcher --allow-file-access-from-files x-github-client://..`
+    // `--protocol-launcher --allow-file-access-from-files x-wingit-client://..`
     // which minimist naturally interprets as
     // `--allow-file-access-from-files=x:/github-client`. This is due to
     // Chromium's hot take on parsing command line arguments, see:
@@ -338,6 +427,8 @@ app.on('ready', () => {
   const orderedWebRequest = new OrderedWebRequest(
     session.defaultSession.webRequest
   )
+
+  installProductServiceIsolation(orderedWebRequest)
 
   // Ensures auth-related headers won't traverse http redirects to hosts
   // on different origins than the originating request.
@@ -722,6 +813,38 @@ app.on('ready', () => {
   )
   ipcMain.handle('request-notifications-permission', async () =>
     requestNotificationsPermission()
+  )
+
+  ipcMain.handle('codex-account-read', async (_, refreshToken) =>
+    requireCodexAppServerClient().readAccount(refreshToken)
+  )
+
+  ipcMain.handle('codex-account-login-start', async (_, method) =>
+    startCodexAccountLogin(method)
+  )
+
+  ipcMain.handle('codex-account-login-cancel', async (_, loginId) =>
+    requireCodexAppServerClient().cancelAccountLogin(loginId)
+  )
+
+  ipcMain.handle('codex-account-logout', async () =>
+    requireCodexAppServerClient().logoutAccount()
+  )
+
+  ipcMain.handle('codex-rate-limits-read', async () =>
+    requireCodexAppServerClient().readRateLimits()
+  )
+
+  ipcMain.handle('codex-generation-start', async (_, request) =>
+    requireCodexAppServerClient().startGeneration(request)
+  )
+
+  ipcMain.handle('codex-generation-cancel', async (_, cancellation) =>
+    requireCodexAppServerClient().cancelGeneration(cancellation)
+  )
+
+  ipcMain.handle('codex-generation-wait', async (_, handle) =>
+    requireCodexAppServerClient().waitForGeneration(handle)
   )
 })
 

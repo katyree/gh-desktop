@@ -4,6 +4,8 @@ const {
   bundleID,
   bundleIDDevelopment,
   companyName,
+  name,
+  protocols,
   productName,
   version,
   windowsAppUserModelID,
@@ -23,6 +25,10 @@ export function getCompanyName() {
   return companyName
 }
 
+export function getPackageName() {
+  return name
+}
+
 export function getVersion() {
   return version
 }
@@ -39,4 +45,12 @@ export function getWindowsAppUserModelID(environment = process.env.NODE_ENV) {
 
 export function getWindowsExecutableName() {
   return windowsExecutableName
+}
+
+export function getProtocolSchemes(environment = process.env.NODE_ENV) {
+  const authentication = isDevelopment(environment)
+    ? protocols.authenticationDevelopment
+    : protocols.authentication
+
+  return [protocols.openRepository, protocols.oauth, authentication]
 }

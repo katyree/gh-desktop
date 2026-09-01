@@ -14,7 +14,7 @@ describe('parseAppURL', () => {
   describe('oauth', () => {
     it('returns right name', () => {
       const result = parseAppURL(
-        'x-github-client://oauth?code=18142422&state=e4cd2dea-1567-46aa-8eb2-c7f56e943187'
+        'x-wingit-client://oauth?code=18142422&state=e4cd2dea-1567-46aa-8eb2-c7f56e943187'
       )
       assert.equal(result.name, 'oauth')
 
@@ -26,7 +26,7 @@ describe('parseAppURL', () => {
   describe('openRepo via HTTPS', () => {
     it('returns right name', () => {
       const result = parseAppURL(
-        'github-mac://openRepo/https://github.com/desktop/desktop'
+        'wingit://openRepo/https://github.com/desktop/desktop'
       )
       assert.equal(result.name, 'open-repository-from-url')
 
@@ -35,13 +35,13 @@ describe('parseAppURL', () => {
     })
 
     it('returns unknown when no remote defined', () => {
-      const result = parseAppURL('github-mac://openRepo/')
+      const result = parseAppURL('wingit://openRepo/')
       assert.equal(result.name, 'unknown')
     })
 
     it('adds branch name if set', () => {
       const result = parseAppURL(
-        'github-mac://openRepo/https://github.com/desktop/desktop?branch=cancel-2fa-flow'
+        'wingit://openRepo/https://github.com/desktop/desktop?branch=cancel-2fa-flow'
       )
       assert.equal(result.name, 'open-repository-from-url')
 
@@ -52,7 +52,7 @@ describe('parseAppURL', () => {
 
     it('adds pull request ID if found', () => {
       const result = parseAppURL(
-        'github-mac://openRepo/https://github.com/octokit/octokit.net?branch=pr%2F1569&pr=1569'
+        'wingit://openRepo/https://github.com/octokit/octokit.net?branch=pr%2F1569&pr=1569'
       )
       assert.equal(result.name, 'open-repository-from-url')
 
@@ -64,7 +64,7 @@ describe('parseAppURL', () => {
 
     it('returns unknown for unexpected pull request input', () => {
       const result = parseAppURL(
-        'github-mac://openRepo/https://github.com/octokit/octokit.net?branch=bar&pr=foo'
+        'wingit://openRepo/https://github.com/octokit/octokit.net?branch=bar&pr=foo'
       )
       assert.equal(result.name, 'unknown')
     })
@@ -72,14 +72,14 @@ describe('parseAppURL', () => {
     it('returns unknown for invalid branch name', () => {
       // branch=<>
       const result = parseAppURL(
-        'github-mac://openRepo/https://github.com/octokit/octokit.net?branch=%3C%3E'
+        'wingit://openRepo/https://github.com/octokit/octokit.net?branch=%3C%3E'
       )
       assert.equal(result.name, 'unknown')
     })
 
     it('adds file path if found', () => {
       const result = parseAppURL(
-        'github-mac://openRepo/https://github.com/octokit/octokit.net?branch=master&filepath=Octokit.Reactive%2FOctokit.Reactive.csproj'
+        'wingit://openRepo/https://github.com/octokit/octokit.net?branch=master&filepath=Octokit.Reactive%2FOctokit.Reactive.csproj'
       )
       assert.equal(result.name, 'open-repository-from-url')
 
@@ -96,7 +96,7 @@ describe('parseAppURL', () => {
   describe('openRepo via SSH', () => {
     it('returns right name', () => {
       const result = parseAppURL(
-        'github-mac://openRepo/git@github.com/desktop/desktop'
+        'wingit://openRepo/git@github.com/desktop/desktop'
       )
       assert.equal(result.name, 'open-repository-from-url')
 
@@ -105,13 +105,13 @@ describe('parseAppURL', () => {
     })
 
     it('returns unknown when no remote defined', () => {
-      const result = parseAppURL('github-mac://openRepo/')
+      const result = parseAppURL('wingit://openRepo/')
       assert.equal(result.name, 'unknown')
     })
 
     it('adds branch name if set', () => {
       const result = parseAppURL(
-        'github-mac://openRepo/git@github.com/desktop/desktop?branch=cancel-2fa-flow'
+        'wingit://openRepo/git@github.com/desktop/desktop?branch=cancel-2fa-flow'
       )
       assert.equal(result.name, 'open-repository-from-url')
 
@@ -122,7 +122,7 @@ describe('parseAppURL', () => {
 
     it('adds pull request ID if found', () => {
       const result = parseAppURL(
-        'github-mac://openRepo/git@github.com/octokit/octokit.net?branch=pr%2F1569&pr=1569'
+        'wingit://openRepo/git@github.com/octokit/octokit.net?branch=pr%2F1569&pr=1569'
       )
       assert.equal(result.name, 'open-repository-from-url')
 
@@ -134,7 +134,7 @@ describe('parseAppURL', () => {
 
     it('returns unknown for unexpected pull request input', () => {
       const result = parseAppURL(
-        'github-mac://openRepo/git@github.com/octokit/octokit.net?branch=bar&pr=foo'
+        'wingit://openRepo/git@github.com/octokit/octokit.net?branch=bar&pr=foo'
       )
       assert.equal(result.name, 'unknown')
     })
@@ -142,14 +142,14 @@ describe('parseAppURL', () => {
     it('returns unknown for invalid branch name', () => {
       // branch=<>
       const result = parseAppURL(
-        'github-mac://openRepo/git@github.com/octokit/octokit.net?branch=%3C%3E'
+        'wingit://openRepo/git@github.com/octokit/octokit.net?branch=%3C%3E'
       )
       assert.equal(result.name, 'unknown')
     })
 
     it('adds file path if found', () => {
       const result = parseAppURL(
-        'github-mac://openRepo/git@github.com/octokit/octokit.net?branch=master&filepath=Octokit.Reactive%2FOctokit.Reactive.csproj'
+        'wingit://openRepo/git@github.com/octokit/octokit.net?branch=master&filepath=Octokit.Reactive%2FOctokit.Reactive.csproj'
       )
       assert.equal(result.name, 'open-repository-from-url')
 

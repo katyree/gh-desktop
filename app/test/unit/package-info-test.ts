@@ -4,6 +4,7 @@ import {
   getBundleID,
   getCompanyName,
   getProductName,
+  getProtocolSchemes,
   getWindowsAppUserModelID,
   getWindowsExecutableName,
 } from '../../package-info'
@@ -34,5 +35,27 @@ describe('package identity', () => {
       getWindowsAppUserModelID('development'),
       getWindowsAppUserModelID('production')
     )
+  })
+
+  it('uses only WinGit-owned protocol schemes', () => {
+    assert.deepEqual(getProtocolSchemes('production'), [
+      'wingit',
+      'x-wingit-client',
+      'x-wingit-auth',
+    ])
+    assert.deepEqual(getProtocolSchemes('development'), [
+      'wingit',
+      'x-wingit-client',
+      'x-wingit-dev-auth',
+    ])
+
+    for (const protocol of [
+      ...getProtocolSchemes('production'),
+      ...getProtocolSchemes('development'),
+    ]) {
+      assert(!protocol.startsWith('x-github-'))
+      assert.notEqual(protocol, 'github-windows')
+      assert.notEqual(protocol, 'github-mac')
+    }
   })
 })

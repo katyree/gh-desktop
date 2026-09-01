@@ -11,7 +11,7 @@ export type CopilotFileResolutionChoice = 'copilot' | 'ours' | 'theirs'
 
 /** Label and icon for each resolution choice. */
 export const resolutionChoices = {
-  copilot: { label: 'Copilot', icon: octicons.copilot },
+  copilot: { label: 'ChatGPT', icon: octicons.sparklesFill },
   ours: { label: 'Current', icon: octicons.chevronLeft },
   theirs: { label: 'Incoming', icon: octicons.chevronRight },
 } as const
@@ -106,7 +106,7 @@ export function getDeleteConflictChoiceLabel(
   const deletedSide = getDeletedSide(status)
 
   if (choice === 'copilot') {
-    return 'Copilot'
+    return 'ChatGPT'
   }
 
   if (deletedSide === 'ours') {

@@ -16,7 +16,6 @@ import { Ref } from './lib/ref'
 import { GitError as DugiteError } from 'dugite'
 import { LinkButton } from './lib/link-button'
 import { getFileFromExceedsError } from '../lib/helpers/regex'
-import { CopilotError, getCopilotErrorDisplayInfo } from '../lib/copilot-error'
 import { Terminal } from './terminal'
 import { coerceToString } from '../lib/git/coerce-to-string'
 
@@ -127,41 +126,10 @@ export class AppError extends React.Component<IAppErrorProps, IAppErrorState> {
       )
     }
 
-    if (e instanceof CopilotError) {
-      const displayInfo = getCopilotErrorDisplayInfo(e)
-      if (displayInfo !== null) {
-        const { actionText, actionURL, message, retryAfterMessage } =
-          displayInfo
-
-        return (
-          <>
-            <p>{message}</p>
-            {retryAfterMessage !== undefined ? (
-              <p>{retryAfterMessage}</p>
-            ) : null}
-            {actionText !== undefined && actionURL !== undefined ? (
-              <p>
-                <LinkButton uri={actionURL}>{actionText}</LinkButton>
-              </p>
-            ) : null}
-          </>
-        )
-      }
-    }
-
     return <p>{e.message}</p>
   }
 
   private getTitle(error: Error) {
-    const underlyingError = getUnderlyingError(error)
-
-    if (underlyingError instanceof CopilotError) {
-      const displayInfo = getCopilotErrorDisplayInfo(underlyingError)
-      if (displayInfo !== null) {
-        return displayInfo.title
-      }
-    }
-
     switch (getDugiteError(error)) {
       case DugiteError.PushWithFileSizeExceedingLimit:
         return 'File size limit exceeded'

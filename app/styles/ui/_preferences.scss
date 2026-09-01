@@ -122,6 +122,69 @@
     }
   }
 
+  .codex-tab {
+    .codex-tab-content {
+      max-width: 520px;
+    }
+
+    .codex-account-state > p:first-child {
+      margin-top: 0;
+    }
+
+    .codex-account-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--spacing);
+      margin-top: var(--spacing);
+    }
+
+    .codex-account-details {
+      margin: 0;
+
+      > div {
+        display: grid;
+        grid-template-columns: 80px minmax(0, 1fr);
+        gap: var(--spacing);
+        padding: var(--spacing-half) 0;
+      }
+
+      dt {
+        color: var(--text-secondary-color);
+      }
+
+      dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+    }
+
+    .codex-device-code {
+      display: inline-block;
+      padding: var(--spacing-half) var(--spacing);
+      border: var(--base-border);
+      border-radius: var(--border-radius);
+      background: var(--box-alt-background-color);
+      font-family: var(--font-family-monospace);
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-semibold);
+      letter-spacing: 0.12em;
+    }
+
+    .codex-rate-limits {
+      margin-top: var(--spacing-double);
+      padding-top: var(--spacing);
+      border-top: var(--base-border);
+
+      h2 {
+        margin-bottom: var(--spacing-half);
+      }
+
+      p {
+        margin: 0;
+      }
+    }
+  }
+
   .no-options-found {
     label {
       margin-bottom: 0;

@@ -5,9 +5,10 @@ import { getAppPath } from '../lib/app-proxy'
 import { Loading } from '../lib/loading'
 import { LinkButton } from '../lib/link-button'
 import { Dialog, DialogContent, DefaultDialogFooter } from '../dialog'
+import { getPackageName } from '../../lib/product-identity'
+import { WinGitRepositoryURL } from '../../lib/product-links'
 
-const WebsiteURL = 'https://desktop.github.com'
-const RepositoryURL = 'https://github.com/desktop/desktop'
+const UpstreamRepositoryURL = 'https://github.com/desktop/desktop'
 
 interface IAcknowledgementsProps {
   /** The function to call when the dialog should be dismissed. */
@@ -107,9 +108,11 @@ export class Acknowledgements extends React.Component<
 
     let desktopLicense: JSX.Element | null = null
     if (licenses) {
-      const key = `desktop@${this.props.applicationVersion}`
+      const key = `${getPackageName()}@${this.props.applicationVersion}`
       const entry = licenses[key]
-      desktopLicense = <p className="license-text">{entry.sourceText}</p>
+      if (entry !== undefined) {
+        desktopLicense = <p className="license-text">{entry.sourceText}</p>
+      }
     }
 
     return (
@@ -121,15 +124,14 @@ export class Acknowledgements extends React.Component<
       >
         <DialogContent>
           <p>
-            <LinkButton uri={WebsiteURL}>GitHub Desktop</LinkButton> is an open
-            source project published under the MIT License. You can view the
-            source code and contribute to this project on{' '}
-            <LinkButton uri={RepositoryURL}>GitHub</LinkButton>.
+            <LinkButton uri={WinGitRepositoryURL}>WinGit</LinkButton> is an open
+            source project published under the MIT License and based on{' '}
+            <LinkButton uri={UpstreamRepositoryURL}>GitHub Desktop</LinkButton>.
           </p>
 
           {desktopLicense}
 
-          <p>GitHub Desktop also distributes these libraries:</p>
+          <p>WinGit also distributes these libraries:</p>
 
           {licenses ? this.renderLicenses(licenses) : <Loading />}
         </DialogContent>

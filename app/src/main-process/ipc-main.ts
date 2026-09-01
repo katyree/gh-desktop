@@ -2,7 +2,7 @@ import { RequestChannels, RequestResponseChannels } from '../lib/ipc-shared'
 // eslint-disable-next-line no-restricted-imports
 import { ipcMain } from 'electron'
 import { IpcMainEvent, IpcMainInvokeEvent } from 'electron/main'
-import { isTrustedIPCSender } from './trusted-ipc-sender'
+import { isTrustedIPCFrameSender } from './trusted-ipc-sender'
 
 type RequestChannelListener<T extends keyof RequestChannels> = (
   event: IpcMainEvent,
@@ -47,18 +47,29 @@ export function handle<T extends keyof RequestResponseChannels>(
   channel: T,
   listener: RequestResponseChannelListener<T>
 ) {
-  ipcMain.handle(channel, safeListener(listener))
+  ipcMain.handle(channel, safeInvokeListener(listener))
 }
 
 function safeListener<E extends IpcMainEvent | IpcMainInvokeEvent, R>(
   listener: (event: E, ...a: any) => R
 ) {
   return (event: E, ...args: any) => {
-    if (!isTrustedIPCSender(event.sender)) {
-      log.error(
-        `IPC message received from invalid sender: ${event.senderFrame?.url}`
-      )
+    if (!isTrustedIPCFrameSender(event.sender, event.senderFrame)) {
+      log.error(`IPC message received from invalid sender frame`)
       return
+    }
+
+    return listener(event, ...args)
+  }
+}
+
+function safeInvokeListener<E extends IpcMainInvokeEvent, R>(
+  listener: (event: E, ...a: any) => R
+) {
+  return (event: E, ...args: any) => {
+    if (!isTrustedIPCFrameSender(event.sender, event.senderFrame)) {
+      log.error(`IPC request received from invalid sender frame`)
+      throw new Error('IPC request rejected from invalid sender frame')
     }
 
     return listener(event, ...args)

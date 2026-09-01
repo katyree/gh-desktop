@@ -37,7 +37,7 @@ export class CopilotDisclaimer extends React.Component<ICopilotDisclaimerProps> 
     const { children, onDismissed } = this.props
     return (
       <Dialog
-        title="GitHub Copilot"
+        title="ChatGPT conflict suggestions"
         type="warning"
         onDismissed={onDismissed}
         onSubmit={this.onSubmit}
@@ -46,10 +46,10 @@ export class CopilotDisclaimer extends React.Component<ICopilotDisclaimerProps> 
       >
         <DialogContent>
           <p id="copilot-disclaimer-body">
-            Copilot is powered by AI, so mistakes are possible.
+            ChatGPT is powered by AI, so mistakes are possible.
             {children !== undefined && <> {children}</>}{' '}
-            <LinkButton uri="https://gh.io/copilot-for-desktop-transparency">
-              Learn more about Copilot in GitHub Desktop.
+            <LinkButton uri="https://openai.com/policies/privacy-policy/">
+              Read OpenAI's privacy policy.
             </LinkButton>
           </p>
         </DialogContent>

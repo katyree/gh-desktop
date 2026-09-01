@@ -51,11 +51,7 @@ import {
 import { Shell } from '../../lib/shells'
 import { ILaunchStats, StatsStore } from '../../lib/stats'
 import { AppStore } from '../../lib/stores/app-store'
-import type {
-  CopilotFeature,
-  CopilotModelSelectionsByAccount,
-} from '../../lib/stores/copilot-store'
-import type { IBYOKProvider } from '../../lib/copilot/byok'
+import type { CodexLoginMethod } from '../../lib/codex-ipc'
 import { RepositoryStateCache } from '../../lib/stores/repository-state-cache'
 import { getTipSha } from '../../lib/tip'
 
@@ -136,7 +132,7 @@ import {
   IConflictResolutionProgress,
   IFileResolution,
   ICopilotResolutionSummary,
-} from '../../lib/copilot-conflict-resolution'
+} from '../../lib/conflict-resolution-contract'
 import { WorktreeEntry } from '../../models/worktree'
 
 /**
@@ -1184,8 +1180,12 @@ export class Dispatcher {
     )
   }
 
-  public updateCommitMessageGenerationDisclaimerLastSeen() {
-    return this.appStore._updateCommitMessageGenerationDisclaimerLastSeen()
+  public acknowledgeCodexCommitMessagePrivacy(repository: Repository) {
+    return this.appStore._acknowledgeCodexCommitMessagePrivacy(repository)
+  }
+
+  public resetCodexCommitMessagePrivacyAcknowledgements() {
+    return this.appStore._resetCodexCommitMessagePrivacyAcknowledgements()
   }
 
   public generateCommitMessage(
@@ -4260,75 +4260,23 @@ export class Dispatcher {
     this.appStore._toggleChangesFilterVisibility()
   }
 
-  /** Set the selected Copilot model for a specific feature. */
-  public setSelectedCopilotModel(
-    account: Account,
-    feature: CopilotFeature,
-    model: string | null
-  ) {
-    return this.appStore._setSelectedCopilotModel(account, feature, model)
+  public startCodexAccountLogin(method: CodexLoginMethod): Promise<void> {
+    return this.appStore._startCodexAccountLogin(method)
   }
 
-  /** Replace all account-scoped Copilot model selections at once. */
-  public setSelectedCopilotModelsByAccount(
-    modelsByAccount: CopilotModelSelectionsByAccount
-  ) {
-    return this.appStore._setSelectedCopilotModelsByAccount(modelsByAccount)
+  public cancelCodexAccountLogin(): Promise<void> {
+    return this.appStore._cancelCodexAccountLogin()
+  }
+
+  public logoutCodexAccount(): Promise<void> {
+    return this.appStore._logoutCodexAccount()
+  }
+
+  public refreshCodexAccount(): Promise<void> {
+    return this.appStore._refreshCodexAccount()
   }
 
   public setAlwaysUseCopilotForConflictResolution(value: boolean): void {
     this.appStore._setAlwaysUseCopilotForConflictResolution(value)
-  }
-
-  /** Fetch the list of available Copilot models from the SDK. */
-  public fetchCopilotModels(): Promise<void> {
-    return this.appStore._fetchCopilotModels()
-  }
-
-  /** Fetch Copilot quota usage snapshots from the SDK. */
-  public fetchCopilotQuotaSnapshots(): Promise<void> {
-    return this.appStore._fetchCopilotQuotaSnapshots()
-  }
-
-  /**
-   * Add a new BYOK Copilot provider. The secret (API key / bearer token)
-   * is stored separately in the OS keychain.
-   */
-  public async addCopilotBYOKProvider(
-    provider: IBYOKProvider,
-    secret: string | null
-  ): Promise<void> {
-    try {
-      await this.appStore._addCopilotBYOKProvider(provider, secret)
-    } catch (e) {
-      log.error(`Error adding BYOK Copilot provider '${provider.name}'`, e)
-      this.postError(e)
-    }
-  }
-
-  /**
-   * Update a BYOK Copilot provider. Pass `secret = undefined` to leave the
-   * stored secret untouched, `null` to clear it, or a string to overwrite it.
-   */
-  public async updateCopilotBYOKProvider(
-    provider: IBYOKProvider,
-    secret: string | null | undefined
-  ): Promise<void> {
-    try {
-      await this.appStore._updateCopilotBYOKProvider(provider, secret)
-    } catch (e) {
-      log.error(`Error updating BYOK Copilot provider '${provider.name}'`, e)
-      this.postError(e)
-    }
-  }
-
-  /** Remove a BYOK Copilot provider and its stored secret. */
-  public async deleteCopilotBYOKProvider(id: string): Promise<void> {
-    try {
-      await this.appStore._deleteCopilotBYOKProvider(id)
-    } catch (e) {
-      log.error(`Error deleting BYOK Copilot provider '${id}'`, e)
-      this.postError(e)
-    }
   }
 }

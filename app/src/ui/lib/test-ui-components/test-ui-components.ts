@@ -4,6 +4,7 @@ import {
   Repository,
 } from '../../../models/repository'
 import { Dispatcher } from '../../dispatcher'
+import { WinGitReleaseNotesURL } from '../../../lib/product-links'
 import { assertNever } from '../../../lib/fatal-error'
 import {
   ExternalEditorError,
@@ -49,10 +50,6 @@ export function showTestUI(
       return showFakeConfirmCommittingConflictedFiles()
     case 'test-cherry-pick-conflicts-banner':
       return showFakeCherryPickConflictBanner()
-    case 'test-copilot-snapshot-card':
-      return dispatcher.showPopup({
-        type: PopupType.TestCopilotSnapshotCard,
-      })
     case 'test-discarded-changes-will-be-unrecoverable':
       return showFakeDiscardedChangesWillBeUnrecoverable()
     case 'test-do-you-want-fork-this-repository':
@@ -157,7 +154,7 @@ export function showTestUI(
     case 'test-prioritized-update-banner':
       return showFakeUpdateBanner({
         isPriority: true,
-        priorityInfoUrl: 'https://desktop.github.com',
+        priorityInfoUrl: WinGitReleaseNotesURL,
       })
     case 'test-update-existing-git-lfs-filters':
       return dispatcher.showPopup({ type: PopupType.LFSAttributeMismatch })
@@ -343,7 +340,7 @@ export function showTestUI(
   function showTestNoExternalEditor() {
     dispatcher.postError(
       new ExternalEditorError(
-        `No suitable editors installed for GitHub Desktop to launch. Install ${suggestedExternalEditor.name} for your platform and restart GitHub Desktop to try again.`,
+        `No suitable editors installed for WinGit to launch. Install ${suggestedExternalEditor.name} for your platform and restart WinGit to try again.`,
         { suggestDefaultEditor: true }
       )
     )

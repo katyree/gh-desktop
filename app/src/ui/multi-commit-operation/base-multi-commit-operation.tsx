@@ -269,7 +269,6 @@ export abstract class BaseMultiCommitOperation extends React.Component<IMultiCom
           <ConflictsDialog
             dispatcher={dispatcher}
             repository={repository}
-            accounts={this.props.accounts}
             shouldShowCopilotConflictResolutionCallOut={
               this.props.shouldShowCopilotConflictResolutionCallOut
             }

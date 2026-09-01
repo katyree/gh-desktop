@@ -23,8 +23,6 @@ import { ManualConflictResolution } from '../../../models/manual-conflict-resolu
 import { OkCancelButtonGroup } from '../../dialog/ok-cancel-button-group'
 import { DialogSuccess } from '../../dialog/success'
 import { enableCopilotConflictResolution } from '../../../lib/feature-flag'
-import { getAccountForCopilotConflictResolution } from '../../../lib/get-account-for-repository'
-import { Account } from '../../../models/account'
 import { Octicon } from '../../octicons'
 import * as octicons from '../../octicons/octicons.generated'
 import { Button } from '../../lib/button'
@@ -54,12 +52,6 @@ interface IConflictsDialogProps {
    * button is shown in the dialog footer.
    */
   readonly onResolveWithCopilot?: () => void
-  /**
-   * Authenticated GitHub accounts. Used to determine whether the
-   * "Resolve with Copilot" button should be shown — the button is only
-   * available when at least one account has Copilot for Desktop enabled.
-   */
-  readonly accounts: ReadonlyArray<Account>
   /**
    * Whether to show the "New" call-to-action bubble on the
    * "Resolve with Copilot" button. Hidden once the user has clicked it
@@ -273,13 +265,12 @@ export class ConflictsDialog extends React.Component<
   private renderCopilotButton(
     conflictedFilesCount: number
   ): JSX.Element | null {
-    const { onResolveWithCopilot, accounts, repository } = this.props
+    const { onResolveWithCopilot } = this.props
 
     if (
       onResolveWithCopilot === undefined ||
       !enableCopilotConflictResolution() ||
-      conflictedFilesCount === 0 ||
-      getAccountForCopilotConflictResolution(accounts, repository) === undefined
+      conflictedFilesCount === 0
     ) {
       return null
     }
@@ -292,11 +283,11 @@ export class ConflictsDialog extends React.Component<
         tooltip={
           this.state.isAborting
             ? 'Cannot resolve while operation is being aborted'
-            : 'Use Copilot to suggest resolutions for conflicted files'
+            : 'Use ChatGPT to suggest resolutions for conflicted files'
         }
       >
-        <Octicon symbol={octicons.copilot} />
-        {' Resolve with Copilot'}
+        <Octicon symbol={octicons.sparklesFill} />
+        {' Suggest with ChatGPT'}
       </Button>
     )
 

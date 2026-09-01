@@ -33,6 +33,7 @@ import { IAheadBehind } from '../../models/branch'
 import { Emoji } from '../../lib/emoji'
 import { FilterChangesList } from './filter-changes-list'
 import { HookProgress } from '../../lib/git'
+import type { ICodexAccountStoreState } from '../../lib/stores/codex-account-store'
 
 /**
  * The timeout for the animation of the enter/leave animation for Undo.
@@ -69,6 +70,7 @@ interface IChangesSidebarProps {
   readonly askForConfirmationOnDiscardChanges: boolean
   readonly askForConfirmationOnCommitFilteredChanges: boolean
   readonly accounts: ReadonlyArray<Account>
+  readonly codexAccount: ICodexAccountStoreState
   readonly isShowingModal: boolean
   readonly isShowingFoldout: boolean
   /** The name of the currently selected external editor */
@@ -476,6 +478,7 @@ export class ChangesSidebar extends React.Component<IChangesSidebarProps, {}> {
           currentRepoRulesInfo={currentRepoRulesInfo}
           aheadBehind={this.props.aheadBehind}
           accounts={this.props.accounts}
+          codexAccount={this.props.codexAccount}
           fileListFilter={this.props.changes.fileListFilter}
           showChangesFilter={this.props.showChangesFilter}
           skipCommitHooks={this.props.skipCommitHooks}

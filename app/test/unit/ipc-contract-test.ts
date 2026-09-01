@@ -69,6 +69,8 @@ describe('IPC channel contract', () => {
     'show-installing-update',
     'install-windows-cli',
     'uninstall-windows-cli',
+    'codex-account-state-changed',
+    'codex-rate-limits-state-changed',
   ] as const
 
   const expectedResponseChannels = [
@@ -98,6 +100,14 @@ describe('IPC channel contract', () => {
     'show-notification',
     'get-notifications-permission',
     'request-notifications-permission',
+    'codex-account-read',
+    'codex-account-login-start',
+    'codex-account-login-cancel',
+    'codex-account-logout',
+    'codex-rate-limits-read',
+    'codex-generation-start',
+    'codex-generation-cancel',
+    'codex-generation-wait',
   ] as const
 
   describe('RequestChannels', () => {

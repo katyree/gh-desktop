@@ -224,6 +224,10 @@ class UpdateStore {
   }
 
   private async getUpdatesUrl(skipGuidCheck: boolean) {
+    if (__UPDATES_URL__ === undefined || __UPDATES_URL__.length === 0) {
+      return null
+    }
+
     let url = null
 
     try {
@@ -272,7 +276,12 @@ class UpdateStore {
 
   private async updatePriorityUpdateStatus() {
     try {
-      const response = await fetch(await this.getUpdatesUrl(false), {
+      const updatesURL = await this.getUpdatesUrl(false)
+      if (updatesURL === null) {
+        return
+      }
+
+      const response = await fetch(updatesURL, {
         method: 'HEAD',
         headers: { 'user-agent': getUserAgent() },
       })
@@ -303,6 +312,10 @@ class UpdateStore {
    * was published in the last 15 days.
    */
   public async isUpdateShowcase() {
+    if (__UPDATES_URL__ === undefined || __UPDATES_URL__.length === 0) {
+      return false
+    }
+
     if (
       (__RELEASE_CHANNEL__ === 'development' ||
         __RELEASE_CHANNEL__ === 'test') &&

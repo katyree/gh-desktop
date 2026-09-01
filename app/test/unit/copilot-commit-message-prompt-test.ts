@@ -3,10 +3,10 @@ import { describe, it } from 'node:test'
 import {
   buildCommitMessageSystemPrompt,
   buildCommitMessageUserPrompt,
+  CommitMessagePromptTags,
   generateCommitMessagePromptTags,
   getCleanedEnforcedRuleDescriptions,
-  ICommitMessagePromptTags,
-} from '../../src/lib/stores/copilot-store'
+} from '../../src/lib/commit-message-generator'
 import {
   IRepoRulesMetadataRule,
   RepoRuleEnforced,
@@ -30,7 +30,7 @@ function cleaned(
   return getCleanedEnforcedRuleDescriptions(rules)
 }
 
-const fixedTags: ICommitMessagePromptTags = {
+const fixedTags: CommitMessagePromptTags = {
   diffOpen: '<diff-deadbeef>',
   diffClose: '</diff-deadbeef>',
   repoRulesOpen: '<repo-rules-deadbeef>',

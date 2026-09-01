@@ -36,6 +36,7 @@ import { PullRequestSuggestedNextAction } from '../models/pull-request'
 import { clamp } from '../lib/clamp'
 import { Emoji } from '../lib/emoji'
 import { PopupType } from '../models/popup'
+import type { ICodexAccountStoreState } from '../lib/stores/codex-account-store'
 
 interface IRepositoryViewProps {
   readonly repository: Repository
@@ -62,6 +63,7 @@ interface IRepositoryViewProps {
   readonly commitSpellcheckEnabled: boolean
   readonly showCommitLengthWarning: boolean
   readonly accounts: ReadonlyArray<Account>
+  readonly codexAccount: ICodexAccountStoreState
   readonly shouldShowGenerateCommitMessageCallOut: boolean
 
   /**
@@ -308,6 +310,7 @@ export class RepositoryView extends React.Component<
           this.props.askForConfirmationOnCommitFilteredChanges
         }
         accounts={this.props.accounts}
+        codexAccount={this.props.codexAccount}
         isShowingModal={this.props.isShowingModal}
         isShowingFoldout={this.props.isShowingFoldout}
         externalEditorLabel={this.props.externalEditorLabel}

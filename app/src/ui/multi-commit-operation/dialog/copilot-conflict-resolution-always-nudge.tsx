@@ -29,17 +29,17 @@ export class CopilotConflictResolutionAlwaysNudge extends React.Component<ICopil
         id="copilot-conflict-resolution-always-nudge"
         title={
           __DARWIN__
-            ? 'Always Use Copilot for Conflict Resolution?'
-            : 'Always use Copilot for conflict resolution?'
+            ? 'Always Use ChatGPT for Conflict Suggestions?'
+            : 'Always use ChatGPT for conflict suggestions?'
         }
         onSubmit={this.onYes}
         onDismissed={this.props.onDismissed}
       >
         <DialogContent>
           <p>
-            Would you like to automatically start with Copilot whenever
+            Would you like to automatically start ChatGPT suggestions whenever
             conflicts are detected? You can change this anytime in{' '}
-            {__DARWIN__ ? 'Settings → Copilot' : 'File → Options → Copilot'}.
+            {__DARWIN__ ? 'Settings → Codex' : 'File → Options → Codex'}.
           </p>
         </DialogContent>
         <DialogFooter>

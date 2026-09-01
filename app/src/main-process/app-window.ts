@@ -29,6 +29,7 @@ import {
 import { addTrustedIPCSender } from './trusted-ipc-sender'
 import { getUpdaterGUID } from '../lib/get-updater-guid'
 import { CLIAction } from '../lib/cli-action'
+import { ICodexAccountState, ICodexRateLimitState } from '../lib/codex-ipc'
 
 export class AppWindow {
   private window: Electron.BrowserWindow
@@ -308,6 +309,24 @@ export class AppWindow {
     this.show()
 
     ipcWebContents.send(this.window.webContents, 'cli-action', action)
+  }
+
+  /** Send credential-free Codex account state to the trusted renderer. */
+  public sendCodexAccountState(state: ICodexAccountState) {
+    ipcWebContents.send(
+      this.window.webContents,
+      'codex-account-state-changed',
+      state
+    )
+  }
+
+  /** Send credential-free subscription usage to the trusted renderer. */
+  public sendCodexRateLimitState(state: ICodexRateLimitState) {
+    ipcWebContents.send(
+      this.window.webContents,
+      'codex-rate-limits-state-changed',
+      state
+    )
   }
 
   /** Send the app launch timing stats to the renderer. */

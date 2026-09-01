@@ -20,9 +20,8 @@ import {
   IFileResolution,
   ICopilotResolutionSummary,
   ICopilotSkippedFile,
-} from '../../../lib/copilot-conflict-resolution'
+} from '../../../lib/conflict-resolution-contract'
 import { IConflictResolutionModelDisplay } from '../../../lib/copilot/conflict-resolution-model'
-import { formatReasoningEffort } from '../../../lib/stores/copilot-store'
 import { showContextualMenu, IMenuItem } from '../../../lib/menu-item'
 import { OkCancelButtonGroup } from '../../dialog/ok-cancel-button-group'
 import { Button } from '../../lib/button'
@@ -164,7 +163,7 @@ export class CopilotConflictsDialog extends React.Component<
 
     const items: ReadonlyArray<IMenuItem> = [
       {
-        label: "Use Copilot's suggestion",
+        label: "Use ChatGPT's suggestion",
         type: 'checkbox',
         checked: currentChoice === 'copilot',
         action: () => this.setResolution(path, 'copilot'),
@@ -603,7 +602,7 @@ export class CopilotConflictsDialog extends React.Component<
       <>
         <h2 className="copilot-conflicts-file-heading copilot-conflicts-skipped-heading">
           <Octicon symbol={octicons.alert} />
-          {skippedFiles.length} Skipped by Copilot
+          {skippedFiles.length} skipped by ChatGPT
         </h2>
         <ul className="copilot-conflicts-file-list">
           {skippedFiles.map(file => this.renderSkippedFile(file))}
@@ -668,10 +667,7 @@ export class CopilotConflictsDialog extends React.Component<
 
     const hasUnresolvedSkippedFiles = this.hasUnresolvedSkippedFiles()
 
-    const modelLabel =
-      model.reasoningEffort !== undefined
-        ? `${model.modelName} · ${formatReasoningEffort(model.reasoningEffort)}`
-        : model.modelName
+    const modelLabel = model.modelName
 
     return (
       <Dialog
@@ -694,8 +690,8 @@ export class CopilotConflictsDialog extends React.Component<
             <span className="copilot-conflicts-dialog-model">{modelLabel}</span>
             <Button
               className="copilot-conflicts-dialog-settings-button"
-              tooltip="Configure Copilot in app settings"
-              ariaLabel="Configure Copilot in app settings"
+              tooltip="Configure ChatGPT in app settings"
+              ariaLabel="Configure ChatGPT in app settings"
               onClick={this.onOpenCopilotSettings}
             >
               <Octicon symbol={octicons.sliders} />
@@ -723,7 +719,7 @@ export class CopilotConflictsDialog extends React.Component<
               okButtonDisabled={hasUnresolvedSkippedFiles || isContinuing}
               okButtonTitle={
                 hasUnresolvedSkippedFiles
-                  ? 'Some files were skipped by Copilot. Those need to be resolved manually.'
+                  ? 'Some files were skipped by ChatGPT. Resolve those files manually.'
                   : undefined
               }
               cancelButtonText={`Abort ${operation}`}

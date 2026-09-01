@@ -44,6 +44,15 @@ const installedAppExecutablePath = process.env.DESKTOP_E2E_APP_PATH
 // requiring packaging or signing.
 const e2eAppMode = process.env.DESKTOP_E2E_APP_MODE ?? 'packaged'
 const unpackagedAppEntryPoint = path.join(projectRoot, 'out', 'main.js')
+export const fakeCodexControlPath = path.join(
+  os.tmpdir(),
+  'wingit-e2e-codex-control.txt'
+)
+export const fakeCodexCapturePath = path.join(
+  os.tmpdir(),
+  'wingit-e2e-codex-capture.jsonl'
+)
+const fakeCodexServerScript = path.join(__dirname, 'fake-codex-app-server.cjs')
 
 function getPackagedAppExecutablePath() {
   const distPath = getDistPath()
@@ -163,7 +172,14 @@ export const test = base.extend<{}, E2EFixtures>({
   app: [
     async ({ mockServer }, use) => {
       // Setup directories
+      const useFakeCodex = process.env.DESKTOP_E2E_FAKE_CODEX === '1'
       ensureSmokeTestRepository()
+      if (useFakeCodex) {
+        fs.writeFileSync(
+          path.join(smokeRepoPath, 'unselected-secret.txt'),
+          'UNSELECTED_PRIVATE_CONTENT\n'
+        )
+      }
 
       const launchOptions = getE2ELaunchOptions()
 
@@ -177,6 +193,13 @@ export const test = base.extend<{}, E2EFixtures>({
       fs.mkdirSync(userDataDir, { recursive: true })
       fs.rmSync(fakeHomeDir, { recursive: true, force: true })
       fs.mkdirSync(fakeHomeDir, { recursive: true })
+      if (useFakeCodex) {
+        fs.writeFileSync(
+          fakeCodexControlPath,
+          process.env.DESKTOP_E2E_CODEX_INITIAL_MODE ?? 'success'
+        )
+        fs.rmSync(fakeCodexCapturePath, { force: true })
+      }
 
       const app = await electron.launch({
         ...launchOptions,
@@ -187,6 +210,14 @@ export const test = base.extend<{}, E2EFixtures>({
           XDG_CONFIG_HOME: path.join(fakeHomeDir, '.config'),
           SSH_AUTH_SOCK: '',
           GIT_SSH_COMMAND: 'false',
+          ...(useFakeCodex
+            ? {
+                DESKTOP_E2E_CODEX_APP_SERVER_SCRIPT: fakeCodexServerScript,
+                DESKTOP_E2E_NODE_EXECUTABLE: process.execPath,
+                DESKTOP_E2E_CODEX_CONTROL_FILE: fakeCodexControlPath,
+                DESKTOP_E2E_CODEX_CAPTURE_FILE: fakeCodexCapturePath,
+              }
+            : {}),
         },
         recordVideo: {
           dir: path.join(projectRoot, 'playwright-videos'),

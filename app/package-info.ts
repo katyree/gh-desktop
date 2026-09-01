@@ -1,7 +1,9 @@
 export {
   getBundleID,
   getCompanyName,
+  getPackageName,
   getProductName,
+  getProtocolSchemes,
   getVersion,
   getWindowsAppUserModelID,
   getWindowsExecutableName,

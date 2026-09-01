@@ -1,5 +1,9 @@
 import { getSHA } from './git-info'
-import { getUpdatesURL, getChannel } from '../script/dist-info'
+import {
+  getAutomaticUpdatesEnabled,
+  getUpdatesURL,
+  getChannel,
+} from '../script/dist-info'
 import { version, productName } from './package.json'
 
 const devClientId = '3a723b10ac5575cc5bb9'
@@ -28,7 +32,8 @@ export function getReplacements() {
     __DEV__: isDevBuild,
     __DEV_SECRETS__: isDevBuild || !process.env.DESKTOP_OAUTH_CLIENT_SECRET,
     __RELEASE_CHANNEL__: s(channel),
-    __UPDATES_URL__: s(process.env.DESKTOP_E2E_UPDATES_URL ?? getUpdatesURL()),
+    __UPDATES_URL__: optionalStringReplacement(getUpdatesURL()),
+    __AUTOMATIC_UPDATES_ENABLED__: getAutomaticUpdatesEnabled(),
     __ERROR_REPORTING_ENDPOINT__: optionalStringReplacement(
       process.env.DESKTOP_ERROR_REPORTING_ENDPOINT
     ),

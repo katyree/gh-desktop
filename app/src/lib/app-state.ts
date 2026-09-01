@@ -1,16 +1,10 @@
-import type {
-  CopilotModelsByAccount,
-  CopilotModelSelectionsByAccount,
-  CopilotQuotaSnapshotsByAccount,
-} from './stores/copilot-store'
-import type { IBYOKProvider } from './copilot/byok'
 import type { IConflictResolutionModelDisplay } from './copilot/conflict-resolution-model'
 import type {
   IFileResolution,
   IConflictResolutionProgress,
   ICopilotResolutionSummary,
   ICopilotSkippedFile,
-} from './copilot-conflict-resolution'
+} from './conflict-resolution-contract'
 import { Account } from '../models/account'
 import { CommitIdentity } from '../models/commit-identity'
 import { IDiff, ImageDiffType } from '../models/diff'
@@ -69,6 +63,7 @@ import { IAPIRepoRuleset } from './api'
 import { ICustomIntegration } from './custom-integration'
 import { Emoji } from './emoji'
 import { IUpdateState } from '../ui/lib/update-store'
+import type { ICodexAccountStoreState } from './stores/codex-account-store'
 
 export enum SelectionType {
   Repository,
@@ -418,20 +413,8 @@ export interface IAppState {
   /** Whether the changes filter is shown */
   readonly showChangesFilter: boolean
 
-  /** Account-scoped Copilot model selections. */
-  readonly selectedCopilotModelsByAccount: CopilotModelSelectionsByAccount
-
-  /** Account-scoped Copilot model lists, keyed by Copilot account cache key. */
-  readonly copilotModelsByAccount: CopilotModelsByAccount
-
-  /** Account-scoped Copilot quota snapshots, keyed by Copilot account cache key. */
-  readonly copilotQuotaSnapshotsByAccount: CopilotQuotaSnapshotsByAccount
-
-  /**
-   * The list of user-configured Copilot model providers (BYOK). Empty when
-   * the user has not configured any custom providers.
-   */
-  readonly byokProviders: ReadonlyArray<IBYOKProvider>
+  /** App Server-managed ChatGPT account state. Never contains credentials. */
+  readonly codexAccount: ICodexAccountStoreState
 }
 
 export enum FoldoutType {

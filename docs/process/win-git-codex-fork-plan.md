@@ -1,8 +1,8 @@
 # WinGit Codex fork plan
 
-Status: active  
+Status: implementation pass complete; public distribution blocked
 Planning baseline: `b17e06dd0f0d9a45807eb39a51d223f52eb14da9` on `development`  
-Last checked: 2026-08-31
+Last checked: 2026-09-01
 
 ## Outcome
 
@@ -297,6 +297,8 @@ Expected size: one day.
 
 ### 3. Isolate protocols, updater, telemetry, and support URLs
 
+Status: complete on 2026-08-31.
+
 Goal: prevent the fork from impersonating or calling GitHub Desktop services.
 
 Scope:
@@ -321,6 +323,8 @@ Expected size: two days.
 
 ### 4. Add provider-independent commit-message types
 
+Status: complete on 2026-08-31.
+
 Goal: separate the application feature from the Copilot SDK.
 
 Scope:
@@ -341,6 +345,10 @@ Dependencies: 1.
 Expected size: one day.
 
 ### 5. Prove and pin the Codex runtime package
+
+Status: complete on 2026-08-31. The pinned runtime, package probe, license
+integration, and remaining public-release blockers are recorded in the
+[WinGit Codex runtime decision](win-git-codex-runtime.md).
 
 Goal: choose a supported Codex runtime that WinGit can package.
 
@@ -367,6 +375,10 @@ Expected size: two days.
 
 ### 6. Add the App Server process supervisor
 
+Status: complete on 2026-08-31. Electron now owns one on-demand Codex App
+Server with isolated data, redacted diagnostics, bounded retries, and verified
+shutdown without an orphaned process.
+
 Goal: give Electron's main process reliable ownership of Codex App Server.
 
 Scope:
@@ -390,6 +402,11 @@ Expected size: two days.
 
 ### 7. Add typed JSON-RPC transport and IPC
 
+Status: complete on 2026-08-31. The main process now owns request correlation,
+JSON-line framing, timeout and cancellation, server request rejection, and
+credential-free account and generation IPC restricted to the trusted main
+renderer frame.
+
 Goal: connect the renderer to App Server without exposing secrets or process
 handles.
 
@@ -412,6 +429,11 @@ Dependencies: 6.
 Expected size: two days.
 
 ### 8. Add Codex account state and managed sign-in
+
+Status: implementation complete on 2026-09-01. Browser and device-code login, account
+notifications, cancellation, logout, safe renderer state, and restart-owned
+credential persistence are implemented and covered by focused tests. A human
+browser sign-in, MFA/passkey handoff, restart, and logout pass remains.
 
 Goal: let users connect their ChatGPT subscription independently of GitHub
 account state.
@@ -438,6 +460,10 @@ Expected size: two days.
 
 ### 9. Replace Copilot entitlement UI with Codex settings
 
+Status: complete on 2026-08-31. The running Windows app exposes a Codex tab
+independent of GitHub or Copilot entitlement, covers every account state, and
+passes component and keyboard-focus E2E checks.
+
 Goal: make Codex access understandable in Settings.
 
 Scope:
@@ -461,6 +487,11 @@ Expected size: one and a half days.
 
 ### 10. Show subscription rate-limit state
 
+Status: complete on 2026-08-31. WinGit reads and subscribes to sanitized App
+Server usage windows, displays available, near-limit, exhausted, reset-time,
+and unavailable states, and blocks commit generation only for an explicit
+exhausted result.
+
 Goal: explain when generation is available without inventing API billing data.
 
 Scope:
@@ -482,6 +513,11 @@ Dependencies: 8 and 9.
 Expected size: one day.
 
 ### 11. Build the bounded Codex commit request
+
+Status: complete on 2026-08-31. Each request uses a main-process-owned empty
+workspace, an ephemeral thread, a read-only sandbox, no approval prompts, no
+tools or inherited capability roots, selected diff content only, randomized
+trust-boundary tags, and a strict title/description schema.
 
 Goal: send only the selected commit context to Codex.
 
@@ -506,6 +542,12 @@ Dependencies: 4 and 7.
 Expected size: one and a half days.
 
 ### 12. Parse results, cancel turns, and map errors
+
+Status: implementation complete on 2026-09-01. Final-only result extraction,
+strict parsing, silent interruption, fresh retries, timeouts, runtime exits,
+and fixed auth, usage, and invalid-output outcomes pass focused tests. Renderer
+E2E also passes mid-turn cancellation without an error dialog. A signed-in live
+cancellation probe remains part of the human authentication pass from issue 8.
 
 Goal: make Codex generation behave like a native part of the existing commit
 form.
@@ -532,6 +574,11 @@ Expected size: one and a half days.
 
 ### 13. Enable generation without GitHub or Copilot entitlement
 
+Status: complete on 2026-08-31. AppStore and the commit form depend only on
+ChatGPT account state, selected changes, active generation, and explicit
+subscription exhaustion. Account-state tests and a local-repository Electron
+integration pass confirm that GitHub authentication is not required.
+
 Goal: make the feature depend only on local changes and Codex account state.
 
 Scope:
@@ -554,6 +601,13 @@ Dependencies: 9, 10, and 12.
 Expected size: one day.
 
 ### 14. Add privacy consent and safe diagnostics
+
+Status: implementation complete on 2026-09-01. WinGit records path-free,
+per-repository acknowledgements, discloses the exact selected data sent to
+OpenAI, offers a settings reset, sends nothing on dismissal, and logs only fixed
+generation status and timing. Deterministic success, cancellation, and
+invalid-output logs pass content and credential scans. A produced-log scan from
+live success, failure, and login flows remains externally blocked by sign-in.
 
 Goal: make repository data transfer explicit and keep sensitive content out of
 logs.
@@ -579,6 +633,13 @@ Expected size: one day.
 
 ### 15. Add a commit-generation integration test
 
+Status: complete on 2026-09-01. A deterministic fake App Server covers success,
+selected-only context, cancellation, invalid output, fresh retries,
+subscription exhaustion, and the no-commit invariant through the real renderer
+and main-process IPC path. Three generation/recovery cases and one exhausted
+case pass in unpackaged Electron. Packaged builds intentionally reject the fake
+runtime override; the real packaged signed-out settings path passes separately.
+
 Goal: prove the full application path without contacting a live model.
 
 Scope:
@@ -600,6 +661,12 @@ Dependencies: 14.
 Expected size: two days.
 
 ### 16. Remove the Copilot runtime and commit-generation path
+
+Status: complete on 2026-08-31. The legacy Copilot API route, SDK generator,
+commit model setting, entitlement gate, cancellation tests, and Copilot-specific
+message attribution are removed. The development package contains no legacy
+Copilot commit route or flag. The SDK and CLI remain only for conflict
+resolution until issue 22.
 
 Goal: stop shipping GitHub Copilot code for the completed feature.
 
@@ -625,6 +692,13 @@ Expected size: two days.
 
 ### 17. Package the Codex runtime for Windows
 
+Status: implementation complete on 2026-08-31; clean-VM verification is an
+explicit issue 18 release gate. The production x64 package and Squirrel
+artifacts contain the pinned native runtime and Apache-2.0 notices. A packaged
+Electron test reached signed-out ChatGPT settings through the real App Server
+while GitHub Desktop remained installed. Installer signing, clean-account
+install/uninstall, and authenticated generation are not yet verified.
+
 Goal: make the commit MVP installable on a clean Windows account.
 
 Scope:
@@ -647,6 +721,12 @@ Dependencies: 3, 5, and 16.
 Expected size: two days.
 
 ### 18. Run the commit MVP release gate
+
+Status: complete on 2026-09-01. The gate records a private-build-only decision:
+tests, lint, builds, packaging, artifact digests, and packaged signed-out App
+Server startup pass; clean-VM, signed-in, signing, redistribution, and explicit
+third-party authentication permission remain external blocks. See
+`docs/process/win-git-preview-release-gate.md`.
 
 Goal: decide whether the build is ready for a limited preview.
 
@@ -671,6 +751,11 @@ Expected size: one day.
 
 ### 19. Add a provider-independent conflict contract
 
+Status: complete on 2026-09-01. Conflict input, progress, result, skipped-file,
+chunking, validation, and reassembly now cross a provider-independent contract.
+`AppStore` and the review UI no longer import Copilot SDK types, and focused
+contract, model, reassembly, helper, and UI tests pass.
+
 Goal: separate conflict suggestions from the Copilot SDK.
 
 Scope:
@@ -692,6 +777,12 @@ Dependencies: 4 and 18.
 Expected size: two days.
 
 ### 20. Generate Codex conflict suggestions
+
+Status: complete on 2026-09-01. A main-process-backed Codex generator uses a
+strict structured-output schema, retains existing bounded-context exclusions,
+validates every returned path and hunk before reassembly, and returns valid
+earlier chunks alongside explicit later failures. Deterministic valid, skipped,
+malicious, malformed, authentication, rate-limit, and cancellation tests pass.
 
 Goal: produce structured suggestions with the same safety limits as the current
 feature.
@@ -717,6 +808,13 @@ Expected size: two days.
 
 ### 21. Connect conflict progress and cancellation
 
+Status: implementation complete on 2026-09-01. Progress exposes only
+application-authored generating and validating counts; Stop interrupts the
+active App Server turn and prevents later chunks, while partial rate-limit
+failure preserves completed suggestions. Deterministic event tests pass. The
+required real mid-turn cancellation remains externally blocked until a user
+completes ChatGPT sign-in.
+
 Goal: preserve responsive conflict UX during longer Codex turns.
 
 Scope:
@@ -737,6 +835,14 @@ Dependencies: 20.
 Expected size: one day.
 
 ### 22. Rebrand and verify the conflict review flow
+
+Status: implementation complete on 2026-09-01. The production conflict flow is
+ChatGPT-branded, generated suggestions remain review-only until Continue, manual
+choices exclude their paths from generated writes, and the legacy Copilot SDK,
+CLI copy step, settings, and license entries are removed. Focused conflict tests
+and production-bundle inspection pass. Packaged accept, reject, cancel, and
+partial-failure observation requires a signed-in test account and remains an
+external verification block.
 
 Goal: let users review Codex suggestions and apply them intentionally.
 
@@ -761,6 +867,14 @@ Expected size: two days.
 
 ### 23. Add an owned update and release channel
 
+Status: implementation complete on 2026-09-01. WinGit now has opt-in HTTPS
+update configuration, a separate automatic-update gate, WinGit-specific release
+metadata and artifact names, and required WinGit signing configuration with no
+GitHub signing fallback. The local package and release manifest pass with
+updates disabled. See `docs/process/win-git-release-channel.md`. A live update
+service, WinGit certificate, and clean-VM signed upgrade/tamper/rollback tests
+remain external release blocks.
+
 Goal: update WinGit without contacting or modifying GitHub Desktop.
 
 Scope:
@@ -783,6 +897,16 @@ Dependencies: 18 and 22.
 Expected size: two days.
 
 ### 24. Finish product, privacy, and contributor documentation
+
+Status: implementation complete on 2026-09-01. Production UI copy, Windows and
+shared icons, installer artwork, crash links, credential namespaces, README,
+privacy paths, and the Windows contributor workflow now use WinGit identity;
+only required upstream acknowledgement and GitHub legal terms retain the GitHub
+Desktop name. See `docs/privacy.md`, `docs/contributing/win-git.md`, and
+`docs/process/win-git-name-screen.md`. A clean-account setup run and professional
+trademark clearance remain external release blocks; macOS's compiled asset
+catalog is outside the Windows-first release scope and must not be published as
+WinGit without regeneration on macOS.
 
 Goal: make the fork's identity, data handling, and development workflow clear.
 
@@ -808,6 +932,14 @@ Dependencies: 23.
 Expected size: two days.
 
 ### 25. Run the public-release and upstream-sync gate
+
+Status: gate complete on 2026-09-01; public distribution is not approved. The
+current upstream branch matches the planning baseline, branchless merge-tree
+rehearsal reports no conflict, and the local unit, lint, type, build, package,
+bundle, deterministic commit E2E, and signed-out packaged checks pass. Installers
+remain unsigned, and the live-account, clean-VM, update-service, legal, and
+fresh-clone gates remain external blocks. See
+`docs/process/win-git-public-release-gate.md`.
 
 Goal: prove the first public release and maintenance path.
 
@@ -897,8 +1029,10 @@ The first public release is done only when:
   digests.
 - The independent download check matches the released source and commit.
 
-## Start here
+## Next release work
 
-Start with **Issue 1: Record the fork baseline and upstream policy**. It creates
-the stable reference needed for every later issue and makes the first upstream
-sync reviewable.
+The numbered implementation pass is complete. Do not publish the current local
+artifacts. Close the external blockers in
+`docs/process/win-git-public-release-gate.md`, beginning with authentication and
+runtime-distribution permission, a WinGit signing identity, and an owned HTTPS
+update channel. Then repeat the gate from a fresh clone and clean Windows VM.

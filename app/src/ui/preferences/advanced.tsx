@@ -2,7 +2,7 @@ import * as React from 'react'
 import { DialogContent } from '../dialog'
 import { Checkbox, CheckboxValue } from '../lib/checkbox'
 import { LinkButton } from '../lib/link-button'
-import { SamplesURL } from '../../lib/stats'
+import { StatsReportingEnabled } from '../../lib/stats'
 import { isWindowsOpenSSHAvailable } from '../../lib/ssh/ssh'
 
 interface IAdvancedPreferencesProps {
@@ -75,12 +75,7 @@ export class Advanced extends React.Component<
   }
 
   private reportDesktopUsageLabel() {
-    return (
-      <span>
-        Help GitHub Desktop improve by submitting{' '}
-        <LinkButton uri={SamplesURL}>usage stats</LinkButton>
-      </span>
-    )
+    return <span>Help WinGit improve by submitting usage stats</span>
   }
 
   public render() {
@@ -113,15 +108,19 @@ export class Advanced extends React.Component<
         </div>
         <div className="advanced-section">
           <h2>Usage</h2>
-          <Checkbox
-            label={this.reportDesktopUsageLabel()}
-            value={
-              this.state.optOutOfUsageTracking
-                ? CheckboxValue.Off
-                : CheckboxValue.On
-            }
-            onChange={this.onReportingOptOutChanged}
-          />
+          {StatsReportingEnabled ? (
+            <Checkbox
+              label={this.reportDesktopUsageLabel()}
+              value={
+                this.state.optOutOfUsageTracking
+                  ? CheckboxValue.Off
+                  : CheckboxValue.On
+              }
+              onChange={this.onReportingOptOutChanged}
+            />
+          ) : (
+            <p>WinGit usage reporting is disabled.</p>
+          )}
         </div>
         <h2>Network and credentials</h2>
         {this.renderSSHSettings()}
