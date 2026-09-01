@@ -31,7 +31,7 @@ export type ApplicableTheme = FixedApplicationTheme
 
 type NativeThemeSource = Exclude<ThemeSource, 'system'>
 
-interface FixedApplicationThemeDefinition {
+interface IFixedApplicationThemeDefinition {
   readonly kind: 'fixed'
   readonly theme: FixedApplicationTheme
   readonly label: string
@@ -40,7 +40,7 @@ interface FixedApplicationThemeDefinition {
   readonly classNames: ReadonlyArray<string>
 }
 
-interface SystemApplicationThemeDefinition {
+interface ISystemApplicationThemeDefinition {
   readonly kind: 'system'
   readonly theme: ApplicationTheme.System
   readonly label: string
@@ -51,8 +51,8 @@ interface SystemApplicationThemeDefinition {
 }
 
 export type ApplicationThemeDefinition =
-  | FixedApplicationThemeDefinition
-  | SystemApplicationThemeDefinition
+  | IFixedApplicationThemeDefinition
+  | ISystemApplicationThemeDefinition
 
 /** The complete set of themes shown in the appearance preferences. */
 export const applicationThemes: ReadonlyArray<ApplicationThemeDefinition> = [
