@@ -2,8 +2,7 @@ import * as React from 'react'
 import memoizeOne from 'memoize-one'
 import { WindowState } from '../../lib/window-state'
 import { WindowControls } from './window-controls'
-import { Octicon } from '../octicons/octicon'
-import * as octicons from '../octicons/octicons.generated'
+import { encodePathAsUrl } from '../../lib/path'
 import { isMacOSBigSurOrLater, isMacOSTahoeOrLater } from '../../lib/get-os'
 import {
   getAppleActionOnDoubleClick,
@@ -12,6 +11,11 @@ import {
   minimizeWindow,
   restoreWindow,
 } from '../main-process-proxy'
+
+const WinGitLogo = encodePathAsUrl(
+  __dirname,
+  'static/windows-logo-64x64@2x.png'
+)
 
 /** Get the height (in pixels) of the title bar depending on the platform */
 export function getTitleBarHeight() {
@@ -110,7 +114,7 @@ export class TitleBar extends React.Component<ITitleBarProps> {
       this.props.titleBarStyle === 'light' ? 'light-title-bar' : ''
 
     const appIcon = this.props.showAppIcon ? (
-      <Octicon className="app-icon" symbol={octicons.markGithub} />
+      <img className="app-icon" src={WinGitLogo} alt="" draggable={false} />
     ) : null
 
     const onTitlebarDoubleClick = __DARWIN__

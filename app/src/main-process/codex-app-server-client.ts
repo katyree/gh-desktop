@@ -7,6 +7,8 @@ import {
   ICodexGenerationHandle,
   ICodexGenerationRequest,
   ICodexGenerationResult,
+  ICodexModel,
+  ICodexReasoningEffort,
   ICodexRateLimitState,
 } from '../lib/codex-ipc'
 import {
@@ -67,6 +69,20 @@ function requiredString(
 ) {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(`${field} must be a non-empty string`)
+  }
+  if (value.length > maximumLength) {
+    throw new Error(`${field} exceeds ${maximumLength} characters`)
+  }
+  return value
+}
+
+function boundedString(
+  value: unknown,
+  field: string,
+  maximumLength = 1_000_000
+): string {
+  if (typeof value !== 'string') {
+    throw new Error(`${field} must be a string`)
   }
   if (value.length > maximumLength) {
     throw new Error(`${field} exceeds ${maximumLength} characters`)
@@ -167,6 +183,109 @@ function sanitizeAccountResponse(
         planType: null,
         requiresOpenaiAuth: response.requiresOpenaiAuth,
       }
+  }
+}
+
+export interface ICodexModelListPage {
+  readonly models: ReadonlyArray<ICodexModel>
+  readonly nextCursor: string | null
+}
+
+function sanitizeReasoningEffort(
+  value: unknown,
+  index: number
+): ICodexReasoningEffort {
+  if (!isRecord(value)) {
+    throw new Error(`Codex returned an invalid reasoning effort at ${index}`)
+  }
+  return {
+    reasoningEffort: requiredString(
+      value.reasoningEffort,
+      `reasoningEffort[${index}]`,
+      200
+    ),
+    description: boundedString(
+      value.description,
+      `reasoningEffort[${index}].description`,
+      1_000
+    ),
+  }
+}
+
+/** Parse and sanitize one model/list response before it crosses IPC. */
+export function sanitizeCodexModelListPage(
+  response: CodexJSONValue | undefined
+): ICodexModelListPage {
+  if (!isRecord(response) || !Array.isArray(response.data)) {
+    throw new Error('Codex returned an invalid model catalog')
+  }
+
+  const models: Array<ICodexModel> = []
+  for (let index = 0; index < response.data.length; index++) {
+    const value = response.data[index]
+    if (!isRecord(value)) {
+      throw new Error(`Codex returned an invalid model at ${index}`)
+    }
+
+    const id = requiredString(value.id, `models[${index}].id`, 200)
+    const model = requiredString(value.model, `models[${index}].model`, 200)
+    const displayName = requiredString(
+      value.displayName,
+      `models[${index}].displayName`,
+      200
+    )
+    const description = boundedString(
+      value.description,
+      `models[${index}].description`,
+      2_000
+    )
+    if (typeof value.hidden !== 'boolean') {
+      throw new Error(`models[${index}].hidden must be a boolean`)
+    }
+    if (typeof value.isDefault !== 'boolean') {
+      throw new Error(`models[${index}].isDefault must be a boolean`)
+    }
+    const defaultReasoningEffort = requiredString(
+      value.defaultReasoningEffort,
+      `models[${index}].defaultReasoningEffort`,
+      200
+    )
+    if (!Array.isArray(value.supportedReasoningEfforts)) {
+      throw new Error(
+        `models[${index}].supportedReasoningEfforts must be an array`
+      )
+    }
+
+    const supportedReasoningEfforts = value.supportedReasoningEfforts.map(
+      (effort, effortIndex) => sanitizeReasoningEffort(effort, effortIndex)
+    )
+
+    // Validate the complete server entry before filtering hidden models.
+    if (value.hidden) {
+      continue
+    }
+
+    models.push({
+      id,
+      model,
+      displayName,
+      description,
+      isDefault: value.isDefault,
+      defaultReasoningEffort,
+      supportedReasoningEfforts,
+    })
+  }
+
+  const nextCursor = response.nextCursor
+  if (nextCursor !== undefined && nextCursor !== null) {
+    if (typeof nextCursor !== 'string' || nextCursor.length === 0) {
+      throw new Error('Codex returned an invalid model catalog cursor')
+    }
+  }
+
+  return {
+    models,
+    nextCursor: nextCursor ?? null,
   }
 }
 
@@ -277,6 +396,41 @@ export class CodexAppServerClient {
     }
   }
 
+  /** Read every visible model from the paginated App Server catalog. */
+  public async readModels(): Promise<ReadonlyArray<ICodexModel>> {
+    const { transport } = await this.getConnection()
+    const models: Array<ICodexModel> = []
+    const seenModels = new Set<string>()
+    const seenCursors = new Set<string>()
+    let cursor: string | null = null
+
+    for (let pageIndex = 0; pageIndex < 100; pageIndex++) {
+      const response = await transport.request('model/list', {
+        cursor,
+        includeHidden: false,
+      })
+      const page = sanitizeCodexModelListPage(response)
+      for (const model of page.models) {
+        if (seenModels.has(model.id)) {
+          continue
+        }
+        seenModels.add(model.id)
+        models.push(model)
+      }
+
+      if (page.nextCursor === null) {
+        return models
+      }
+      if (seenCursors.has(page.nextCursor)) {
+        throw new Error('Codex returned a repeated model catalog cursor')
+      }
+      seenCursors.add(page.nextCursor)
+      cursor = page.nextCursor
+    }
+
+    throw new Error('Codex returned too many model catalog pages')
+  }
+
   public async cancelAccountLogin(loginId: string): Promise<void> {
     const validatedLoginId = requiredString(loginId, 'loginId', 200)
     try {
@@ -356,6 +510,9 @@ export class CodexAppServerClient {
           text_elements: [],
         },
       ],
+    }
+    if (request.reasoningEffort !== undefined) {
+      turnParams.effort = request.reasoningEffort
     }
     if (request.outputSchema !== undefined) {
       turnParams.outputSchema = request.outputSchema
@@ -545,6 +702,9 @@ export class CodexAppServerClient {
     requiredString(request.prompt, 'prompt')
     if (request.model !== undefined) {
       requiredString(request.model, 'model', 200)
+    }
+    if (request.reasoningEffort !== undefined) {
+      requiredString(request.reasoningEffort, 'reasoningEffort', 200)
     }
     if (request.outputSchema !== undefined) {
       validateJSONValue(request.outputSchema)

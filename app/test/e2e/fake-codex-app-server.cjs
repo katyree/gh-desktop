@@ -97,6 +97,60 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         },
       })
       break
+    case 'model/list':
+      send({
+        id: message.id,
+        result: {
+          data: [
+            {
+              id: 'fixture-balanced',
+              model: 'gpt-5.6-terra',
+              displayName: 'Balanced fixture model',
+              description: 'A balanced model for deterministic E2E coverage.',
+              hidden: false,
+              isDefault: true,
+              defaultReasoningEffort: 'medium',
+              supportedReasoningEfforts: [
+                { reasoningEffort: 'low', description: 'Faster responses.' },
+                {
+                  reasoningEffort: 'medium',
+                  description: 'Balanced responses.',
+                },
+              ],
+            },
+            {
+              id: 'fixture-deep',
+              model: 'gpt-5.6-luna',
+              displayName: 'Deep fixture model',
+              description: 'A deeper model with stronger reasoning options.',
+              hidden: false,
+              isDefault: false,
+              defaultReasoningEffort: 'high',
+              supportedReasoningEfforts: [
+                { reasoningEffort: 'high', description: 'Deeper responses.' },
+                {
+                  reasoningEffort: 'xhigh',
+                  description: 'Most deliberate responses.',
+                },
+              ],
+            },
+            {
+              id: 'fixture-hidden',
+              model: 'gpt-hidden-fixture',
+              displayName: 'Hidden fixture model',
+              description: 'This model must not appear in the picker.',
+              hidden: true,
+              isDefault: false,
+              defaultReasoningEffort: 'low',
+              supportedReasoningEfforts: [
+                { reasoningEffort: 'low', description: 'Faster responses.' },
+              ],
+            },
+          ],
+          nextCursor: null,
+        },
+      })
+      break
     case 'thread/start': {
       generation++
       const threadId = `thread-${generation}`

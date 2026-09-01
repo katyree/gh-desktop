@@ -25,6 +25,7 @@ import {
   ICodexGenerationRequest,
   ICodexGenerationResult,
   ICodexLoginStart,
+  ICodexModel,
   ICodexRateLimitState,
 } from './codex-ipc'
 
@@ -154,6 +155,7 @@ export type RequestResponseChannels = {
   'codex-account-login-cancel': (loginId: string) => Promise<void>
   'codex-account-logout': () => Promise<ICodexAccountState>
   'codex-rate-limits-read': () => Promise<ICodexRateLimitState>
+  'codex-models-read': () => Promise<ReadonlyArray<ICodexModel>>
   'codex-generation-start': (
     request: ICodexGenerationRequest
   ) => Promise<ICodexGenerationHandle>

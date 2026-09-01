@@ -1,8 +1,15 @@
 import * as React from 'react'
 
 import type { ICodexAccountStoreState } from '../../lib/stores/codex-account-store'
+import type { ICodexModelSelection } from '../../lib/codex-model-selection'
+import {
+  defaultCodexModelSelection,
+  getCodexModelForSelection,
+  resolveCodexModelSelection,
+} from '../../lib/codex-model-selection'
 import { assertNever } from '../../lib/fatal-error'
 import { Button } from '../lib/button'
+import { Select } from '../lib/select'
 import { DialogContent, DialogPreferredFocusClassName } from '../dialog'
 
 interface ICodexPreferencesProps {
@@ -13,6 +20,8 @@ interface ICodexPreferencesProps {
   readonly onSignOut: () => void
   readonly onRetry: () => void
   readonly onResetPrivacyAcknowledgements: () => void
+  readonly modelSelection?: ICodexModelSelection
+  readonly onModelSelectionChanged?: (selection: ICodexModelSelection) => void
 }
 
 /** ChatGPT account settings for Codex-backed WinGit features. */
@@ -23,6 +32,8 @@ export class CodexPreferences extends React.Component<ICodexPreferencesProps> {
         <div className="codex-tab-content">
           <h2>ChatGPT account</h2>
           {this.renderAccountState()}
+          {this.props.state.account.status === 'signed-in' &&
+            this.renderModelControls()}
           {this.props.state.account.status === 'signed-in' &&
             this.renderRateLimits()}
           {this.props.state.account.status === 'signed-in' &&
@@ -206,6 +217,101 @@ export class CodexPreferences extends React.Component<ICodexPreferencesProps> {
         {description}
       </section>
     )
+  }
+
+  private renderModelControls(): JSX.Element {
+    const models = this.props.state.models
+    const selection = this.props.modelSelection ?? defaultCodexModelSelection
+
+    if (models === undefined || models.kind === 'loading') {
+      return (
+        <section className="codex-model-settings" aria-live="polite">
+          <h2>AI model</h2>
+          <p>Loading the available Codex models…</p>
+        </section>
+      )
+    }
+
+    if (models.kind === 'unavailable') {
+      return (
+        <section className="codex-model-settings" role="alert">
+          <h2>AI model</h2>
+          <p>
+            The available Codex models could not be loaded. Automatic selection
+            will be used until the catalog is available.
+          </p>
+        </section>
+      )
+    }
+
+    const selectedModel = getCodexModelForSelection(models, selection)
+    const resolvedSelection = resolveCodexModelSelection(models, selection)
+
+    return (
+      <section
+        className="codex-model-settings"
+        aria-labelledby="codex-model-title"
+      >
+        <h2 id="codex-model-title">AI model</h2>
+        <p>
+          Choose the model and reasoning effort used for generated commit
+          messages and merge conflict suggestions.
+        </p>
+        <Select
+          label="Model"
+          value={selectedModel === undefined ? '' : selection.modelId ?? ''}
+          onChange={this.onModelChanged}
+        >
+          <option value="">Automatic (recommended)</option>
+          {models.models.map(model => (
+            <option key={model.id} value={model.id}>
+              {model.displayName}
+            </option>
+          ))}
+        </Select>
+        {selectedModel !== undefined && (
+          <>
+            {selectedModel.description.length > 0 && (
+              <p className="settings-description">
+                {selectedModel.description}
+              </p>
+            )}
+            <Select
+              label="Reasoning effort"
+              value={resolvedSelection.reasoningEffort ?? ''}
+              onChange={this.onReasoningEffortChanged}
+            >
+              <option value="">Default (Model default)</option>
+              {selectedModel.supportedReasoningEfforts.map(option => (
+                <option
+                  key={option.reasoningEffort}
+                  value={option.reasoningEffort}
+                >
+                  {option.reasoningEffort}
+                </option>
+              ))}
+            </Select>
+          </>
+        )}
+      </section>
+    )
+  }
+
+  private onModelChanged = (event: React.FormEvent<HTMLSelectElement>) => {
+    this.props.onModelSelectionChanged?.({
+      modelId: event.currentTarget.value || null,
+      reasoningEffort: null,
+    })
+  }
+
+  private onReasoningEffortChanged = (
+    event: React.FormEvent<HTMLSelectElement>
+  ) => {
+    const selection = this.props.modelSelection ?? defaultCodexModelSelection
+    this.props.onModelSelectionChanged?.({
+      modelId: selection.modelId,
+      reasoningEffort: event.currentTarget.value || null,
+    })
   }
 
   private renderPrivacyControls(): JSX.Element {

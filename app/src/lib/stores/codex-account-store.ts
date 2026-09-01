@@ -2,7 +2,9 @@ import {
   CodexLoginMethod,
   ICodexAccountState,
   ICodexLoginStart,
+  ICodexModel,
   ICodexRateLimitState,
+  CodexModelsState,
 } from '../codex-ipc'
 import {
   cancelCodexAccountLogin,
@@ -10,6 +12,7 @@ import {
   onCodexAccountStateChanged,
   onCodexRateLimitsStateChanged,
   readCodexAccount,
+  readCodexModels,
   readCodexRateLimits,
   startCodexAccountLogin,
 } from '../../ui/main-process-proxy'
@@ -19,6 +22,8 @@ export interface ICodexAccountStoreState {
   readonly account: ICodexAccountState
   readonly login: ICodexLoginStart | null
   readonly rateLimits: ICodexRateLimitState
+  /** The account-scoped model catalog. */
+  readonly models: CodexModelsState
 }
 
 export type CodexCommitMessageAvailability =
@@ -44,6 +49,7 @@ interface ICodexAccountIPC {
   readonly cancelLogin: (loginId: string) => Promise<void>
   readonly logout: () => Promise<ICodexAccountState>
   readonly readRateLimits: () => Promise<ICodexRateLimitState>
+  readonly readModels: () => Promise<ReadonlyArray<ICodexModel>>
   readonly onStateChanged: (
     handler: (state: ICodexAccountState) => void
   ) => () => void
@@ -66,6 +72,7 @@ const defaultIPC: ICodexAccountIPC = {
   cancelLogin: cancelCodexAccountLogin,
   logout: logoutCodexAccount,
   readRateLimits: readCodexRateLimits,
+  readModels: readCodexModels,
   onStateChanged: handler => onCodexAccountStateChanged(handler),
   onRateLimitsChanged: handler => onCodexRateLimitsStateChanged(handler),
 }
@@ -97,6 +104,7 @@ export class CodexAccountStore extends TypedBaseStore<ICodexAccountStoreState> {
     account: { ...signedOutState, status: 'loading' },
     login: null,
     rateLimits: unavailableRateLimits,
+    models: { kind: 'loading' },
   }
   private initializePromise: Promise<void> | undefined
   private readonly removeStateListener: () => void
@@ -121,6 +129,7 @@ export class CodexAccountStore extends TypedBaseStore<ICodexAccountStoreState> {
     const promise = Promise.all([
       this.refresh(false),
       this.refreshRateLimits(),
+      this.refreshModels(),
     ]).then(() => undefined)
     this.initializePromise = promise
     return promise
@@ -143,6 +152,17 @@ export class CodexAccountStore extends TypedBaseStore<ICodexAccountStoreState> {
       this.update({ rateLimits: await this.ipc.readRateLimits() })
     } catch {
       this.update({ rateLimits: unavailableRateLimits })
+    }
+  }
+
+  public async refreshModels(): Promise<void> {
+    this.update({ models: { kind: 'loading' } })
+    try {
+      this.update({
+        models: { kind: 'ready', models: await this.ipc.readModels() },
+      })
+    } catch {
+      this.update({ models: { kind: 'unavailable' } })
     }
   }
 
@@ -222,6 +242,9 @@ export class CodexAccountStore extends TypedBaseStore<ICodexAccountStoreState> {
         ? {}
         : { rateLimits: unavailableRateLimits }),
     })
+    if (account.status === 'signed-in') {
+      void this.refreshModels()
+    }
   }
 
   private readonly handleRateLimitsState = (

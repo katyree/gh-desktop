@@ -183,6 +183,24 @@
         margin: 0;
       }
     }
+
+    .codex-model-settings {
+      margin-top: var(--spacing-double);
+      padding-top: var(--spacing);
+      border-top: var(--base-border);
+
+      h2 {
+        margin-bottom: var(--spacing-half);
+      }
+
+      > p:first-of-type {
+        margin-top: 0;
+      }
+
+      .select-component + .select-component {
+        margin-top: var(--spacing);
+      }
+    }
   }
 
   .no-options-found {
@@ -216,12 +234,15 @@
   }
 
   .theme-selector {
-    display: flex;
-    margin: 0 calc(var(--spacing-half) * -1);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing);
+    margin: 0;
 
     .radio-button-component {
       display: block;
-      padding: var(--spacing-half);
+      min-width: 0;
+      padding: 0;
       position: relative;
       margin: 0;
 

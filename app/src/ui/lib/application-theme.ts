@@ -16,9 +16,128 @@ export enum ApplicationTheme {
   Light = 'light',
   Dark = 'dark',
   System = 'system',
+  Nord = 'nord',
+  Amoled = 'amoled',
+  MonokaiPro = 'monokai-pro',
+  OneDark = 'one-dark',
 }
 
-export type ApplicableTheme = ApplicationTheme.Light | ApplicationTheme.Dark
+export type FixedApplicationTheme = Exclude<
+  ApplicationTheme,
+  ApplicationTheme.System
+>
+
+export type ApplicableTheme = FixedApplicationTheme
+
+type NativeThemeSource = Exclude<ThemeSource, 'system'>
+
+interface FixedApplicationThemeDefinition {
+  readonly kind: 'fixed'
+  readonly theme: FixedApplicationTheme
+  readonly label: string
+  readonly preview: string
+  readonly nativeThemeSource: NativeThemeSource
+  readonly classNames: ReadonlyArray<string>
+}
+
+interface SystemApplicationThemeDefinition {
+  readonly kind: 'system'
+  readonly theme: ApplicationTheme.System
+  readonly label: string
+  readonly preview: {
+    readonly light: string
+    readonly dark: string
+  }
+}
+
+export type ApplicationThemeDefinition =
+  | FixedApplicationThemeDefinition
+  | SystemApplicationThemeDefinition
+
+/** The complete set of themes shown in the appearance preferences. */
+export const applicationThemes: ReadonlyArray<ApplicationThemeDefinition> = [
+  {
+    kind: 'fixed',
+    theme: ApplicationTheme.Light,
+    label: 'Light',
+    preview: 'ghd_light.svg',
+    nativeThemeSource: 'light',
+    classNames: ['theme-light'],
+  },
+  {
+    kind: 'fixed',
+    theme: ApplicationTheme.Dark,
+    label: 'Dark',
+    preview: 'ghd_dark.svg',
+    nativeThemeSource: 'dark',
+    classNames: ['theme-dark'],
+  },
+  {
+    kind: 'system',
+    theme: ApplicationTheme.System,
+    label: 'System',
+    preview: {
+      light: 'ghd_light.svg',
+      dark: 'ghd_dark.svg',
+    },
+  },
+  {
+    kind: 'fixed',
+    theme: ApplicationTheme.Nord,
+    label: 'Nord',
+    preview: 'ghd_nord.svg',
+    nativeThemeSource: 'dark',
+    classNames: ['theme-dark', 'theme-nord'],
+  },
+  {
+    kind: 'fixed',
+    theme: ApplicationTheme.Amoled,
+    label: 'AMOLED',
+    preview: 'ghd_amoled.svg',
+    nativeThemeSource: 'dark',
+    classNames: ['theme-dark', 'theme-amoled'],
+  },
+  {
+    kind: 'fixed',
+    theme: ApplicationTheme.MonokaiPro,
+    label: 'Monokai Pro (CE)',
+    preview: 'ghd_monokai_pro.svg',
+    nativeThemeSource: 'dark',
+    classNames: ['theme-dark', 'theme-monokai-pro'],
+  },
+  {
+    kind: 'fixed',
+    theme: ApplicationTheme.OneDark,
+    label: 'One Dark',
+    preview: 'ghd_one_dark.svg',
+    nativeThemeSource: 'dark',
+    classNames: ['theme-dark', 'theme-one-dark'],
+  },
+]
+
+export function getApplicationThemeDefinition(
+  theme: ApplicationTheme
+): ApplicationThemeDefinition
+export function getApplicationThemeDefinition(
+  theme: unknown
+): ApplicationThemeDefinition | undefined
+export function getApplicationThemeDefinition(
+  theme: unknown
+): ApplicationThemeDefinition | undefined {
+  return applicationThemes.find(definition => definition.theme === theme)
+}
+
+/** Return a valid persisted theme, defaulting to System for unknown values. */
+export function normalizeApplicationTheme(theme: unknown): ApplicationTheme {
+  return getApplicationThemeDefinition(theme)?.theme ?? ApplicationTheme.System
+}
+
+export function getThemeClassNames(
+  theme: FixedApplicationTheme
+): ReadonlyArray<string> {
+  const definition = getApplicationThemeDefinition(theme)
+  return definition.kind === 'fixed' ? definition.classNames : []
+}
 
 /**
  * Gets the friendly name of an application theme for use
@@ -26,14 +145,8 @@ export type ApplicableTheme = ApplicationTheme.Light | ApplicationTheme.Dark
  * body class name to set in order to apply the theme.
  */
 export function getThemeName(theme: ApplicationTheme): ThemeSource {
-  switch (theme) {
-    case ApplicationTheme.Light:
-      return 'light'
-    case ApplicationTheme.Dark:
-      return 'dark'
-    default:
-      return 'system'
-  }
+  const definition = getApplicationThemeDefinition(theme)
+  return definition.kind === 'fixed' ? definition.nativeThemeSource : 'system'
 }
 
 // The key under which the decision to automatically switch the theme is persisted
@@ -68,16 +181,7 @@ const applicationThemeKey = 'theme'
  * Returns User's theme preference or 'system' if not set or parsable
  */
 function getApplicationThemeSetting(): ApplicationTheme {
-  const themeSetting = localStorage.getItem(applicationThemeKey)
-
-  if (
-    themeSetting === ApplicationTheme.Light ||
-    themeSetting === ApplicationTheme.Dark
-  ) {
-    return themeSetting
-  }
-
-  return ApplicationTheme.System
+  return normalizeApplicationTheme(localStorage.getItem(applicationThemeKey))
 }
 
 /**
@@ -104,8 +208,9 @@ export function getPersistedThemeName(): ApplicationTheme {
  * Stores the given theme in the persistent store.
  */
 export function setPersistedTheme(theme: ApplicationTheme): void {
-  const themeName = getThemeName(theme)
-  localStorage.setItem(applicationThemeKey, theme)
+  const normalizedTheme = normalizeApplicationTheme(theme)
+  const themeName = getThemeName(normalizedTheme)
+  localStorage.setItem(applicationThemeKey, normalizedTheme)
   setNativeThemeSource(themeName)
 }
 

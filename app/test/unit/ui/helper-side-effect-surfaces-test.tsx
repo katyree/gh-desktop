@@ -49,9 +49,21 @@ describe('helper side-effect surfaces', () => {
         ['update-window-background-color', 'rgb(1, 2, 3)'],
       ])
 
+      view.rerender(<AppTheme theme={ApplicationTheme.Nord} />)
+
+      assert.ok(document.body.classList.contains('theme-dark'))
+      assert.ok(document.body.classList.contains('theme-nord'))
+      assert.equal(document.documentElement.style.colorScheme, 'dark')
+
+      view.rerender(<AppTheme theme={ApplicationTheme.Dark} />)
+
+      assert.ok(document.body.classList.contains('theme-dark'))
+      assert.equal(document.body.classList.contains('theme-nord'), false)
+
       view.rerender(<AppTheme theme={ApplicationTheme.Light} />)
 
       assert.equal(document.body.classList.contains('theme-dark'), false)
+      assert.equal(document.body.classList.contains('theme-nord'), false)
       assert.ok(document.body.classList.contains('theme-light'))
       assert.equal(document.documentElement.style.colorScheme, 'light')
       assert.deepEqual(sends.at(-1), [

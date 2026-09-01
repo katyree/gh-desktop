@@ -105,6 +105,7 @@ describe('IPC channel contract', () => {
     'codex-account-login-cancel',
     'codex-account-logout',
     'codex-rate-limits-read',
+    'codex-models-read',
     'codex-generation-start',
     'codex-generation-cancel',
     'codex-generation-wait',

@@ -1,13 +1,13 @@
 import * as React from 'react'
 import {
-  ApplicationTheme,
-  getThemeName,
-  getCurrentlyAppliedTheme,
+  ApplicableTheme,
+  getApplicationThemeDefinition,
+  getThemeClassNames,
 } from './lib/application-theme'
 import * as ipcRenderer from '../lib/ipc-renderer'
 
 interface IAppThemeProps {
-  readonly theme: ApplicationTheme
+  readonly theme: ApplicableTheme
 }
 
 /**
@@ -35,24 +35,28 @@ export class AppTheme extends React.PureComponent<IAppThemeProps> {
     this.clearThemes()
   }
 
-  private async ensureTheme() {
-    let themeToDisplay = this.props.theme
+  private ensureTheme() {
+    const themeClassNames = getThemeClassNames(this.props.theme)
+    const currentThemeClassNames = [...document.body.classList].filter(
+      className => className.startsWith('theme-')
+    )
+    const hasExactThemeClasses =
+      currentThemeClassNames.length === themeClassNames.length &&
+      themeClassNames.every(className =>
+        document.body.classList.contains(className)
+      )
 
-    if (this.props.theme === ApplicationTheme.System) {
-      themeToDisplay = await getCurrentlyAppliedTheme()
-    }
-
-    const newThemeClassName = `theme-${getThemeName(themeToDisplay)}`
-
-    if (!document.body.classList.contains(newThemeClassName)) {
+    if (!hasExactThemeClasses) {
       this.clearThemes()
-      document.body.classList.add(newThemeClassName)
+      document.body.classList.add(...themeClassNames)
       this.updateColorScheme()
     }
   }
 
   private updateColorScheme = () => {
-    const isDarkTheme = document.body.classList.contains('theme-dark')
+    const definition = getApplicationThemeDefinition(this.props.theme)
+    const isDarkTheme =
+      definition?.kind === 'fixed' && definition.nativeThemeSource === 'dark'
     const rootStyle = document.documentElement.style
 
     rootStyle.colorScheme = isDarkTheme ? 'dark' : 'light'

@@ -1,0 +1,189 @@
+// AMOLED theme
+// Pure-black primary surfaces keep OLED pixels off wherever possible.
+
+body.theme-amoled {
+  --color-new: #3fb950;
+  --color-deleted: #ff6b6b;
+  --color-modified: #d29922;
+  --color-renamed: #58a6ff;
+  --color-conflicted: #f0883e;
+
+  --text-color: #f5f5f5;
+  --text-secondary-color: #b3b3b3;
+  --text-secondary-color-muted: #777777;
+  --background-color: #000000;
+  --win32-title-bar-background-color: #000000;
+
+  --button-background: #1f6feb;
+  --button-hover-background: #388bfd;
+  --button-text-color: #ffffff;
+  --button-focus-border-color: #58a6ff;
+  --link-button-color: #58a6ff;
+  --link-button-hover-color: #79c0ff;
+  --link-button-selected-hover-color: #58a6ff;
+
+  --secondary-button-background: #0a0a0a;
+  --secondary-button-border-color: #303030;
+  --secondary-button-hover-border-color: #666666;
+  --secondary-button-hover-background: #151515;
+  --secondary-button-text-color: #f5f5f5;
+  --secondary-button-focus-shadow-color: rgba(88, 166, 255, 0.35);
+  --secondary-button-focus-border-color: #58a6ff;
+
+  --badge-icon-color: #f5f5f5;
+  --input-icon-warning-color: #d29922;
+  --input-icon-error-color: #ff6b6b;
+  --input-icon-hover-background-color: #151515;
+  --commit-message-icon-warning-color: var(--input-icon-warning-color);
+  --commit-message-icon-error-color: var(--input-icon-error-color);
+  --commit-message-action-button-separator-color: #303030;
+
+  --scroll-bar-thumb-background-color: rgba(255, 255, 255, 0.28);
+  --scroll-bar-thumb-background-color-active: rgba(255, 255, 255, 0.5);
+
+  --box-background-color: #000000;
+  --box-alt-background-color: #0a0a0a;
+  --box-skeleton-background-color: #1a1a1a;
+  --skeleton-background-gradient: linear-gradient(90deg, transparent, #202020, transparent);
+  --box-border-color: #202020;
+  --box-border-contrast-color: #3a3a3a;
+  --box-border-accent-color: #58a6ff;
+  --box-selected-background-color: #171717;
+  --box-hover-text-color: #ffffff;
+  --box-hover-background-color: #101010;
+  --box-selected-text-color: #f5f5f5;
+  --box-selected-border-color: #666666;
+  --box-selected-active-background-color: #1f6feb;
+  --box-selected-active-text-color: #ffffff;
+  --box-selected-active-border-color: #58a6ff;
+  --box-placeholder-color: #8b8b8b;
+
+  --co-author-tag-background-color: #0d2d4f;
+  --co-author-tag-border-color: #1f6feb;
+  --commit-warning-badge-background-color: #000000;
+  --commit-warning-badge-border-color: #303030;
+  --shadow-color: rgba(0, 0, 0, 0.95);
+
+  --toolbar-background-color: #000000;
+  --toolbar-border-color: #202020;
+  --toolbar-text-color: #f5f5f5;
+  --toolbar-text-secondary-color: #b3b3b3;
+  --toolbar-button-color: #f5f5f5;
+  --toolbar-button-border-color: #202020;
+  --toolbar-button-secondary-color: #b3b3b3;
+  --toolbar-button-hover-color: #ffffff;
+  --toolbar-button-hover-background-color: #151515;
+  --toolbar-button-focus-background-color: #151515;
+  --toolbar-button-active-color: #ffffff;
+  --toolbar-button-active-background-color: #0a0a0a;
+  --toolbar-button-active-border-color: #303030;
+  --toolbar-button-progress-color: #303030;
+  --toolbar-button-focus-progress-color: #404040;
+  --toolbar-button-hover-progress-color: #404040;
+  --toolbar-dropdown-open-progress-color: #b3b3b3;
+  --toolbar-tooltip-background-color: #151515;
+  --toolbar-tooltip-shadow-color: #000000;
+  --app-menu-pane-background-color: #0a0a0a;
+  --app-menu-divider-color: #303030;
+  --toolbar-badge-background-color: #202020;
+  --toolbar-badge-active-background-color: #303030;
+
+  --tab-bar-active-color: #58a6ff;
+  --tab-bar-background-color: #000000;
+  --tab-bar-hover-background-color: #101010;
+  --tab-bar-count-background-color: #202020;
+  --list-item-badge-color: #f5f5f5;
+  --list-item-badge-background-color: #202020;
+  --list-item-selected-badge-color: #ffffff;
+  --list-item-selected-badge-background-color: #303030;
+  --list-item-selected-active-badge-color: #000000;
+  --list-item-selected-active-badge-background-color: #ffffff;
+  --list-item-hover-background-color: #101010;
+
+  --focus-color: #58a6ff;
+  --accent-color: #58a6ff;
+  --diff-linenumber-focus-color: #79c0ff;
+  --text-field-focus-shadow-color: rgba(88, 166, 255, 0.3);
+  --primary-suggested-action-background: #0d2d4f;
+  --primary-suggested-action-border-color: #1f6feb;
+  --suggested-action-icon-color: #58a6ff;
+
+  --diff-text-color: #f5f5f5;
+  --diff-alt-text-color: #b3b3b3;
+  --diff-border-color: #303030;
+  --diff-gutter-color: #303030;
+  --diff-gutter-background-color: #000000;
+  --diff-line-number-color: #8b8b8b;
+  --diff-selected-background-color: #1f6feb;
+  --diff-selected-border-color: #58a6ff;
+  --diff-selected-gutter-color: #58a6ff;
+  --diff-selected-text-color: #ffffff;
+  --diff-add-background-color: #061d0d;
+  --diff-add-border-color: #238636;
+  --diff-add-gutter-color: #2ea043;
+  --diff-add-gutter-background-color: #0b2b14;
+  --diff-add-inner-background-color: #124d22;
+  --diff-delete-background-color: #290b0e;
+  --diff-delete-border-color: #da3633;
+  --diff-delete-gutter-color: #f85149;
+  --diff-delete-gutter-background-color: #3b1115;
+  --diff-delete-inner-background-color: #6e1b22;
+  --diff-hunk-background-color: #071b2e;
+  --diff-hunk-border-color: #1f6feb;
+  --diff-hunk-gutter-color: #388bfd;
+  --diff-hunk-gutter-background-color: #0d2d4f;
+  --diff-hunk-text-color: #79c0ff;
+  --diff-empty-row-background-color: #0a0a0a;
+
+  --syntax-variable-color: #d2a8ff;
+  --syntax-alt-variable-color: #f5f5f5;
+  --syntax-keyword-color: #ff7b72;
+  --syntax-atom-color: #79c0ff;
+  --syntax-string-color: #a5d6ff;
+  --syntax-qualifier-color: #ffa657;
+  --syntax-type-color: #ff7b72;
+  --syntax-comment-color: #8b949e;
+  --syntax-tag-color: #7ee787;
+  --syntax-attribute-color: #d2a8ff;
+  --syntax-link-color: #58a6ff;
+  --syntax-header-color: #79c0ff;
+  --syntax-quote-color: #7ee787;
+
+  --error-color: #ff6b6b;
+  --form-error-background: #290b0e;
+  --form-error-border-color: #da3633;
+  --form-error-text-color: #ff7b72;
+  --dialog-banner-success-background: #061d0d;
+  --dialog-banner-success-border-color: #238636;
+  --dialog-banner-success-text-color: #7ee787;
+  --overlay-background-color: rgba(0, 0, 0, 0.82);
+  --dialog-warning-color: #e3b341;
+  --dialog-information-color: #58a6ff;
+  --dialog-error-color: #ff6b6b;
+  --banner-warning-background: #261c00;
+  --banner-warning-text-color: #f5f5f5;
+  --banner-warning-link-color: #79c0ff;
+  --banner-warning-icon-color: #d29922;
+  --file-warning-background-color: #261c00;
+  --file-warning-color: #e3b341;
+  --file-warning-border-color: #9e6a03;
+  --tooltip-background-color: #151515;
+  --tooltip-color: #f5f5f5;
+  --tooltip-shadow-color: #000000;
+  --path-segment-background: #0d2d4f;
+  --path-segment-background-focus: #123f6d;
+  --status-pending-color: #d29922;
+  --status-error-color: #ff6b6b;
+  --status-success-color: #3fb950;
+
+  --md-border-default-color: #303030;
+  --md-border-muted-color: #202020;
+  --md-canvas-default-color: #000000;
+  --md-canvas-subtle-color: #0a0a0a;
+  --md-fg-default-color: #f5f5f5;
+  --md-fg-muted-color: #b3b3b3;
+  --md-danger-fg-color: #ff6b6b;
+  --md-neutral-muted-color: rgba(255, 255, 255, 0.12);
+  --md-accent-emphasis-color: #1f6feb;
+  --md-accent-fg-color: #58a6ff;
+}

@@ -4,6 +4,7 @@ import type {
   ICodexGenerationHandle,
   ICodexGenerationResult,
 } from './codex-ipc'
+import type { ICodexModelSelectionSnapshot } from './codex-model-selection'
 import {
   createConflictSuggestionChunks,
   IConflictFileSuggestion,
@@ -135,7 +136,10 @@ function interruptedReason(kind: CodexConflictSuggestionErrorKind): string {
 
 /** Produces review-only conflict suggestions through the isolated App Server. */
 export class CodexConflictSuggestionGenerator {
-  public constructor(private readonly client: ICodexGenerationClient) {}
+  public constructor(
+    private readonly client: ICodexGenerationClient,
+    private readonly modelSelection?: ICodexModelSelectionSnapshot
+  ) {}
 
   public async suggest(
     input: IConflictSuggestionInput,
@@ -266,6 +270,12 @@ export class CodexConflictSuggestionGenerator {
       return await this.client.start({
         instructions: ConflictSuggestionInstructions,
         prompt: formatConflictContextForPrompt(input),
+        ...(this.modelSelection?.model === undefined
+          ? {}
+          : { model: this.modelSelection.model }),
+        ...(this.modelSelection?.reasoningEffort === undefined
+          ? {}
+          : { reasoningEffort: this.modelSelection.reasoningEffort }),
         outputSchema: CodexConflictSuggestionOutputSchema,
       })
     } catch {

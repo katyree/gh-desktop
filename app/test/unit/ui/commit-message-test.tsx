@@ -135,6 +135,7 @@ function createProps(
         secondary: null,
         resetsAt: null,
       },
+      models: { kind: 'loading' },
     },
     skipCommitHooks: false,
     signOffCommits: false,
@@ -225,6 +226,7 @@ describe('CommitMessage', () => {
               secondary: null,
               resetsAt: null,
             },
+            models: { kind: 'loading' },
           },
         })
       )

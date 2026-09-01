@@ -419,6 +419,9 @@ export const logoutCodexAccount = invokeProxy('codex-account-logout', 0)
 /** Read sanitized ChatGPT subscription rate limits. */
 export const readCodexRateLimits = invokeProxy('codex-rate-limits-read', 0)
 
+/** Read the sanitized, account-scoped model catalog from the main process. */
+export const readCodexModels = invokeProxy('codex-models-read', 0)
+
 /** Subscribe to sanitized App Server account updates. */
 export function onCodexAccountStateChanged(
   handler: (state: ICodexAccountState) => void

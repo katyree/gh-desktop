@@ -4,6 +4,8 @@ export interface IConflictResolutionModelDisplay {
 }
 
 /** Codex owns model selection for ChatGPT subscription requests. */
-export function getConflictResolutionModelDisplay(): IConflictResolutionModelDisplay {
-  return { modelName: 'ChatGPT' }
+export function getConflictResolutionModelDisplay(
+  modelName = 'ChatGPT'
+): IConflictResolutionModelDisplay {
+  return { modelName }
 }

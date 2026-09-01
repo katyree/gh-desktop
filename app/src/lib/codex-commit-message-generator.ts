@@ -4,6 +4,7 @@ import type {
   ICodexGenerationHandle,
   ICodexGenerationRequest,
 } from './codex-ipc'
+import type { ICodexModelSelectionSnapshot } from './codex-model-selection'
 export type { ICodexGenerationClient } from './codex-ipc'
 import type { IRepoRulesMetadataRule } from '../models/repo-rules'
 import {
@@ -58,7 +59,8 @@ export const CodexCommitMessageOutputSchema: CodexJSONValue = {
 /** Build one isolated Codex turn from the already-selected commit context. */
 export function buildCodexCommitMessageGenerationRequest(
   diff: string,
-  commitMessageRules: ReadonlyArray<IRepoRulesMetadataRule> = []
+  commitMessageRules: ReadonlyArray<IRepoRulesMetadataRule> = [],
+  modelSelection?: ICodexModelSelectionSnapshot
 ): ICodexGenerationRequest {
   const tags = generateCommitMessagePromptTags()
   const cleanedRules = getCleanedEnforcedRuleDescriptions(commitMessageRules)
@@ -76,13 +78,22 @@ Return only the structured commit message.
   return {
     instructions,
     prompt: buildCommitMessageUserPrompt(diff, tags, cleanedRules),
+    ...(modelSelection?.model === undefined
+      ? {}
+      : { model: modelSelection.model }),
+    ...(modelSelection?.reasoningEffort === undefined
+      ? {}
+      : { reasoningEffort: modelSelection.reasoningEffort }),
     outputSchema: CodexCommitMessageOutputSchema,
   }
 }
 
 /** Generate one commit message through the isolated Codex App Server bridge. */
 export class CodexCommitMessageGenerator implements CommitMessageGenerator {
-  public constructor(private readonly client: ICodexGenerationClient) {}
+  public constructor(
+    private readonly client: ICodexGenerationClient,
+    private readonly modelSelection?: ICodexModelSelectionSnapshot
+  ) {}
 
   public async generateCommitMessage({
     diff,
@@ -94,7 +105,11 @@ export class CodexCommitMessageGenerator implements CommitMessageGenerator {
     let handle: ICodexGenerationHandle
     try {
       handle = await this.client.start(
-        buildCodexCommitMessageGenerationRequest(diff, commitMessageRules)
+        buildCodexCommitMessageGenerationRequest(
+          diff,
+          commitMessageRules,
+          this.modelSelection
+        )
       )
     } catch {
       this.throwIfCancelled(signal)

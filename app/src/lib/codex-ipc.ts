@@ -51,11 +51,36 @@ export interface ICodexRateLimitState {
   readonly resetsAt: string | null
 }
 
+/** One reasoning effort advertised by the active Codex model catalog. */
+export interface ICodexReasoningEffort {
+  readonly reasoningEffort: string
+  readonly description: string
+}
+
+/** A sanitized model entry safe to expose to the renderer. */
+export interface ICodexModel {
+  readonly id: string
+  readonly model: string
+  readonly displayName: string
+  readonly description: string
+  readonly isDefault: boolean
+  readonly defaultReasoningEffort: string
+  readonly supportedReasoningEfforts: ReadonlyArray<ICodexReasoningEffort>
+}
+
+/** Discriminated state for the dynamic model catalog. */
+export type CodexModelsState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'ready'; readonly models: ReadonlyArray<ICodexModel> }
+  | { readonly kind: 'unavailable' }
+
 /** A provider-neutral generation request crossing the renderer IPC boundary. */
 export interface ICodexGenerationRequest {
   readonly instructions: string
   readonly prompt: string
   readonly model?: string
+  /** Optional turn-level reasoning effort override. */
+  readonly reasoningEffort?: string
   readonly outputSchema?: CodexJSONValue
 }
 

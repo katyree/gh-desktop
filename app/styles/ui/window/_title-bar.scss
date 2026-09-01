@@ -21,7 +21,8 @@
     border-bottom: 1px solid #000;
 
     .app-icon {
-      color: var(--toolbar-button-secondary-color);
+      width: 16px;
+      height: 16px;
       margin: 0 var(--spacing);
       align-self: center;
     }

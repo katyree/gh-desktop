@@ -2,7 +2,11 @@ import assert from 'node:assert'
 import { describe, it } from 'node:test'
 import * as React from 'react'
 
-import type { CodexAccountStatus } from '../../../src/lib/codex-ipc'
+import type {
+  CodexAccountStatus,
+  ICodexModel,
+} from '../../../src/lib/codex-ipc'
+import type { ICodexModelSelection } from '../../../src/lib/codex-model-selection'
 import type { ICodexAccountStoreState } from '../../../src/lib/stores/codex-account-store'
 import { CodexPreferences } from '../../../src/ui/preferences/codex'
 import { fireEvent, render, screen } from '../../helpers/ui/render'
@@ -35,6 +39,7 @@ function state(
       secondary: null,
       resetsAt: null,
     },
+    models: { kind: 'loading' },
     ...overrides,
   }
 }
@@ -132,6 +137,91 @@ describe('CodexPreferences', () => {
     })
     fireEvent.click(signOutButton)
     assert.equal(calls.signOut, 1)
+  })
+
+  it('shows model-specific reasoning choices and resets effort on model changes', () => {
+    const defaultModel: ICodexModel = {
+      id: 'default-id',
+      model: 'default-model',
+      displayName: 'Default Model',
+      description: 'Recommended model.',
+      isDefault: true,
+      defaultReasoningEffort: 'medium',
+      supportedReasoningEfforts: [
+        { reasoningEffort: 'low', description: 'Faster' },
+        { reasoningEffort: 'medium', description: 'Balanced' },
+      ],
+    }
+    const alternateModel: ICodexModel = {
+      id: 'alternate-id',
+      model: 'alternate-model',
+      displayName: 'Alternate Model',
+      description: 'Alternate model.',
+      isDefault: false,
+      defaultReasoningEffort: 'high',
+      supportedReasoningEfforts: [
+        { reasoningEffort: 'high', description: 'Deeper' },
+      ],
+    }
+    const modelState = {
+      kind: 'ready' as const,
+      models: [defaultModel, alternateModel],
+    }
+    let selection: ICodexModelSelection = {
+      modelId: null,
+      reasoningEffort: null,
+    }
+    const changes = new Array<ICodexModelSelection>()
+    const sharedProps = {
+      onSignIn: () => undefined,
+      onDeviceCodeSignIn: () => undefined,
+      onCancelSignIn: () => undefined,
+      onSignOut: () => undefined,
+      onRetry: () => undefined,
+      onResetPrivacyAcknowledgements: () => undefined,
+      onModelSelectionChanged: (next: ICodexModelSelection) => {
+        changes.push(next)
+        selection = next
+      },
+    }
+    const view = render(
+      <CodexPreferences
+        state={state('signed-in', { models: modelState })}
+        {...sharedProps}
+        modelSelection={selection}
+      />
+    )
+
+    const modelSelect = screen.getByLabelText('Model') as HTMLSelectElement
+    assert.equal(modelSelect.value, '')
+    const reasoningSelect = screen.getByLabelText(
+      'Reasoning effort'
+    ) as HTMLSelectElement
+    assert.deepStrictEqual(
+      Array.from(reasoningSelect.options).map(option => option.value),
+      ['', 'low', 'medium']
+    )
+
+    fireEvent.change(modelSelect, { target: { value: 'alternate-id' } })
+    assert.deepStrictEqual(changes[0], {
+      modelId: 'alternate-id',
+      reasoningEffort: null,
+    })
+
+    view.rerender(
+      <CodexPreferences
+        state={state('signed-in', { models: modelState })}
+        {...sharedProps}
+        modelSelection={selection}
+      />
+    )
+    const alternateReasoningSelect = screen.getByLabelText(
+      'Reasoning effort'
+    ) as HTMLSelectElement
+    assert.deepStrictEqual(
+      Array.from(alternateReasoningSelect.options).map(option => option.value),
+      ['', 'high']
+    )
   })
 
   it('offers a clear privacy acknowledgement reset', () => {

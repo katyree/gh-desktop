@@ -317,6 +317,139 @@ describe('CodexAppServerClient', () => {
     await client.shutdown()
   })
 
+  it('reads the paginated model catalog and filters hidden entries', async () => {
+    const lifecycle = new FakeCodexLifecycle()
+    const pages = [
+      {
+        data: [
+          {
+            id: 'default-id',
+            model: 'default-model',
+            displayName: 'Default Model',
+            description: 'Recommended model',
+            hidden: false,
+            isDefault: true,
+            defaultReasoningEffort: 'medium',
+            supportedReasoningEfforts: [
+              { reasoningEffort: 'low', description: 'Faster' },
+              { reasoningEffort: 'medium', description: 'Balanced' },
+            ],
+          },
+          {
+            id: 'hidden-id',
+            model: 'hidden-model',
+            displayName: 'Hidden Model',
+            description: 'Hidden model',
+            hidden: true,
+            isDefault: false,
+            defaultReasoningEffort: 'low',
+            supportedReasoningEfforts: [
+              { reasoningEffort: 'low', description: 'Faster' },
+            ],
+          },
+        ],
+        nextCursor: 'page-2',
+      },
+      {
+        data: [
+          {
+            id: 'alternate-id',
+            model: 'alternate-model',
+            displayName: 'Alternate Model',
+            description: 'Alternate model',
+            hidden: false,
+            isDefault: false,
+            defaultReasoningEffort: 'high',
+            supportedReasoningEfforts: [
+              { reasoningEffort: 'high', description: 'Deeper' },
+            ],
+          },
+        ],
+        nextCursor: null,
+      },
+    ]
+    const messages = emulateServer(lifecycle.child, message => {
+      if (message.method === 'initialize') {
+        return {}
+      }
+      if (message.method === 'model/list') {
+        const cursor = (message.params as { cursor?: string | null }).cursor
+        return cursor === 'page-2' ? pages[1] : pages[0]
+      }
+      throw new Error(`Unexpected method: ${String(message.method)}`)
+    })
+    const client = new CodexAppServerClient(
+      lifecycle,
+      'test-version',
+      TestGenerationWorkingDirectory
+    )
+
+    assert.deepStrictEqual(await client.readModels(), [
+      {
+        id: 'default-id',
+        model: 'default-model',
+        displayName: 'Default Model',
+        description: 'Recommended model',
+        isDefault: true,
+        defaultReasoningEffort: 'medium',
+        supportedReasoningEfforts: [
+          { reasoningEffort: 'low', description: 'Faster' },
+          { reasoningEffort: 'medium', description: 'Balanced' },
+        ],
+      },
+      {
+        id: 'alternate-id',
+        model: 'alternate-model',
+        displayName: 'Alternate Model',
+        description: 'Alternate model',
+        isDefault: false,
+        defaultReasoningEffort: 'high',
+        supportedReasoningEfforts: [
+          { reasoningEffort: 'high', description: 'Deeper' },
+        ],
+      },
+    ])
+    assert.deepStrictEqual(
+      messages
+        .filter(message => message.method === 'model/list')
+        .map(message => message.params),
+      [
+        { cursor: null, includeHidden: false },
+        { cursor: 'page-2', includeHidden: false },
+      ]
+    )
+    await client.shutdown()
+  })
+
+  it('validates hidden model entries before filtering them', async () => {
+    const lifecycle = new FakeCodexLifecycle()
+    emulateServer(lifecycle.child, message => {
+      if (message.method === 'initialize') {
+        return {}
+      }
+      if (message.method === 'model/list') {
+        return {
+          data: [
+            {
+              id: 'hidden-id',
+              hidden: true,
+            },
+          ],
+          nextCursor: null,
+        }
+      }
+      throw new Error(`Unexpected method: ${String(message.method)}`)
+    })
+    const client = new CodexAppServerClient(
+      lifecycle,
+      'test-version',
+      TestGenerationWorkingDirectory
+    )
+
+    await assert.rejects(client.readModels(), /models\[0\]\.model/)
+    await client.shutdown()
+  })
+
   it('starts and cancels read-only generation using opaque IDs', async () => {
     const lifecycle = new FakeCodexLifecycle()
     const messages = emulateServer(lifecycle.child, message => {
@@ -345,6 +478,7 @@ describe('CodexAppServerClient', () => {
       instructions: 'Return only a structured commit message.',
       prompt: 'Write a concise commit message.',
       model: 'test-model',
+      reasoningEffort: 'high',
       outputSchema: { type: 'object' },
     })
     assert.deepStrictEqual(handle, {
@@ -396,6 +530,7 @@ describe('CodexAppServerClient', () => {
           text_elements: [],
         },
       ],
+      effort: 'high',
       outputSchema: { type: 'object' },
     })
 

@@ -52,6 +52,7 @@ import { Shell } from '../../lib/shells'
 import { ILaunchStats, StatsStore } from '../../lib/stats'
 import { AppStore } from '../../lib/stores/app-store'
 import type { CodexLoginMethod } from '../../lib/codex-ipc'
+import type { ICodexModelSelection } from '../../lib/codex-model-selection'
 import { RepositoryStateCache } from '../../lib/stores/repository-state-cache'
 import { getTipSha } from '../../lib/tip'
 
@@ -4274,6 +4275,10 @@ export class Dispatcher {
 
   public refreshCodexAccount(): Promise<void> {
     return this.appStore._refreshCodexAccount()
+  }
+
+  public setCodexModelSelection(selection: ICodexModelSelection): void {
+    this.appStore._setCodexModelSelection(selection)
   }
 
   public setAlwaysUseCopilotForConflictResolution(value: boolean): void {

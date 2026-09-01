@@ -44,6 +44,7 @@ import { Notifications } from './notifications'
 import { Accessibility } from './accessibility'
 import { CodexPreferences } from './codex'
 import type { ICodexAccountStoreState } from '../../lib/stores/codex-account-store'
+import type { ICodexModelSelection } from '../../lib/codex-model-selection'
 import {
   ICustomIntegration,
   TargetPathArgument,
@@ -109,6 +110,7 @@ interface IPreferencesProps {
   readonly showDiffCheckMarks: boolean
   readonly alwaysUseCopilotForConflictResolution: boolean
   readonly codexAccount: ICodexAccountStoreState
+  readonly codexModelSelection: ICodexModelSelection
 }
 
 interface IPreferencesState {
@@ -526,6 +528,8 @@ export class Preferences extends React.Component<
             onResetPrivacyAcknowledgements={
               this.onResetCodexPrivacyAcknowledgements
             }
+            modelSelection={this.props.codexModelSelection}
+            onModelSelectionChanged={this.onCodexModelSelectionChanged}
           />
         )
         break
@@ -876,6 +880,10 @@ export class Preferences extends React.Component<
 
   private onResetCodexPrivacyAcknowledgements = () => {
     this.props.dispatcher.resetCodexCommitMessagePrivacyAcknowledgements()
+  }
+
+  private onCodexModelSelectionChanged = (selection: ICodexModelSelection) => {
+    this.props.dispatcher.setCodexModelSelection(selection)
   }
 
   private onSelectedTabSizeChanged = (tabSize: number) => {

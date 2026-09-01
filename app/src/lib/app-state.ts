@@ -64,6 +64,7 @@ import { ICustomIntegration } from './custom-integration'
 import { Emoji } from './emoji'
 import { IUpdateState } from '../ui/lib/update-store'
 import type { ICodexAccountStoreState } from './stores/codex-account-store'
+import type { ICodexModelSelection } from './codex-model-selection'
 
 export enum SelectionType {
   Repository,
@@ -415,6 +416,9 @@ export interface IAppState {
 
   /** App Server-managed ChatGPT account state. Never contains credentials. */
   readonly codexAccount: ICodexAccountStoreState
+
+  /** Global model and reasoning-effort selection for Codex-backed features. */
+  readonly codexModelSelection: ICodexModelSelection
 }
 
 export enum FoldoutType {

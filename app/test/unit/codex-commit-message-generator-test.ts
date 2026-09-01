@@ -99,6 +99,39 @@ function createClient(result: ICodexGenerationResult) {
 }
 
 describe('CodexCommitMessageGenerator', () => {
+  it('passes the selected model and reasoning effort to the request', async () => {
+    const harness = createClient({
+      outcome: 'success',
+      output: '{"title":"Selected","description":"Model"}',
+    })
+    const generator = new CodexCommitMessageGenerator(harness.client, {
+      model: 'gpt-selected',
+      reasoningEffort: 'high',
+      modelName: 'Selected model',
+    })
+
+    await generator.generateCommitMessage({ diff: '+selected' })
+
+    assert.equal(harness.requests[0].model, 'gpt-selected')
+    assert.equal(harness.requests[0].reasoningEffort, 'high')
+  })
+
+  it('passes an explicit effort while leaving Automatic model selection unset', async () => {
+    const harness = createClient({
+      outcome: 'success',
+      output: '{"title":"Automatic","description":"Effort"}',
+    })
+    const generator = new CodexCommitMessageGenerator(harness.client, {
+      reasoningEffort: 'low',
+      modelName: 'Default model',
+    })
+
+    await generator.generateCommitMessage({ diff: '+automatic' })
+
+    assert.equal(harness.requests[0].model, undefined)
+    assert.equal(harness.requests[0].reasoningEffort, 'low')
+  })
+
   it('returns a valid structured result and starts fresh on retry', async () => {
     const harness = createClient({
       outcome: 'success',

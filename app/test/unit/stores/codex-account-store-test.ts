@@ -63,6 +63,10 @@ function createAccountIPC(initialState = signedOut) {
       calls.push('read-rate-limits')
       return availableRateLimits
     },
+    readModels: async () => {
+      calls.push('read-models')
+      return []
+    },
     onStateChanged: (listener: (state: ICodexAccountState) => void) => {
       stateListener = listener
       return () => {
@@ -105,6 +109,7 @@ describe('CodexAccountStore', () => {
         account: signedOut,
         login: null,
         rateLimits: availableRateLimits,
+        models: { kind: 'loading' },
       }),
       'account-required'
     )
@@ -113,6 +118,7 @@ describe('CodexAccountStore', () => {
         account: signedIn,
         login: null,
         rateLimits: unavailable,
+        models: { kind: 'loading' },
       }),
       'ready'
     )
@@ -121,6 +127,7 @@ describe('CodexAccountStore', () => {
         account: signedIn,
         login: null,
         rateLimits: exhausted,
+        models: { kind: 'loading' },
       }),
       'rate-limit-exhausted'
     )
@@ -137,8 +144,13 @@ describe('CodexAccountStore', () => {
       account: signedIn,
       login: null,
       rateLimits: availableRateLimits,
+      models: { kind: 'ready', models: [] },
     })
-    assert.deepStrictEqual(accountIPC.calls, ['read:false', 'read-rate-limits'])
+    assert.deepStrictEqual(accountIPC.calls, [
+      'read:false',
+      'read-rate-limits',
+      'read-models',
+    ])
     store.dispose()
   })
 
@@ -163,8 +175,9 @@ describe('CodexAccountStore', () => {
         secondary: null,
         resetsAt: null,
       },
+      models: { kind: 'loading' },
     })
-    assert.deepStrictEqual(accountIPC.calls, ['start:browser'])
+    assert.deepStrictEqual(accountIPC.calls, ['start:browser', 'read-models'])
     store.dispose()
   })
 
@@ -189,6 +202,7 @@ describe('CodexAccountStore', () => {
         secondary: null,
         resetsAt: null,
       },
+      models: { kind: 'loading' },
     })
     assert.deepStrictEqual(accountIPC.calls, [
       'start:device-code',
@@ -208,6 +222,7 @@ describe('CodexAccountStore', () => {
     assert.deepStrictEqual(accountIPC.calls, [
       'read:false',
       'read-rate-limits',
+      'read-models',
       'logout',
     ])
     store.dispose()

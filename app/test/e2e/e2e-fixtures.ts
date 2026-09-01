@@ -106,7 +106,13 @@ function getE2ELaunchOptions() {
 }
 
 export function terminateWindowsUpdaterProcesses() {
-  if (process.platform !== 'win32') {
+  // The unpackaged Electron process is owned by Playwright. A broad taskkill
+  // here could terminate an unrelated WinGit instance running on the user's
+  // desktop, so let `app.close()` handle this mode's lifecycle.
+  if (
+    process.platform !== 'win32' ||
+    process.env.DESKTOP_E2E_APP_MODE === 'unpackaged'
+  ) {
     return
   }
 

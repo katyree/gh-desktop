@@ -835,6 +835,10 @@ app.on('ready', () => {
     requireCodexAppServerClient().readRateLimits()
   )
 
+  ipcMain.handle('codex-models-read', async () =>
+    requireCodexAppServerClient().readModels()
+  )
+
   ipcMain.handle('codex-generation-start', async (_, request) =>
     requireCodexAppServerClient().startGeneration(request)
   )

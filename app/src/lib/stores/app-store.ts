@@ -25,6 +25,13 @@ import {
   ICodexAccountStoreState,
 } from './codex-account-store'
 import type { CodexLoginMethod } from '../codex-ipc'
+import {
+  getPersistedCodexModelSelection,
+  ICodexModelSelection,
+  normalizeCodexModelSelection,
+  resolveCodexModelSelection,
+  setPersistedCodexModelSelection,
+} from '../codex-model-selection'
 import { getConflictResolutionModelDisplay } from '../copilot/conflict-resolution-model'
 import { Account, isDotComAccount } from '../../models/account'
 import { AppMenu, IMenu } from '../../models/app-menu'
@@ -721,6 +728,8 @@ export class AppStore extends TypedBaseStore<IAppState> {
   private showChangesFilter: boolean = false
 
   private codexAccount: ICodexAccountStoreState
+  private codexModelSelection: ICodexModelSelection =
+    getPersistedCodexModelSelection()
 
   public constructor(
     private readonly gitHubUserStore: GitHubUserStore,
@@ -1047,6 +1056,18 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
     this.codexAccountStore.onDidUpdate(state => {
       this.codexAccount = state
+      const normalizedModelSelection = normalizeCodexModelSelection(
+        this.codexModelSelection,
+        state.models
+      )
+      if (
+        normalizedModelSelection.modelId !== this.codexModelSelection.modelId ||
+        normalizedModelSelection.reasoningEffort !==
+          this.codexModelSelection.reasoningEffort
+      ) {
+        this.codexModelSelection = normalizedModelSelection
+        setPersistedCodexModelSelection(normalizedModelSelection)
+      }
       this.emitUpdate()
     })
   }
@@ -1241,6 +1262,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
         this.alwaysUseCopilotForConflictResolution,
       showChangesFilter: this.showChangesFilter,
       codexAccount: this.codexAccount,
+      codexModelSelection: this.codexModelSelection,
     }
   }
 
@@ -6244,6 +6266,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
     return this.withIsGeneratingCommitMessage(repository, async signal => {
       try {
+        const modelSelection = resolveCodexModelSelection(
+          this.codexAccount.models,
+          this.codexModelSelection
+        )
         // If user is amending a commit, we want to use the commit
         // to amend as the base for the commit message generation.
         const commitToAmend =
@@ -6258,11 +6284,14 @@ export class AppStore extends TypedBaseStore<IAppState> {
           return false
         }
 
-        const generator = new CodexCommitMessageGenerator({
-          start: startCodexGeneration,
-          wait: waitForCodexGeneration,
-          cancel: cancelCodexGeneration,
-        })
+        const generator = new CodexCommitMessageGenerator(
+          {
+            start: startCodexGeneration,
+            wait: waitForCodexGeneration,
+            cancel: cancelCodexGeneration,
+          },
+          modelSelection
+        )
         const response = await generator.generateCommitMessage({
           diff,
           commitMessageRules:
@@ -6371,7 +6400,11 @@ export class AppStore extends TypedBaseStore<IAppState> {
   public async _resolveConflictsWithCopilot(
     repository: Repository,
     onProgress?: (progress: IConflictResolutionProgress) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    modelSelection = resolveCodexModelSelection(
+      this.codexAccount.models,
+      this.codexModelSelection
+    )
   ): Promise<{
     readonly resolutions: ReadonlyArray<IFileResolution>
     readonly summary: ICopilotResolutionSummary
@@ -6431,11 +6464,14 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
       const resolveTimer = startTimer('codex conflict suggestions', repository)
       try {
-        const generator = new CodexConflictSuggestionGenerator({
-          start: startCodexGeneration,
-          wait: waitForCodexGeneration,
-          cancel: cancelCodexGeneration,
-        })
+        const generator = new CodexConflictSuggestionGenerator(
+          {
+            start: startCodexGeneration,
+            wait: waitForCodexGeneration,
+            cancel: cancelCodexGeneration,
+          },
+          modelSelection
+        )
         const result = await generator.suggest(context, { onProgress, signal })
 
         // The model can only cite data we placed in the prompt, so resolving
@@ -6778,7 +6814,13 @@ export class AppStore extends TypedBaseStore<IAppState> {
     // Controller used to actually cancel the in-flight SDK turn when the user
     // clicks "Stop" (see _abortCopilotConflictResolution).
     const abortController = new AbortController()
-    const copilotResolutionModel = getConflictResolutionModelDisplay()
+    const modelSelection = resolveCodexModelSelection(
+      this.codexAccount.models,
+      this.codexModelSelection
+    )
+    const copilotResolutionModel = getConflictResolutionModelDisplay(
+      modelSelection.modelName
+    )
     this.repositoryStateCache.updateMultiCommitOperationState(
       repository,
       () => ({
@@ -6820,7 +6862,8 @@ export class AppStore extends TypedBaseStore<IAppState> {
           )
           this.emitUpdate()
         },
-        abortController.signal
+        abortController.signal,
+        modelSelection
       )
 
       // The user stopped the resolution. The loading dialog has already
@@ -10059,7 +10102,26 @@ export class AppStore extends TypedBaseStore<IAppState> {
     return Promise.all([
       this.codexAccountStore.refresh(true),
       this.codexAccountStore.refreshRateLimits(),
+      this.codexAccountStore.refreshModels(),
     ]).then(() => undefined)
+  }
+
+  /** Persist the global Codex model and reasoning-effort preference. */
+  public _setCodexModelSelection(selection: ICodexModelSelection): void {
+    const normalized = normalizeCodexModelSelection(
+      selection,
+      this.codexAccount.models
+    )
+    if (
+      normalized.modelId === this.codexModelSelection.modelId &&
+      normalized.reasoningEffort === this.codexModelSelection.reasoningEffort
+    ) {
+      return
+    }
+
+    this.codexModelSelection = normalized
+    setPersistedCodexModelSelection(normalized)
+    this.emitUpdate()
   }
 
   public _setPreferAbsoluteDates(value: boolean) {

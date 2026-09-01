@@ -85,6 +85,56 @@ class FakeGenerationClient implements ICodexGenerationClient {
 }
 
 describe('CodexConflictSuggestionGenerator', () => {
+  it('reuses one model and reasoning snapshot across conflict chunks', async () => {
+    const client = new FakeGenerationClient([
+      responseFor(
+        Array.from({ length: 20 }, (_, index) => `src/file-${index}.ts`)
+      ),
+      responseFor('src/file-20.ts'),
+    ])
+    const generator = new CodexConflictSuggestionGenerator(client, {
+      model: 'gpt-selected',
+      reasoningEffort: 'high',
+      modelName: 'Selected model',
+    })
+
+    const result = await generator.suggest(makeInput(21))
+
+    assert.equal(result.suggestions.length, 21)
+    assert.equal(client.requests.length, 2)
+    for (const request of client.requests) {
+      assert.equal(request.model, 'gpt-selected')
+      assert.equal(request.reasoningEffort, 'high')
+    }
+  })
+
+  it('passes the selected model and reasoning effort to each request', async () => {
+    const client = new FakeGenerationClient([responseFor('src/file-0.ts')])
+    const generator = new CodexConflictSuggestionGenerator(client, {
+      model: 'gpt-selected',
+      reasoningEffort: 'xhigh',
+      modelName: 'Selected model',
+    })
+
+    await generator.suggest(makeInput())
+
+    assert.equal(client.requests[0].model, 'gpt-selected')
+    assert.equal(client.requests[0].reasoningEffort, 'xhigh')
+  })
+
+  it('passes an explicit effort while leaving Automatic model selection unset', async () => {
+    const client = new FakeGenerationClient([responseFor('src/file-0.ts')])
+    const generator = new CodexConflictSuggestionGenerator(client, {
+      reasoningEffort: 'low',
+      modelName: 'Default model',
+    })
+
+    await generator.suggest(makeInput())
+
+    assert.equal(client.requests[0].model, undefined)
+    assert.equal(client.requests[0].reasoningEffort, 'low')
+  })
+
   it('returns validated review-only suggestions for input paths', async () => {
     const client = new FakeGenerationClient([responseFor('src/file-0.ts')])
     const generator = new CodexConflictSuggestionGenerator(client)

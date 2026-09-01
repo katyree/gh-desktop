@@ -1697,6 +1697,7 @@ export class App extends React.Component<IAppProps, IAppState> {
               this.state.alwaysUseCopilotForConflictResolution
             }
             codexAccount={this.state.codexAccount}
+            codexModelSelection={this.state.codexModelSelection}
           />
         )
       case PopupType.RepositorySettings: {
@@ -3841,7 +3842,9 @@ export class App extends React.Component<IAppProps, IAppState> {
 
     const currentTheme = this.state.showWelcomeFlow
       ? ApplicationTheme.Light
-      : this.state.currentTheme
+      : this.state.selectedTheme === ApplicationTheme.System
+      ? this.state.currentTheme
+      : this.state.selectedTheme
 
     const currentTabSize = this.state.selectedTabSize
 
