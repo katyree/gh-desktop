@@ -218,10 +218,14 @@
       position: absolute;
       display: flex;
       left: calc(50% - var(--hunk-handle-width) / 2);
-      color: white;
+      color: var(--diff-empty-hunk-handle-foreground-color, white);
       padding-top: 3px;
       text-align: center;
       user-select: none;
+
+      &.selected {
+        color: var(--diff-selected-hunk-handle-foreground-color, white);
+      }
 
       * {
         user-select: none;

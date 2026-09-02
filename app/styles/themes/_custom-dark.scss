@@ -9,6 +9,17 @@
   @return map-get($palette, $key);
 }
 
+@function custom-dark-foreground-for($background) {
+  // Sass 1.x exposes HSL lightness rather than relative luminance. This
+  // threshold gives the current palettes a readable foreground for the
+  // hunk-handle border while keeping the rule data-driven for new palettes.
+  @if lightness($background) <= 47% {
+    @return #ffffff;
+  }
+
+  @return #000000;
+}
+
 @mixin custom-dark-theme($name, $palette) {
   $required-palette-keys: (
     background,
@@ -83,6 +94,9 @@
   $syntax-link: custom-dark-palette-color($palette, syntax-link);
   $syntax-header: custom-dark-palette-color($palette, syntax-header);
   $syntax-quote: custom-dark-palette-color($palette, syntax-quote);
+  $empty-hunk-handle-foreground: custom-dark-foreground-for($border-contrast);
+  $empty-hunk-handle-background: if(lightness($border-contrast) <= 47%, $border-contrast, mix(#ffffff, $border-contrast, 5%));
+  $selected-hunk-handle-foreground: $on-accent;
 
   body.theme-custom-dark.theme-#{$name} {
     --color-new: #{$success};
@@ -228,42 +242,44 @@
     --diff-gutter-background-color: #{$surface};
     --diff-line-number-color: #{$text-secondary};
     --diff-line-number-column-width: 50px;
-    --diff-selected-background-color: #{rgba($accent, 0.38)};
+    --diff-selected-background-color: #{rgba($accent-strong, 0.18)};
     --diff-selected-border-color: #{$accent-strong};
     --diff-selected-gutter-color: #{$accent-strong};
     --diff-selected-text-color: #{$text};
     --diff-add-background-color: #{rgba($success, 0.14)};
     --diff-add-border-color: #{rgba($success, 0.55)};
     --diff-add-gutter-color: #{$success};
-    --diff-add-gutter-background-color: #{rgba($success, 0.2)};
-    --diff-add-inner-background-color: #{$success};
+    --diff-add-gutter-background-color: #{$surface};
+    --diff-add-inner-background-color: #{mix($background, $success, 85%)};
     --diff-add-text-color: #{$text};
     --diff-delete-background-color: #{rgba($danger, 0.14)};
     --diff-delete-border-color: #{rgba($danger, 0.55)};
     --diff-delete-gutter-color: #{$danger};
-    --diff-delete-gutter-background-color: #{rgba($danger, 0.2)};
-    --diff-delete-inner-background-color: #{$danger};
+    --diff-delete-gutter-background-color: #{$surface};
+    --diff-delete-inner-background-color: #{mix($background, $danger, 85%)};
     --diff-delete-text-color: #{$text};
     --diff-hunk-background-color: #{rgba($info, 0.14)};
     --diff-hunk-border-color: #{rgba($info, 0.55)};
     --diff-hunk-gutter-color: #{$info};
-    --diff-hunk-gutter-background-color: #{rgba($info, 0.2)};
-    --diff-hunk-text-color: #{$text-secondary};
-    --diff-hover-background-color: #{rgba($accent, 0.42)};
+    --diff-hunk-gutter-background-color: #{$surface};
+    --diff-hunk-text-color: #{$text};
+    --diff-hover-background-color: #{rgba($accent, 0.17)};
     --diff-hover-border-color: #{$accent-hover};
     --diff-hover-gutter-color: #{$accent-hover};
     --diff-hover-text-color: #{$text};
-    --diff-add-hover-background-color: #{rgba($success, 0.28)};
+    --diff-add-hover-background-color: #{rgba($success, 0.15)};
     --diff-add-hover-border-color: #{$success};
     --diff-add-hover-gutter-color: #{$success};
     --diff-add-hover-text-color: #{$text};
-    --diff-delete-hover-background-color: #{rgba($danger, 0.28)};
+    --diff-delete-hover-background-color: #{rgba($danger, 0.18)};
     --diff-delete-hover-border-color: #{$danger};
     --diff-delete-hover-gutter-color: #{$danger};
     --diff-delete-hover-text-color: #{$text};
     --diff-empty-row-background-color: #{rgba($background-dark, 0.55)};
     --diff-empty-row-gutter-background-color: var(--diff-gutter-background-color);
-    --diff-empty-hunk-handle: #{$border-contrast};
+    --diff-empty-hunk-handle: #{$empty-hunk-handle-background};
+    --diff-empty-hunk-handle-foreground-color: #{$empty-hunk-handle-foreground};
+    --diff-selected-hunk-handle-foreground-color: #{$selected-hunk-handle-foreground};
 
     --syntax-variable-color: #{$syntax-variable};
     --syntax-alt-variable-color: #{$syntax-atom};

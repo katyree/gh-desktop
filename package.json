@@ -13,6 +13,7 @@
     "test:script": "node script/test.mjs script",
     "test": "node script/test.mjs",
     "test:unit": "node script/test.mjs",
+    "test:theme-contrast": "ts-node -P script/tsconfig.json script/theme-contrast-test.ts",
     "test:setup": "ts-node -P script/tsconfig.json script/test-setup.ts",
     "test:e2e": "yarn test:e2e:packaged",
     "test:e2e:packaged": "yarn test:e2e:build:packaged && yarn test:e2e:run:packaged",
