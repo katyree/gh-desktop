@@ -1,0 +1,40 @@
+// Gruvbox Dark theme.
+// Palette reference: https://github.com/morhetz/gruvbox
+
+@include custom-dark-theme(
+  'gruvbox-dark',
+  (
+    background: #282828,
+    background-dark: #1d2021,
+    surface: #3c3836,
+    surface-alt: #504945,
+    surface-raised: #665c54,
+    surface-selected: #504945,
+    border: #665c54,
+    border-contrast: #a89984,
+    text: #ebdbb2,
+    text-secondary: #d5c4a1,
+    text-muted: #a89984,
+    accent: #83a598,
+    accent-hover: #8ec07c,
+    accent-strong: #83a598,
+    on-accent: #1d2021,
+    info: #83a598,
+    success: #b8bb26,
+    warning: #fabd2f,
+    danger: #fb4934,
+    conflict: #fe8019,
+    syntax-variable: #ebdbb2,
+    syntax-keyword: #fb4934,
+    syntax-atom: #d3869b,
+    syntax-string: #b8bb26,
+    syntax-qualifier: #8ec07c,
+    syntax-type: #fabd2f,
+    syntax-comment: #928374,
+    syntax-tag: #fb4934,
+    syntax-attribute: #fe8019,
+    syntax-link: #83a598,
+    syntax-header: #d3869b,
+    syntax-quote: #b8bb26,
+  )
+);

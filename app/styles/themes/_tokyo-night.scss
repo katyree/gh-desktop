@@ -1,0 +1,40 @@
+// Tokyo Night theme.
+// Palette reference: https://github.com/tokyo-night/tokyo-night-vscode-theme
+
+@include custom-dark-theme(
+  'tokyo-night',
+  (
+    background: #1a1b26,
+    background-dark: #16161e,
+    surface: #292e42,
+    surface-alt: #3b4261,
+    surface-raised: #414868,
+    surface-selected: #33416c,
+    border: #4a5274,
+    border-contrast: #7783af,
+    text: #c0caf5,
+    text-secondary: #a9b1d6,
+    text-muted: #7f8ab3,
+    accent: #7aa2f7,
+    accent-hover: #8db0ff,
+    accent-strong: #7dcfff,
+    on-accent: #1a1b26,
+    info: #7dcfff,
+    success: #9ece6a,
+    warning: #e0af68,
+    danger: #f7768e,
+    conflict: #ff9e64,
+    syntax-variable: #c0caf5,
+    syntax-keyword: #bb9af7,
+    syntax-atom: #ff9e64,
+    syntax-string: #9ece6a,
+    syntax-qualifier: #73daca,
+    syntax-type: #e0af68,
+    syntax-comment: #565f89,
+    syntax-tag: #f7768e,
+    syntax-attribute: #bb9af7,
+    syntax-link: #7dcfff,
+    syntax-header: #7aa2f7,
+    syntax-quote: #b4f9f8,
+  )
+);

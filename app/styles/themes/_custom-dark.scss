@@ -1,0 +1,338 @@
+// Shared semantic mapping for custom dark palettes.
+//
+// Each custom theme supplies a small, coherent palette and this mixin maps it
+// to every dark-mode surface used by the application. Keeping the mapping in
+// one place prevents a custom theme from silently inheriting a stock-dark
+// color when a new component adds a variable.
+
+@function custom-dark-palette-color($palette, $key) {
+  @return map-get($palette, $key);
+}
+
+@mixin custom-dark-theme($name, $palette) {
+  $required-palette-keys: (
+    background,
+    background-dark,
+    surface,
+    surface-alt,
+    surface-raised,
+    surface-selected,
+    border,
+    border-contrast,
+    text,
+    text-secondary,
+    text-muted,
+    accent,
+    accent-hover,
+    accent-strong,
+    on-accent,
+    info,
+    success,
+    warning,
+    danger,
+    conflict,
+    syntax-variable,
+    syntax-keyword,
+    syntax-atom,
+    syntax-string,
+    syntax-qualifier,
+    syntax-type,
+    syntax-comment,
+    syntax-tag,
+    syntax-attribute,
+    syntax-link,
+    syntax-header,
+    syntax-quote
+  );
+
+  @each $key in $required-palette-keys {
+    @if not map-has-key($palette, $key) {
+      @error 'Custom dark palette "#{$name}" is missing "#{$key}"';
+    }
+  }
+
+  $background: custom-dark-palette-color($palette, background);
+  $background-dark: custom-dark-palette-color($palette, background-dark);
+  $surface: custom-dark-palette-color($palette, surface);
+  $surface-alt: custom-dark-palette-color($palette, surface-alt);
+  $surface-raised: custom-dark-palette-color($palette, surface-raised);
+  $surface-selected: custom-dark-palette-color($palette, surface-selected);
+  $border: custom-dark-palette-color($palette, border);
+  $border-contrast: custom-dark-palette-color($palette, border-contrast);
+  $text: custom-dark-palette-color($palette, text);
+  $text-secondary: custom-dark-palette-color($palette, text-secondary);
+  $text-muted: custom-dark-palette-color($palette, text-muted);
+  $accent: custom-dark-palette-color($palette, accent);
+  $accent-hover: custom-dark-palette-color($palette, accent-hover);
+  $accent-strong: custom-dark-palette-color($palette, accent-strong);
+  $on-accent: custom-dark-palette-color($palette, on-accent);
+  $info: custom-dark-palette-color($palette, info);
+  $success: custom-dark-palette-color($palette, success);
+  $warning: custom-dark-palette-color($palette, warning);
+  $danger: custom-dark-palette-color($palette, danger);
+  $conflict: custom-dark-palette-color($palette, conflict);
+  $syntax-variable: custom-dark-palette-color($palette, syntax-variable);
+  $syntax-keyword: custom-dark-palette-color($palette, syntax-keyword);
+  $syntax-atom: custom-dark-palette-color($palette, syntax-atom);
+  $syntax-string: custom-dark-palette-color($palette, syntax-string);
+  $syntax-qualifier: custom-dark-palette-color($palette, syntax-qualifier);
+  $syntax-type: custom-dark-palette-color($palette, syntax-type);
+  $syntax-comment: custom-dark-palette-color($palette, syntax-comment);
+  $syntax-tag: custom-dark-palette-color($palette, syntax-tag);
+  $syntax-attribute: custom-dark-palette-color($palette, syntax-attribute);
+  $syntax-link: custom-dark-palette-color($palette, syntax-link);
+  $syntax-header: custom-dark-palette-color($palette, syntax-header);
+  $syntax-quote: custom-dark-palette-color($palette, syntax-quote);
+
+  body.theme-custom-dark.theme-#{$name} {
+    --color-new: #{$success};
+    --color-deleted: #{$danger};
+    --color-modified: #{$warning};
+    --color-renamed: #{$info};
+    --color-conflicted: #{$conflict};
+
+    --text-color: #{$text};
+    --text-secondary-color: #{$text-secondary};
+    --text-secondary-color-muted: #{$text-muted};
+    --background-color: #{$background};
+    --win32-title-bar-background-color: #{$background-dark};
+
+    --button-background: #{$accent};
+    --button-hover-background: #{$accent-hover};
+    --button-text-color: #{$on-accent};
+    --button-focus-border-color: #{$accent-strong};
+
+    --link-button-color: #{$accent};
+    --link-button-hover-color: #{$accent-hover};
+    --link-button-selected-hover-color: #{$accent-strong};
+
+    --secondary-button-background: #{$surface-raised};
+    --secondary-button-border-color: #{$border-contrast};
+    --secondary-button-hover-border-color: #{$accent-strong};
+    --secondary-button-hover-background: #{$surface-alt};
+    --secondary-button-text-color: #{$text};
+    --secondary-button-focus-shadow-color: #{rgba($accent, 0.35)};
+    --secondary-button-focus-border-color: #{$accent-strong};
+
+    --badge-icon-color: #{$text-secondary};
+    --warning-badge-icon-color: #{$warning};
+    --input-icon-warning-color: #{$warning};
+    --input-icon-error-color: #{$danger};
+    --input-icon-hover-background-color: #{$surface-alt};
+    --commit-message-icon-warning-color: var(--input-icon-warning-color);
+    --commit-message-icon-error-color: var(--input-icon-error-color);
+    --commit-message-action-button-separator-color: #{$border-contrast};
+
+    --scroll-bar-thumb-background-color: #{rgba($text, 0.22)};
+    --scroll-bar-thumb-background-color-active: #{rgba($text, 0.5)};
+
+    --box-background-color: #{$surface};
+    --box-alt-background-color: #{$surface-alt};
+    --box-skeleton-background-color: #{$surface-raised};
+    --skeleton-background-gradient: #{linear-gradient(90deg, rgba($surface-raised, 0), rgba($surface-raised, 0.5), rgba($surface-raised, 0))};
+    --box-border-color: #{$border};
+    --box-border-contrast-color: #{$border-contrast};
+    --box-border-accent-color: #{$accent};
+    --box-selected-background-color: #{$surface-selected};
+    --box-hover-text-color: #{$text};
+    --box-hover-background-color: #{$surface-alt};
+    --box-selected-text-color: #{$text};
+    --box-selected-border-color: #{$accent-strong};
+    --box-selected-active-background-color: #{$accent};
+    --box-selected-active-text-color: #{$on-accent};
+    --box-selected-active-border-color: #{$accent-strong};
+    --box-overflow-shadow-background: #{linear-gradient(180deg, rgba($background, 0) 0%, rgba($background, 1) 90%, rgba($background, 1) 100%)};
+    --no-shadow-top: #{linear-gradient($background, rgba($text, 0))};
+    --no-shadow-bottom: #{linear-gradient(rgba($text, 0), $background)};
+    --top-shadow: #{linear-gradient(0deg, rgba($background, 0) 0%, rgba($background-dark, 0.7) 90%, rgba($background-dark, 1) 100%)};
+    --bottom-shadow: #{linear-gradient(180deg, rgba($background, 0) 0%, rgba($background-dark, 0.7) 90%, rgba($background-dark, 1) 100%) 0 100%};
+    --box-overflow-shadow-background-two: #{var(--no-shadow-top), var(--no-shadow-bottom) 0 100%, var(--top-shadow), var(--bottom-shadow)};
+    --box-placeholder-color: #{$text-secondary};
+    --co-author-tag-background-color: #{rgba($accent, 0.22)};
+    --co-author-tag-border-color: #{$accent-strong};
+    --co-author-tag-selected-border-color: #{$accent-strong};
+    --commit-warning-badge-background-color: #{$background};
+    --commit-warning-badge-border-color: #{$border-contrast};
+    --commit-warning-badge-border: #{$border-contrast};
+    --base-border: 1px solid #{$border};
+    --contrast-border: 1px solid #{$border-contrast};
+    --shadow-color: #{rgba($background-dark, 0.65)};
+    --base-box-shadow: 0 2px 7px var(--shadow-color);
+
+    --toolbar-background-color: #{$surface};
+    --toolbar-border-color: #{$border};
+    --toolbar-text-color: #{$text};
+    --toolbar-text-secondary-color: #{$text-secondary};
+    --toolbar-button-color: var(--toolbar-text-color);
+    --toolbar-button-background-color: transparent;
+    --toolbar-button-border-color: #{$border};
+    --toolbar-button-secondary-color: var(--toolbar-text-secondary-color);
+    --toolbar-button-hover-color: #{$text};
+    --toolbar-button-hover-background-color: #{$surface-alt};
+    --toolbar-button-hover-border-color: #{$accent-strong};
+    --toolbar-button-focus-background-color: #{$surface-alt};
+    --toolbar-button-active-color: #{$text};
+    --toolbar-button-active-background-color: #{$background};
+    --toolbar-button-active-border-color: #{$accent-strong};
+    --toolbar-button-progress-color: #{$surface-raised};
+    --toolbar-button-focus-progress-color: #{$border-contrast};
+    --toolbar-button-hover-progress-color: #{$border-contrast};
+    --toolbar-dropdown-open-progress-color: #{$text-secondary};
+    --toolbar-dropdown-text-warning-color: #{$warning};
+    --toolbar-dropdown-text-hover-color: #{$text};
+    --toolbar-tooltip-background-color: #{$surface-raised};
+    --toolbar-tooltip-shadow-color: #{$background-dark};
+
+    --app-menu-button-color: var(--toolbar-text-color);
+    --app-menu-button-hover-color: #{$text};
+    --app-menu-button-hover-background-color: #{$surface-alt};
+    --app-menu-button-active-color: #{$text};
+    --app-menu-button-active-background-color: #{$surface-alt};
+    --app-menu-pane-color: #{$text};
+    --app-menu-pane-secondary-color: #{$text-secondary};
+    --app-menu-pane-background-color: #{$surface};
+    --app-menu-divider-color: #{$border-contrast};
+
+    --toolbar-badge-background-color: #{$surface-raised};
+    --toolbar-badge-active-background-color: #{$accent-strong};
+    --tab-bar-active-color: #{$accent};
+    --tab-bar-background-color: #{$surface};
+    --tab-bar-hover-background-color: #{$surface-alt};
+    --tab-bar-count-color: #{$text};
+    --tab-bar-count-background-color: #{$surface-raised};
+    --list-item-badge-color: #{$text};
+    --list-item-badge-background-color: #{$surface-raised};
+    --list-item-selected-badge-color: #{$on-accent};
+    --list-item-selected-badge-background-color: #{$accent};
+    --list-item-selected-active-badge-color: #{$background};
+    --list-item-selected-active-badge-background-color: #{$text};
+    --list-item-hover-background-color: #{$surface-alt};
+
+    --toast-notification-color: #{$text};
+    --toast-notification-background-color: #{rgba($background-dark, 0.92)};
+    --tip-box-background-color: #{rgba($info, 0.12)};
+    --tip-box-border-color: #{$info};
+    --focus-color: #{$accent};
+    --accent-color: #{$accent};
+    --diff-linenumber-focus-color: #{$accent-hover};
+    --text-field-focus-shadow-color: #{rgba($accent, 0.3)};
+    --primary-suggested-action-background: #{rgba($accent, 0.18)};
+    --primary-suggested-action-border-color: #{$accent-strong};
+    --suggested-action-icon-color: #{$accent-hover};
+
+    --diff-background-color: #{$background};
+    --diff-text-color: #{$text};
+    --diff-alt-text-color: #{$text-secondary};
+    --diff-border-color: #{$border};
+    --diff-gutter-color: #{$border};
+    --diff-gutter-background-color: #{$surface};
+    --diff-line-number-color: #{$text-secondary};
+    --diff-line-number-column-width: 50px;
+    --diff-selected-background-color: #{rgba($accent, 0.38)};
+    --diff-selected-border-color: #{$accent-strong};
+    --diff-selected-gutter-color: #{$accent-strong};
+    --diff-selected-text-color: #{$text};
+    --diff-add-background-color: #{rgba($success, 0.14)};
+    --diff-add-border-color: #{rgba($success, 0.55)};
+    --diff-add-gutter-color: #{$success};
+    --diff-add-gutter-background-color: #{rgba($success, 0.2)};
+    --diff-add-inner-background-color: #{$success};
+    --diff-add-text-color: #{$text};
+    --diff-delete-background-color: #{rgba($danger, 0.14)};
+    --diff-delete-border-color: #{rgba($danger, 0.55)};
+    --diff-delete-gutter-color: #{$danger};
+    --diff-delete-gutter-background-color: #{rgba($danger, 0.2)};
+    --diff-delete-inner-background-color: #{$danger};
+    --diff-delete-text-color: #{$text};
+    --diff-hunk-background-color: #{rgba($info, 0.14)};
+    --diff-hunk-border-color: #{rgba($info, 0.55)};
+    --diff-hunk-gutter-color: #{$info};
+    --diff-hunk-gutter-background-color: #{rgba($info, 0.2)};
+    --diff-hunk-text-color: #{$text-secondary};
+    --diff-hover-background-color: #{rgba($accent, 0.42)};
+    --diff-hover-border-color: #{$accent-hover};
+    --diff-hover-gutter-color: #{$accent-hover};
+    --diff-hover-text-color: #{$text};
+    --diff-add-hover-background-color: #{rgba($success, 0.28)};
+    --diff-add-hover-border-color: #{$success};
+    --diff-add-hover-gutter-color: #{$success};
+    --diff-add-hover-text-color: #{$text};
+    --diff-delete-hover-background-color: #{rgba($danger, 0.28)};
+    --diff-delete-hover-border-color: #{$danger};
+    --diff-delete-hover-gutter-color: #{$danger};
+    --diff-delete-hover-text-color: #{$text};
+    --diff-empty-row-background-color: #{rgba($background-dark, 0.55)};
+    --diff-empty-row-gutter-background-color: var(--diff-gutter-background-color);
+    --diff-empty-hunk-handle: #{$border-contrast};
+
+    --syntax-variable-color: #{$syntax-variable};
+    --syntax-alt-variable-color: #{$syntax-atom};
+    --syntax-keyword-color: #{$syntax-keyword};
+    --syntax-atom-color: #{$syntax-atom};
+    --syntax-string-color: #{$syntax-string};
+    --syntax-qualifier-color: #{$syntax-qualifier};
+    --syntax-type-color: #{$syntax-type};
+    --syntax-comment-color: #{$syntax-comment};
+    --syntax-tag-color: #{$syntax-tag};
+    --syntax-attribute-color: #{$syntax-attribute};
+    --syntax-link-color: #{$syntax-link};
+    --syntax-header-color: #{$syntax-header};
+    --syntax-quote-color: #{$syntax-quote};
+
+    --error-color: #{$danger};
+    --form-error-background: #{rgba($danger, 0.16)};
+    --form-error-border-color: #{$danger};
+    --form-error-text-color: #{$text};
+    --dialog-banner-success-background: #{rgba($success, 0.16)};
+    --dialog-banner-success-border-color: #{$success};
+    --dialog-banner-success-text-color: #{$text};
+    --input-warning-text-color: #{$warning};
+    --input-error-text-color: #{$danger};
+    --overlay-background-color: #{rgba($background-dark, 0.72)};
+    --dialog-warning-color: #{$warning};
+    --dialog-information-color: #{$info};
+    --dialog-error-color: #{$danger};
+    --banner-warning-background: #{rgba($warning, 0.16)};
+    --banner-warning-text-color: #{$text};
+    --banner-warning-link-color: #{$accent-hover};
+    --banner-warning-icon-color: #{$warning};
+    --file-warning-background-color: #{rgba($warning, 0.16)};
+    --file-warning-color: #{$warning};
+    --file-warning-border-color: #{rgba($warning, 0.55)};
+    --tooltip-background-color: #{$surface-raised};
+    --tooltip-color: #{$text};
+    --tooltip-shadow-color: #{$background-dark};
+    --path-segment-background: #{rgba($accent, 0.2)};
+    --path-segment-background-focus: #{rgba($accent, 0.35)};
+    --status-pending-color: #{$warning};
+    --status-error-color: #{$danger};
+    --status-success-color: #{$success};
+    --dialog-progress-background: #{$success};
+    --pr-open-icon-color: #{$success};
+    --pr-draft-icon-color: #{$text-muted};
+    --pr-timeline-line-color: #{$border-contrast};
+    --pr-changes-requested-icon-color: #{$on-accent};
+    --pr-changes-requested-icon-background-color: #{$danger};
+    --pr-approved-icon-color: #{$on-accent};
+    --pr-approved-icon-background-color: #{$success};
+    --pr-commented-icon-color: #{$text-secondary};
+    --pr-commented-icon-background-color: #{$surface-raised};
+    --call-to-action-bubble-border-color: #{$success};
+    --call-to-action-bubble-background-color: #{rgba($success, 0.16)};
+    --call-to-action-bubble-color: #{$success};
+    --border-color: #{$border};
+    --title-tool-tip-background-color: #{$surface-raised};
+    --title-tool-tip-shadow: none;
+
+    --md-border-default-color: #{$border-contrast};
+    --md-border-muted-color: #{$border};
+    --md-canvas-default-color: #{$background};
+    --md-canvas-subtle-color: #{$surface};
+    --md-fg-default-color: #{$text};
+    --md-fg-muted-color: #{$text-secondary};
+    --md-danger-fg-color: #{$danger};
+    --md-neutral-muted-color: #{rgba($text, 0.2)};
+    --md-accent-emphasis-color: #{$accent};
+    --md-accent-fg-color: #{$accent-hover};
+  }
+}

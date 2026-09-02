@@ -29,9 +29,14 @@ describe('application themes', () => {
   it('maps every bundled palette to dark native controls and a distinct class', () => {
     const bundledThemes: ReadonlyArray<FixedApplicationTheme> = [
       ApplicationTheme.Nord,
-      ApplicationTheme.Amoled,
       ApplicationTheme.MonokaiPro,
       ApplicationTheme.OneDark,
+      ApplicationTheme.Dracula,
+      ApplicationTheme.TokyoNight,
+      ApplicationTheme.CatppuccinMocha,
+      ApplicationTheme.GruvboxDark,
+      ApplicationTheme.Graphite,
+      ApplicationTheme.Amoled,
     ]
 
     for (const theme of bundledThemes) {
@@ -40,6 +45,7 @@ describe('application themes', () => {
       assert.equal(definition?.kind, 'fixed')
       assert.equal(getThemeName(theme), 'dark')
       assert.ok(getThemeClassNames(theme).includes('theme-dark'))
+      assert.ok(getThemeClassNames(theme).includes('theme-custom-dark'))
       assert.ok(getThemeClassNames(theme).includes(`theme-${theme}`))
     }
   })

@@ -1,0 +1,40 @@
+// Dracula theme.
+// Palette reference: https://github.com/dracula/dracula-theme
+
+@include custom-dark-theme(
+  'dracula',
+  (
+    background: #282a36,
+    background-dark: #21222c,
+    surface: #343746,
+    surface-alt: #44475a,
+    surface-raised: #565a73,
+    surface-selected: #4d5065,
+    border: #565a73,
+    border-contrast: #8190c2,
+    text: #f8f8f2,
+    text-secondary: #d0d2df,
+    text-muted: #a7acc3,
+    accent: #bd93f9,
+    accent-hover: #d6acff,
+    accent-strong: #bd93f9,
+    on-accent: #282a36,
+    info: #8be9fd,
+    success: #50fa7b,
+    warning: #f1fa8c,
+    danger: #ff5555,
+    conflict: #ffb86c,
+    syntax-variable: #f8f8f2,
+    syntax-keyword: #ff79c6,
+    syntax-atom: #bd93f9,
+    syntax-string: #f1fa8c,
+    syntax-qualifier: #8be9fd,
+    syntax-type: #8be9fd,
+    syntax-comment: #6272a4,
+    syntax-tag: #ff79c6,
+    syntax-attribute: #50fa7b,
+    syntax-link: #8be9fd,
+    syntax-header: #bd93f9,
+    syntax-quote: #f1fa8c,
+  )
+);

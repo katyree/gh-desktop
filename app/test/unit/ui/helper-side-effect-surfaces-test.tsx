@@ -52,13 +52,23 @@ describe('helper side-effect surfaces', () => {
       view.rerender(<AppTheme theme={ApplicationTheme.Nord} />)
 
       assert.ok(document.body.classList.contains('theme-dark'))
+      assert.ok(document.body.classList.contains('theme-custom-dark'))
       assert.ok(document.body.classList.contains('theme-nord'))
       assert.equal(document.documentElement.style.colorScheme, 'dark')
+
+      view.rerender(<AppTheme theme={ApplicationTheme.Graphite} />)
+
+      assert.ok(document.body.classList.contains('theme-dark'))
+      assert.ok(document.body.classList.contains('theme-custom-dark'))
+      assert.ok(document.body.classList.contains('theme-graphite'))
+      assert.equal(document.body.classList.contains('theme-nord'), false)
 
       view.rerender(<AppTheme theme={ApplicationTheme.Dark} />)
 
       assert.ok(document.body.classList.contains('theme-dark'))
+      assert.equal(document.body.classList.contains('theme-custom-dark'), false)
       assert.equal(document.body.classList.contains('theme-nord'), false)
+      assert.equal(document.body.classList.contains('theme-graphite'), false)
 
       view.rerender(<AppTheme theme={ApplicationTheme.Light} />)
 

@@ -1,0 +1,40 @@
+// Catppuccin Mocha theme.
+// Palette reference: https://github.com/catppuccin/catppuccin
+
+@include custom-dark-theme(
+  'catppuccin-mocha',
+  (
+    background: #1e1e2e,
+    background-dark: #181825,
+    surface: #313244,
+    surface-alt: #45475a,
+    surface-raised: #585b70,
+    surface-selected: #4b4964,
+    border: #585b70,
+    border-contrast: #8a8fa8,
+    text: #cdd6f4,
+    text-secondary: #bac2de,
+    text-muted: #a6adc8,
+    accent: #cba6f7,
+    accent-hover: #d7b8ff,
+    accent-strong: #b4befe,
+    on-accent: #1e1e2e,
+    info: #89b4fa,
+    success: #a6e3a1,
+    warning: #f9e2af,
+    danger: #f38ba8,
+    conflict: #fab387,
+    syntax-variable: #cdd6f4,
+    syntax-keyword: #cba6f7,
+    syntax-atom: #fab387,
+    syntax-string: #a6e3a1,
+    syntax-qualifier: #94e2d5,
+    syntax-type: #f9e2af,
+    syntax-comment: #6c7086,
+    syntax-tag: #f38ba8,
+    syntax-attribute: #f2cdcd,
+    syntax-link: #89dceb,
+    syntax-header: #89b4fa,
+    syntax-quote: #a6e3a1,
+  )
+);

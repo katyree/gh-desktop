@@ -1,0 +1,40 @@
+// Graphite theme.
+// A near-black custom palette with lifted surfaces for comfortable long use.
+
+@include custom-dark-theme(
+  'graphite',
+  (
+    background: #12161c,
+    background-dark: #0f1217,
+    surface: #181d25,
+    surface-alt: #222a34,
+    surface-raised: #2b3541,
+    surface-selected: #303c49,
+    border: #35404d,
+    border-contrast: #687a8e,
+    text: #e6edf3,
+    text-secondary: #a7b1bd,
+    text-muted: #7f8b99,
+    accent: #6cb6ff,
+    accent-hover: #9ecbff,
+    accent-strong: #79c0ff,
+    on-accent: #12161c,
+    info: #79c0ff,
+    success: #56d364,
+    warning: #e3b341,
+    danger: #ff7b72,
+    conflict: #ffa657,
+    syntax-variable: #d2a8ff,
+    syntax-keyword: #ff7b72,
+    syntax-atom: #79c0ff,
+    syntax-string: #a5d6ff,
+    syntax-qualifier: #d2a8ff,
+    syntax-type: #ffa657,
+    syntax-comment: #8b949e,
+    syntax-tag: #7ee787,
+    syntax-attribute: #d2a8ff,
+    syntax-link: #79c0ff,
+    syntax-header: #a5d6ff,
+    syntax-quote: #7ee787,
+  )
+);

@@ -67,6 +67,11 @@
     }
   }
 
+  .dialog-content.appearance-tab {
+    max-height: calc(100vh - 150px);
+    overflow-y: auto;
+  }
+
   .accounts-tab {
     .account-info {
       .user-info-container {
@@ -234,60 +239,103 @@
   }
 
   .theme-selector {
+    --theme-preview-width: 68px;
+
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 156px), 1fr));
     gap: var(--spacing);
     margin: 0;
 
     .radio-button-component {
       display: block;
       min-width: 0;
-      padding: 0;
-      position: relative;
       margin: 0;
 
-      label {
-        input[type='radio'] {
+      > label {
+        display: block;
+        position: relative;
+        height: 100%;
+        cursor: pointer;
+
+        &:hover > span {
+          background-color: var(--box-hover-background-color);
+          border-color: var(--box-selected-border-color);
+        }
+
+        > input[type='radio'] {
           position: absolute;
-          left: calc(var(--spacing) + var(--spacing-half));
-          margin-top: calc(50.5%);
+          z-index: 1;
+          top: 50%;
+          left: calc(var(--theme-preview-width) + var(--spacing) + var(--spacing-half));
+          transform: translateY(-50%);
+          margin: 0;
+          accent-color: var(--box-selected-active-background-color);
 
           &:checked + span {
-            border-color: var(--box-selected-active-background-color);
+            background-color: var(--box-selected-background-color);
+            border-color: var(--box-selected-active-border-color);
+          }
+
+          &:focus-visible + span {
+            outline: 2px solid var(--box-selected-active-border-color);
+            outline-offset: 2px;
           }
         }
 
         > span {
-          border-radius: var(--border-radius);
-          border: var(--base-border);
-          float: left;
-          overflow: hidden;
-          padding-bottom: var(--spacing-half);
+          box-sizing: border-box;
+          display: grid;
+          grid-template-columns: var(--theme-preview-width) minmax(0, 1fr);
+          align-items: center;
+          gap: var(--spacing);
+          min-height: 56px;
           width: 100%;
           margin: 0;
+          padding: var(--spacing-half);
+          border-radius: var(--border-radius);
+          border: var(--base-border);
+          overflow: hidden;
+
+          transition: background-color 120ms ease, border-color 120ms ease;
 
           .theme-value-label {
-            margin-left: calc(var(--spacing-triple));
+            display: flex;
+            align-items: center;
+            min-width: 0;
+            min-height: 36px;
+            margin: 0;
+            padding-left: var(--spacing-double);
+            line-height: 1.5;
+            overflow-wrap: anywhere;
           }
 
-          img {
-            width: 100%;
-            border-bottom: var(--base-border);
-            margin-bottom: var(--spacing-half);
+          .theme-preview {
             display: block;
+            width: 100%;
+            height: 36px;
+            overflow: hidden;
+            border-radius: var(--outlined-border-radius);
+            background-color: var(--background-color);
+
+            > img {
+              display: block;
+              width: 100%;
+              height: 100%;
+              margin: 0;
+              object-fit: cover;
+            }
           }
 
           .system-theme-swatch {
-            width: 100%;
             position: relative;
-            display: block;
 
-            img {
+            > img {
               position: absolute;
               top: 0;
+              left: 0;
 
               &:first-child {
-                position: inherit;
+                position: relative;
               }
 
               &:last-child {
@@ -295,7 +343,25 @@
               }
             }
           }
+
+          /* Keep preview images decorative; the label supplies the name. */
+          img {
+            width: 100%;
+            display: block;
+          }
         }
+      }
+    }
+
+    @media (max-width: 480px) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    @media (min-width: 481px) {
+      .radio-button-component:last-child:nth-child(odd) {
+        grid-column: 1 / -1;
+        justify-self: center;
+        width: calc((100% - var(--spacing)) / 2);
       }
     }
   }

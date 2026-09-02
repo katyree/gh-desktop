@@ -151,14 +151,14 @@ export class Appearance extends React.Component<
        * second and third positioned absolutely over first and third one
        * clipped in half to render a split dark and light theme swatch. */
       return (
-        <span>
-          <span className="system-theme-swatch">
+        <>
+          <span className="theme-preview system-theme-swatch">
             <img src={lightThemeImage} alt="" />
             <img src={lightThemeImage} alt="" />
             <img src={darkThemeImage} alt="" />
           </span>
           <span className="theme-value-label">{definition.label}</span>
-        </span>
+        </>
       )
     }
 
@@ -167,10 +167,12 @@ export class Appearance extends React.Component<
       `static/${definition.preview}`
     )
     return (
-      <span>
-        <img src={themeImage} alt="" />
+      <>
+        <span className="theme-preview">
+          <img src={themeImage} alt="" />
+        </span>
         <span className="theme-value-label">{definition.label}</span>
-      </span>
+      </>
     )
   }
 
@@ -292,7 +294,7 @@ export class Appearance extends React.Component<
 
   public render() {
     return (
-      <DialogContent>
+      <DialogContent className="appearance-tab">
         {this.renderSelectedTheme()}
         {this.renderFormatting()}
         {this.renderSelectedTabSize()}
