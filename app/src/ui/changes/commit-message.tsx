@@ -187,6 +187,17 @@ interface ICommitMessageProps {
 
   readonly onCancelGenerateCommitMessage?: () => void
 
+  /** Called when the user asks Codex to review the selected changes. */
+  readonly onReviewSelectedChanges?: (
+    filesSelected: ReadonlyArray<WorkingDirectoryFileChange>
+  ) => void
+
+  /** Called to cancel an in-flight selected-changes review. */
+  readonly onCancelSelectedChangesReview?: () => void
+
+  /** Whether a selected-changes review is currently in progress. */
+  readonly isReviewingSelectedChanges?: boolean
+
   /**
    * Called when the component has given the commit message focus due to
    * `focusCommitMessage` being set. Used to reset the `focusCommitMessage`
@@ -911,6 +922,40 @@ export class CommitMessage extends React.Component<
     }
   }
 
+  private getReviewSelectedChangesMenuItem(): IMenuItem | null {
+    const {
+      onReviewSelectedChanges,
+      onCancelSelectedChangesReview,
+      filesSelected,
+      isCommitting,
+      isReviewingSelectedChanges,
+    } = this.props
+
+    if (onReviewSelectedChanges === undefined) {
+      return null
+    }
+
+    if (isReviewingSelectedChanges === true) {
+      return {
+        label: 'Cancel reviewing selected changes with Codex',
+        action: () => onCancelSelectedChangesReview?.(),
+        enabled:
+          isCommitting !== true && onCancelSelectedChangesReview !== undefined,
+      }
+    }
+
+    return {
+      label: __DARWIN__
+        ? 'Review Selected Changes with Codex'
+        : 'Review selected changes with Codex',
+      action: () => onReviewSelectedChanges(filesSelected),
+      enabled:
+        isCommitting !== true &&
+        filesSelected.length > 0 &&
+        this.selectedChangesReviewDisabledReason === null,
+    }
+  }
+
   private onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
     if (
       event.target instanceof HTMLTextAreaElement ||
@@ -926,6 +971,11 @@ export class CommitMessage extends React.Component<
       items.push(generateMenuItem)
     }
 
+    const reviewMenuItem = this.getReviewSelectedChangesMenuItem()
+    if (reviewMenuItem) {
+      items.push(reviewMenuItem)
+    }
+
     showContextualMenu(items)
   }
 
@@ -935,6 +985,11 @@ export class CommitMessage extends React.Component<
     const generateMenuItem = this.getGenerateCommitMessageMenuItem()
     if (generateMenuItem) {
       items.push(generateMenuItem)
+    }
+
+    const reviewMenuItem = this.getReviewSelectedChangesMenuItem()
+    if (reviewMenuItem) {
+      items.push(reviewMenuItem)
     }
 
     items.push(
@@ -983,6 +1038,19 @@ export class CommitMessage extends React.Component<
       this.props.filesSelected,
       !!commitMessage.summary || !!commitMessage.description
     )
+  }
+
+  private onSelectedChangesReviewButtonClick = (
+    e: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    e.preventDefault()
+
+    if (this.props.isReviewingSelectedChanges === true) {
+      this.props.onCancelSelectedChangesReview?.()
+      return
+    }
+
+    this.props.onReviewSelectedChanges?.(this.props.filesSelected)
   }
 
   private onCoAuthorToggleButtonClick = async (
@@ -1060,12 +1128,59 @@ export class CommitMessage extends React.Component<
     )
   }
 
+  private renderSelectedChangesReviewButton() {
+    if (this.props.onReviewSelectedChanges === undefined) {
+      return null
+    }
+
+    const {
+      filesSelected,
+      isCommitting,
+      isReviewingSelectedChanges,
+      onCancelSelectedChangesReview,
+    } = this.props
+    const isReviewing = isReviewingSelectedChanges === true
+    const noFilesSelected = filesSelected.length === 0
+    const canCancel = onCancelSelectedChangesReview !== undefined
+    const disabledReason = this.selectedChangesReviewDisabledReason
+    let ariaLabel = disabledReason ?? 'Review selected changes with Codex'
+
+    if (isReviewing) {
+      ariaLabel = 'Cancel reviewing selected changes'
+    } else if (noFilesSelected) {
+      ariaLabel += '. Files must be selected to review changes.'
+    }
+
+    return (
+      <>
+        {(this.isCoAuthorInputEnabled || this.isCopilotButtonEnabled) && (
+          <div className="separator" />
+        )}
+        <Button
+          className="selected-changes-review-button"
+          onClick={this.onSelectedChangesReviewButtonClick}
+          ariaLabel={ariaLabel}
+          tooltip={ariaLabel}
+          disabled={
+            isCommitting === true ||
+            (isReviewing ? !canCancel : noFilesSelected) ||
+            (!isReviewing && disabledReason !== null)
+          }
+        >
+          {isReviewing ? <Loading /> : <Octicon symbol={octicons.codeReview} />}
+        </Button>
+      </>
+    )
+  }
+
   private renderCommitOptionsButton() {
     const ariaLabel = 'Configure commit options'
 
     return (
       <>
-        {(this.isCoAuthorInputEnabled || this.isCopilotButtonEnabled) && (
+        {(this.isCoAuthorInputEnabled ||
+          this.isCopilotButtonEnabled ||
+          this.props.onReviewSelectedChanges !== undefined) && (
           <div className="separator" />
         )}
         <Button
@@ -1245,6 +1360,29 @@ export class CommitMessage extends React.Component<
     return this.props.onCancelGenerateCommitMessage !== undefined
   }
 
+  private get selectedChangesReviewDisabledReason(): string | null {
+    if (this.props.codexAccount === undefined) {
+      return 'Sign in to ChatGPT in Options to review selected changes.'
+    }
+
+    const availability = getCodexCommitMessageAvailability(
+      this.props.codexAccount
+    )
+    switch (availability) {
+      case 'ready':
+        return null
+      case 'account-required':
+        return 'Sign in to ChatGPT in Options to review selected changes.'
+      case 'rate-limit-exhausted':
+        return 'ChatGPT usage is exhausted. Check Options for the reset time.'
+      default:
+        return assertNever(
+          availability,
+          'Unknown Codex selected-changes review availability'
+        )
+    }
+  }
+
   private renderActionBar() {
     const { isCommitting, isGeneratingCommitMessage } = this.props
 
@@ -1256,6 +1394,7 @@ export class CommitMessage extends React.Component<
       <div className={className}>
         {this.renderCoAuthorToggleButton()}
         {this.renderCopilotButton()}
+        {this.renderSelectedChangesReviewButton()}
         {this.renderCommitOptionsButton()}
       </div>
     )

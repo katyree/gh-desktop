@@ -9,6 +9,7 @@ Current AI features:
 
 - generate an editable commit message from the changes selected for a commit;
 - generate review-only conflict suggestions with explicit per-file choices;
+- review selected changes with concrete findings linked to files and lines;
 - show ChatGPT account and usage state independently from GitHub authentication.
 
 WinGit is currently a private development build. The local installers are

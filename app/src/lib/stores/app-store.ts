@@ -15,6 +15,18 @@ import {
 import { CommitMessageGenerationCancelledError } from '../commit-message-generator'
 import { CodexCommitMessageGenerator } from '../codex-commit-message-generator'
 import {
+  CodexSelectedChangesReviewGenerationError,
+  CodexSelectedChangesReviewGenerator,
+} from '../codex-selected-changes-review-generator'
+import {
+  captureSelectedChangesReviewSnapshot,
+  SelectedChangesReviewSnapshotError,
+} from '../selected-changes-review-snapshot'
+import {
+  getSelectedChangesReviewSelectionKey,
+  selectedChangesReviewSnapshotsEqual,
+} from '../selected-changes-review-state'
+import {
   CodexConflictSuggestionCancelledError,
   CodexConflictSuggestionGenerator,
 } from '../codex-conflict-suggestion-generator'
@@ -730,6 +742,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
   private codexAccount: ICodexAccountStoreState
   private codexModelSelection: ICodexModelSelection =
     getPersistedCodexModelSelection()
+  private selectedChangesReviewRequestId = 0
 
   public constructor(
     private readonly gitHubUserStore: GitHubUserStore,
@@ -2895,6 +2908,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
     this.emitUpdate()
 
     this.updateChangesWorkingDirectoryDiff(repository)
+    void this._refreshSelectedChangesReview(repository)
 
     return status
   }
@@ -3776,6 +3790,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
     })
 
     this.emitUpdate()
+    this._markSelectedChangesReviewOutdated(repository, 'selection-changed')
     return Promise.resolve()
   }
 
@@ -3786,6 +3801,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
     diffSelection: DiffSelection
   ): Promise<void> {
     this.updateWorkingDirectoryFileSelection(repository, file, diffSelection)
+    this._markSelectedChangesReviewOutdated(repository, 'selection-changed')
     return Promise.resolve()
   }
 
@@ -3823,6 +3839,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
     })
 
     this.emitUpdate()
+    this._markSelectedChangesReviewOutdated(repository, 'selection-changed')
 
     return Promise.resolve()
   }
@@ -6340,6 +6357,442 @@ export class AppStore extends TypedBaseStore<IAppState> {
     abortController.abort()
   }
 
+  /** Start a review of the currently checked changes through Codex. */
+  public async _reviewSelectedChanges(
+    repository: Repository,
+    filesSelected: ReadonlyArray<WorkingDirectoryFileChange>
+  ): Promise<void> {
+    const review =
+      this.repositoryStateCache.get(repository).selectedChangesReview
+    if (review.kind !== 'idle') {
+      if (review.kind === 'complete') {
+        void this._refreshSelectedChangesReview(repository)
+      }
+
+      if (!this.hasSelectedChangesReviewPopup(repository)) {
+        await this._showPopup({
+          type: PopupType.SelectedChangesReview,
+          repository,
+        })
+      }
+      return
+    }
+
+    if (getCodexCommitMessageAvailability(this.codexAccount) !== 'ready') {
+      return
+    }
+
+    if (
+      filesSelected.length === 0 ||
+      this.getCurrentSelectedChangesReviewFiles(repository).length === 0
+    ) {
+      return
+    }
+
+    if (!this.codexPrivacyConsentStore.hasFreshConsent(repository.id)) {
+      await this._showPopup({
+        type: PopupType.SelectedChangesReviewDisclaimer,
+        repository,
+        filesSelected,
+      })
+      return
+    }
+
+    this.startSelectedChangesReview(repository)
+
+    if (!this.hasSelectedChangesReviewPopup(repository)) {
+      await this._showPopup({
+        type: PopupType.SelectedChangesReview,
+        repository,
+      })
+    }
+  }
+
+  /** Explicitly run the review again against the current selected changes. */
+  public async _rerunSelectedChangesReview(
+    repository: Repository
+  ): Promise<void> {
+    if (getCodexCommitMessageAvailability(this.codexAccount) !== 'ready') {
+      return
+    }
+
+    const filesSelected = this.getCurrentSelectedChangesReviewFiles(repository)
+    if (filesSelected.length === 0) {
+      return
+    }
+
+    if (!this.codexPrivacyConsentStore.hasFreshConsent(repository.id)) {
+      await this._showPopup({
+        type: PopupType.SelectedChangesReviewDisclaimer,
+        repository,
+        filesSelected,
+        reviewAgain: true,
+      })
+      return
+    }
+
+    this.startSelectedChangesReview(repository)
+    if (!this.hasSelectedChangesReviewPopup(repository)) {
+      await this._showPopup({
+        type: PopupType.SelectedChangesReview,
+        repository,
+      })
+    }
+  }
+
+  private hasSelectedChangesReviewPopup(repository: Repository): boolean {
+    return this.popupManager.allPopups.some(
+      popup =>
+        popup.type === PopupType.SelectedChangesReview &&
+        popup.repository.hash === repository.hash
+    )
+  }
+
+  /** Cancel a selected-changes review without retaining its partial result. */
+  public _cancelSelectedChangesReview(repository: Repository): void {
+    const state = this.repositoryStateCache.get(repository)
+    const review = state.selectedChangesReview
+    if (review.kind !== 'pending') {
+      return
+    }
+
+    state.selectedChangesReviewAbortController?.abort()
+    this.repositoryStateCache.update(repository, () => ({
+      selectedChangesReview: {
+        kind: 'idle',
+      },
+      selectedChangesReviewAbortController: null,
+    }))
+    this.emitUpdate()
+  }
+
+  /** Recheck a retained review against the current working directory snapshot. */
+  public async _refreshSelectedChangesReview(
+    repository: Repository
+  ): Promise<void> {
+    const state = this.repositoryStateCache.get(repository)
+    const review = state.selectedChangesReview
+    if (
+      (review.kind !== 'pending' && review.kind !== 'complete') ||
+      review.snapshot === null
+    ) {
+      return
+    }
+
+    const files = this.getCurrentSelectedChangesReviewFiles(repository)
+    if (getSelectedChangesReviewSelectionKey(files) !== review.selectionKey) {
+      this._markSelectedChangesReviewOutdated(repository, 'selection-changed')
+      return
+    }
+
+    try {
+      const snapshot = await captureSelectedChangesReviewSnapshot(
+        repository,
+        files,
+        this.getSelectedChangesReviewCommitish(repository)
+      )
+      const currentReview =
+        this.repositoryStateCache.get(repository).selectedChangesReview
+      if (
+        (currentReview.kind !== 'pending' &&
+          currentReview.kind !== 'complete') ||
+        currentReview.requestId !== review.requestId
+      ) {
+        return
+      }
+
+      if (
+        getSelectedChangesReviewSelectionKey(
+          this.getCurrentSelectedChangesReviewFiles(repository)
+        ) !== review.selectionKey
+      ) {
+        this._markSelectedChangesReviewOutdated(repository, 'selection-changed')
+        return
+      }
+
+      if (!selectedChangesReviewSnapshotsEqual(review.snapshot, snapshot)) {
+        this._markSelectedChangesReviewOutdated(repository, 'content-changed')
+      }
+    } catch (error) {
+      this.setSelectedChangesReviewError(
+        repository,
+        review.requestId,
+        review.snapshot,
+        this.getSelectedChangesReviewErrorMessage(error)
+      )
+    }
+  }
+
+  private startSelectedChangesReview(repository: Repository): void {
+    const currentState = this.repositoryStateCache.get(repository)
+    if (currentState.selectedChangesReview.kind === 'pending') {
+      return
+    }
+
+    const files = this.getCurrentSelectedChangesReviewFiles(repository)
+    if (files.length === 0) {
+      return
+    }
+
+    const requestId = ++this.selectedChangesReviewRequestId
+    const selectionKey = getSelectedChangesReviewSelectionKey(files)
+    const abortController = new AbortController()
+    this.repositoryStateCache.update(repository, () => ({
+      selectedChangesReview: {
+        kind: 'pending',
+        requestId,
+        selectionKey,
+        snapshot: null,
+      },
+      selectedChangesReviewAbortController: abortController,
+    }))
+    this.emitUpdate()
+    void this.executeSelectedChangesReview(
+      repository,
+      files,
+      requestId,
+      selectionKey,
+      abortController
+    )
+  }
+
+  private async executeSelectedChangesReview(
+    repository: Repository,
+    files: ReadonlyArray<WorkingDirectoryFileChange>,
+    requestId: number,
+    selectionKey: string,
+    abortController: AbortController
+  ): Promise<void> {
+    let snapshot: Awaited<
+      ReturnType<typeof captureSelectedChangesReviewSnapshot>
+    > | null = null
+
+    try {
+      const capturedSnapshot = await captureSelectedChangesReviewSnapshot(
+        repository,
+        files,
+        this.getSelectedChangesReviewCommitish(repository)
+      )
+      snapshot = capturedSnapshot
+      if (!this.ownsSelectedChangesReviewRequest(repository, requestId)) {
+        return
+      }
+
+      this.repositoryStateCache.update(repository, state => {
+        const review = state.selectedChangesReview
+        if (review.kind !== 'pending' || review.requestId !== requestId) {
+          return { selectedChangesReview: review }
+        }
+        return {
+          selectedChangesReview: {
+            ...review,
+            snapshot: capturedSnapshot,
+          },
+        }
+      })
+      this.emitUpdate()
+
+      const generator = new CodexSelectedChangesReviewGenerator(
+        {
+          start: startCodexGeneration,
+          wait: waitForCodexGeneration,
+          cancel: cancelCodexGeneration,
+        },
+        resolveCodexModelSelection(
+          this.codexAccount.models,
+          this.codexModelSelection
+        )
+      )
+      const findings = await generator.review({
+        snapshot: capturedSnapshot,
+        signal: abortController.signal,
+      })
+
+      if (!this.ownsSelectedChangesReviewRequest(repository, requestId)) {
+        return
+      }
+
+      const currentFiles = this.getCurrentSelectedChangesReviewFiles(repository)
+      if (getSelectedChangesReviewSelectionKey(currentFiles) !== selectionKey) {
+        this._markSelectedChangesReviewOutdated(repository, 'selection-changed')
+        return
+      }
+
+      const currentSnapshot = await captureSelectedChangesReviewSnapshot(
+        repository,
+        currentFiles,
+        this.getSelectedChangesReviewCommitish(repository)
+      )
+      if (!this.ownsSelectedChangesReviewRequest(repository, requestId)) {
+        return
+      }
+
+      if (
+        getSelectedChangesReviewSelectionKey(
+          this.getCurrentSelectedChangesReviewFiles(repository)
+        ) !== selectionKey
+      ) {
+        this._markSelectedChangesReviewOutdated(repository, 'selection-changed')
+        return
+      }
+
+      if (
+        !selectedChangesReviewSnapshotsEqual(capturedSnapshot, currentSnapshot)
+      ) {
+        this._markSelectedChangesReviewOutdated(repository, 'content-changed')
+        return
+      }
+
+      this.repositoryStateCache.update(repository, state => {
+        const review = state.selectedChangesReview
+        if (review.kind !== 'pending' || review.requestId !== requestId) {
+          return { selectedChangesReview: review }
+        }
+        return {
+          selectedChangesReview: {
+            kind: 'complete',
+            requestId,
+            selectionKey,
+            snapshot: capturedSnapshot,
+            findings,
+          },
+        }
+      })
+      this.emitUpdate()
+    } catch (error) {
+      if (abortController.signal.aborted) {
+        return
+      }
+
+      this.setSelectedChangesReviewError(
+        repository,
+        requestId,
+        snapshot,
+        this.getSelectedChangesReviewErrorMessage(error)
+      )
+    } finally {
+      const currentState = this.repositoryStateCache.get(repository)
+      if (
+        currentState.selectedChangesReviewAbortController === abortController
+      ) {
+        this.repositoryStateCache.update(repository, () => ({
+          selectedChangesReviewAbortController: null,
+        }))
+        this.emitUpdate()
+      }
+    }
+  }
+
+  private getCurrentSelectedChangesReviewFiles(
+    repository: Repository
+  ): ReadonlyArray<WorkingDirectoryFileChange> {
+    return this.repositoryStateCache
+      .get(repository)
+      .changesState.workingDirectory.files.filter(
+        file => file.selection.getSelectionType() !== DiffSelectionType.None
+      )
+  }
+
+  private getSelectedChangesReviewCommitish(
+    repository: Repository
+  ): string | undefined {
+    const commitToAmend =
+      this.repositoryStateCache.get(repository).commitToAmend
+    return commitToAmend === null ? undefined : `${commitToAmend.sha}^`
+  }
+
+  private ownsSelectedChangesReviewRequest(
+    repository: Repository,
+    requestId: number
+  ): boolean {
+    const state = this.repositoryStateCache.get(repository)
+    return (
+      state.selectedChangesReview.kind === 'pending' &&
+      state.selectedChangesReview.requestId === requestId &&
+      state.selectedChangesReviewAbortController !== null
+    )
+  }
+
+  private _markSelectedChangesReviewOutdated(
+    repository: Repository,
+    reason: 'selection-changed' | 'content-changed'
+  ): void {
+    const state = this.repositoryStateCache.get(repository)
+    const review = state.selectedChangesReview
+    if (review.kind === 'pending') {
+      state.selectedChangesReviewAbortController?.abort()
+      this.repositoryStateCache.update(repository, () => ({
+        selectedChangesReview: {
+          kind: 'outdated',
+          requestId: review.requestId,
+          selectionKey: review.selectionKey,
+          snapshot: review.snapshot,
+          findings: [],
+          reason,
+        },
+        selectedChangesReviewAbortController: null,
+      }))
+      this.emitUpdate()
+      return
+    }
+
+    if (review.kind !== 'complete') {
+      return
+    }
+
+    this.repositoryStateCache.update(repository, () => ({
+      selectedChangesReview: {
+        kind: 'outdated',
+        requestId: review.requestId,
+        selectionKey: review.selectionKey,
+        snapshot: review.snapshot,
+        findings: review.findings,
+        reason,
+      },
+    }))
+    this.emitUpdate()
+  }
+
+  private setSelectedChangesReviewError(
+    repository: Repository,
+    requestId: number,
+    snapshot: Awaited<
+      ReturnType<typeof captureSelectedChangesReviewSnapshot>
+    > | null,
+    message: string
+  ): void {
+    const state = this.repositoryStateCache.get(repository)
+    const review = state.selectedChangesReview
+    if (
+      (review.kind !== 'pending' && review.kind !== 'complete') ||
+      review.requestId !== requestId
+    ) {
+      return
+    }
+
+    this.repositoryStateCache.update(repository, () => ({
+      selectedChangesReview: {
+        kind: 'error',
+        requestId,
+        selectionKey: review.selectionKey,
+        snapshot: snapshot ?? review.snapshot,
+        message,
+      },
+    }))
+    this.emitUpdate()
+  }
+
+  private getSelectedChangesReviewErrorMessage(error: unknown): string {
+    if (
+      error instanceof CodexSelectedChangesReviewGenerationError ||
+      error instanceof SelectedChangesReviewSnapshotError
+    ) {
+      return error.message
+    }
+
+    return 'WinGit could not review the selected changes. Try again.'
+  }
+
   /**
    * Extract display labels and git refs for both sides of a conflict.
    */
@@ -7850,6 +8303,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       this.repositoryIndicatorUpdater.resume()
       if (this.selectedRepository instanceof Repository) {
         this.startPullRequestUpdater(this.selectedRepository)
+        void this._refreshSelectedChangesReview(this.selectedRepository)
         // if we're in the tutorial and we don't have an editor yet, check for one!
         if (this.currentOnboardingTutorialStep === TutorialStep.PickEditor) {
           await this._resolveCurrentEditor()

@@ -13,7 +13,7 @@
     "authentication": "x-wingit-auth",
     "authenticationDevelopment": "x-wingit-dev-auth"
   },
-  "version": "3.6.5-beta1",
+  "version": "3.6.5-beta2",
   "main": "./main.js",
   "repository": {
     "type": "git",

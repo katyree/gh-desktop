@@ -1200,6 +1200,25 @@ export class Dispatcher {
     return this.appStore._cancelGenerateCommitMessage(repository)
   }
 
+  public reviewSelectedChanges(
+    repository: Repository,
+    filesSelected: ReadonlyArray<WorkingDirectoryFileChange>
+  ) {
+    return this.appStore._reviewSelectedChanges(repository, filesSelected)
+  }
+
+  public cancelSelectedChangesReview(repository: Repository) {
+    return this.appStore._cancelSelectedChangesReview(repository)
+  }
+
+  public refreshSelectedChangesReview(repository: Repository) {
+    return this.appStore._refreshSelectedChangesReview(repository)
+  }
+
+  public rerunSelectedChangesReview(repository: Repository) {
+    return this.appStore._rerunSelectedChangesReview(repository)
+  }
+
   /**
    * Use Copilot to analyze and suggest resolutions for conflicts
    * from merge, rebase, or cherry-pick operations.

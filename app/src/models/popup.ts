@@ -107,6 +107,8 @@ export enum PopupType {
   BypassPushProtection = 'BypassPushProtection',
   GenerateCommitMessageOverrideWarning = 'GenerateCommitMessageOverrideWarning',
   GenerateCommitMessageDisclaimer = 'GenerateCommitMessageDisclaimer',
+  SelectedChangesReviewDisclaimer = 'SelectedChangesReviewDisclaimer',
+  SelectedChangesReview = 'SelectedChangesReview',
   CopilotConflictResolutionDisclaimer = 'CopilotConflictResolutionDisclaimer',
   HookFailed = 'HookFailed',
   CommitProgress = 'CommitProgress',
@@ -479,6 +481,16 @@ export type PopupDetail =
       // from this popup we will trigger the commit message generation too.
       repository: Repository
       filesSelected: ReadonlyArray<WorkingDirectoryFileChange>
+    }
+  | {
+      type: PopupType.SelectedChangesReviewDisclaimer
+      repository: Repository
+      filesSelected: ReadonlyArray<WorkingDirectoryFileChange>
+      reviewAgain?: boolean
+    }
+  | {
+      type: PopupType.SelectedChangesReview
+      repository: Repository
     }
   | {
       type: PopupType.CopilotConflictResolutionDisclaimer

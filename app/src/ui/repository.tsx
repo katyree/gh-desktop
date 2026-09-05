@@ -297,6 +297,9 @@ export class RepositoryView extends React.Component<
             : undefined
         }
         isGeneratingCommitMessage={this.props.state.isGeneratingCommitMessage}
+        isReviewingSelectedChanges={
+          this.props.state.selectedChangesReview.kind === 'pending'
+        }
         shouldShowGenerateCommitMessageCallOut={
           this.props.shouldShowGenerateCommitMessageCallOut
         }

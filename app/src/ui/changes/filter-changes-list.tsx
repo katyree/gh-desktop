@@ -163,6 +163,7 @@ interface IFilterChangesListProps {
   readonly hookProgress: HookProgress | null
   readonly onShowCommitProgress?: (() => void) | undefined
   readonly isGeneratingCommitMessage: boolean
+  readonly isReviewingSelectedChanges: boolean
   readonly shouldShowGenerateCommitMessageCallOut: boolean
   readonly commitToAmend: Commit | null
   readonly currentBranchProtected: boolean
@@ -1003,6 +1004,9 @@ export class FilterChangesList extends React.Component<
         onPersistCommitMessage={this.onPersistCommitMessage}
         onGenerateCommitMessage={this.onGenerateCommitMessage}
         onCancelGenerateCommitMessage={this.onCancelGenerateCommitMessage}
+        onReviewSelectedChanges={this.onReviewSelectedChanges}
+        onCancelSelectedChangesReview={this.onCancelSelectedChangesReview}
+        isReviewingSelectedChanges={this.props.isReviewingSelectedChanges}
         onCommitMessageFocusSet={this.onCommitMessageFocusSet}
         onRefreshAuthor={this.onRefreshAuthor}
         onShowPopup={this.onShowPopup}
@@ -1074,6 +1078,19 @@ export class FilterChangesList extends React.Component<
 
   private onCancelGenerateCommitMessage = () => {
     this.props.dispatcher.cancelGenerateCommitMessage(this.props.repository)
+  }
+
+  private onReviewSelectedChanges = (
+    filesSelected: ReadonlyArray<WorkingDirectoryFileChange>
+  ) => {
+    void this.props.dispatcher.reviewSelectedChanges(
+      this.props.repository,
+      filesSelected
+    )
+  }
+
+  private onCancelSelectedChangesReview = () => {
+    this.props.dispatcher.cancelSelectedChangesReview(this.props.repository)
   }
 
   private onShowPopup = (p: Popup) => this.props.dispatcher.showPopup(p)

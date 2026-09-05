@@ -37,6 +37,7 @@ import { Branch } from '../models/branch'
 import { PreferencesTab } from '../models/preferences'
 import { findItemByAccessKey, itemIsSelectable } from '../models/app-menu'
 import { Account, isDotComAccount } from '../models/account'
+import { DiffSelectionType } from '../models/diff'
 import { TipState } from '../models/tip'
 import { CloneRepositoryTab } from '../models/clone-repository-tab'
 import { CloningRepository } from '../models/cloning-repository'
@@ -102,6 +103,7 @@ import { CommitConflictsWarning } from './merge-conflicts'
 import { AppTheme } from './app-theme'
 import { ApplicationTheme } from './lib/application-theme'
 import { RepositoryStateCache } from '../lib/stores/repository-state-cache'
+import { getCodexCommitMessageAvailability } from '../lib/stores/codex-account-store'
 import { PopupType, Popup } from '../models/popup'
 import { OversizedFiles } from './changes/oversized-files-warning'
 import { PushNeedsPullWarning } from './push-needs-pull'
@@ -194,6 +196,7 @@ import {
 } from './secret-scanning/push-protection-error-dialog'
 import { GenerateCommitMessageOverrideWarning } from './generate-commit-message/generate-commit-message-override-warning'
 import { CodexCommitMessageDisclaimer } from './generate-commit-message/codex-commit-message-disclaimer'
+import { SelectedChangesReviewDialog } from './changes/selected-changes-review-dialog'
 import { CopilotDisclaimer } from './copilot/copilot-disclaimer'
 import { CopilotConflictResolutionAlwaysNudge } from './multi-commit-operation/dialog/copilot-conflict-resolution-always-nudge'
 import { IAPICreatePushProtectionBypassResponse } from '../lib/api'
@@ -2697,6 +2700,74 @@ export class App extends React.Component<IAppProps, IAppState> {
             // eslint-disable-next-line react/jsx-no-bind
             onAccepted={onAccepted}
             onDismissed={onPopupDismissedFn}
+          />
+        )
+      }
+      case PopupType.SelectedChangesReviewDisclaimer: {
+        const { repository, filesSelected } = popup
+        const onAccepted = () => {
+          this.props.dispatcher.acknowledgeCodexCommitMessagePrivacy(repository)
+          if (popup.reviewAgain === true) {
+            this.props.dispatcher.rerunSelectedChangesReview(repository)
+          } else {
+            this.props.dispatcher.reviewSelectedChanges(
+              repository,
+              filesSelected
+            )
+          }
+        }
+        return (
+          <CodexCommitMessageDisclaimer
+            key="selected-changes-review-disclaimer"
+            purpose="selected-review"
+            // eslint-disable-next-line react/jsx-no-bind
+            onAccepted={onAccepted}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
+      }
+      case PopupType.SelectedChangesReview: {
+        const repositoryState = this.props.repositoryStateManager.get(
+          popup.repository
+        )
+        const availability = getCodexCommitMessageAvailability(
+          this.state.codexAccount
+        )
+        const selectedFiles =
+          repositoryState.changesState.workingDirectory.files.filter(
+            file => file.selection.getSelectionType() !== DiffSelectionType.None
+          )
+        const canReview =
+          availability === 'ready' &&
+          selectedFiles.length > 0 &&
+          !repositoryState.isCommitting
+        const disabledReason =
+          availability === 'account-required'
+            ? 'Sign in to ChatGPT in Options to review selected changes.'
+            : availability === 'rate-limit-exhausted'
+            ? 'ChatGPT usage is exhausted. Check Options for the reset time.'
+            : selectedFiles.length === 0
+            ? 'Select changes to review selected changes.'
+            : repositoryState.isCommitting
+            ? 'Finish the current commit before reviewing selected changes.'
+            : undefined
+
+        const onReviewAgain = () =>
+          this.props.dispatcher.rerunSelectedChangesReview(popup.repository)
+        const onCancel = () =>
+          this.props.dispatcher.cancelSelectedChangesReview(popup.repository)
+
+        return (
+          <SelectedChangesReviewDialog
+            key="selected-changes-review"
+            review={repositoryState.selectedChangesReview}
+            onDismissed={onPopupDismissedFn}
+            // eslint-disable-next-line react/jsx-no-bind
+            onReviewAgain={onReviewAgain}
+            // eslint-disable-next-line react/jsx-no-bind
+            onCancel={onCancel}
+            canReview={canReview}
+            disabledReason={disabledReason}
           />
         )
       }

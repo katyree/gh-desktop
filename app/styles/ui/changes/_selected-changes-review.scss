@@ -1,0 +1,179 @@
+@import '../../mixins';
+
+dialog#selected-changes-review {
+  width: 680px;
+  max-width: calc(100% - var(--spacing-double));
+
+  .selected-changes-review-content {
+    min-height: 120px;
+    max-height: min(620px, calc(100vh - 150px));
+    overflow-y: auto;
+  }
+
+  .selected-changes-review-pending,
+  .selected-changes-review-empty,
+  .selected-changes-review-error {
+    padding: var(--spacing-double);
+  }
+
+  .selected-changes-review-pending,
+  .selected-changes-review-error {
+    p:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  .selected-changes-review-outdated {
+    display: flex;
+    gap: var(--spacing-half);
+    align-items: baseline;
+    margin: var(--spacing-double);
+    padding: var(--spacing);
+    border: 1px solid var(--dialog-warning-color);
+    border-radius: var(--border-radius);
+    color: var(--text-color);
+    background: var(--box-alt-background-color);
+
+    strong {
+      color: var(--dialog-warning-color);
+      white-space: nowrap;
+    }
+  }
+
+  .selected-changes-review-findings {
+    list-style: none;
+    margin: 0;
+    padding: 0 var(--spacing-double) var(--spacing-double);
+  }
+
+  .selected-changes-review-finding {
+    padding: var(--spacing-double) 0;
+    border-bottom: var(--base-border);
+
+    &:first-child {
+      padding-top: var(--spacing);
+    }
+
+    &:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    h2 {
+      margin-top: var(--spacing-half);
+      margin-bottom: var(--spacing-half);
+      font-size: var(--font-size-md);
+    }
+
+    p {
+      overflow-wrap: anywhere;
+    }
+  }
+
+  .selected-changes-review-finding-location {
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing);
+    min-width: 0;
+  }
+
+  .selected-changes-review-location-link {
+    overflow-wrap: anywhere;
+    font-family: var(--font-family-monospace);
+    font-size: var(--font-size-sm);
+  }
+
+  .selected-changes-review-side {
+    color: var(--text-secondary-color);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+  }
+
+  .selected-changes-review-suggestion {
+    margin-bottom: 0;
+  }
+
+  .selected-changes-review-diff-viewer {
+    margin-top: var(--spacing-double);
+    border: var(--base-border);
+    border-radius: var(--border-radius);
+    overflow: auto;
+    background: var(--box-alt-background-color);
+  }
+
+  .selected-changes-review-diff-table {
+    min-width: 100%;
+    padding: var(--spacing-half) 0;
+    font-family: var(--font-family-monospace);
+    font-size: var(--font-size-sm);
+  }
+
+  .selected-changes-review-diff-row {
+    display: grid;
+    grid-template-columns: 4ch 4ch minmax(max-content, 1fr);
+    min-height: 20px;
+    line-height: 20px;
+    white-space: pre;
+
+    &:focus {
+      outline: 2px solid var(--focus-color);
+      outline-offset: -2px;
+    }
+
+    &.is-focused {
+      box-shadow: inset 3px 0 var(--focus-color);
+
+      &.is-added {
+        background: var(--diff-add-background-color);
+        color: var(--diff-add-text-color);
+      }
+
+      &.is-deleted {
+        background: var(--diff-delete-background-color);
+        color: var(--diff-delete-text-color);
+      }
+
+      .selected-changes-review-diff-number,
+      .selected-changes-review-diff-text {
+        color: inherit;
+      }
+    }
+  }
+
+  .selected-changes-review-diff-number {
+    padding: 0 var(--spacing-half);
+    color: var(--text-secondary-color);
+    text-align: right;
+    user-select: none;
+  }
+
+  .selected-changes-review-diff-text {
+    display: block;
+    min-width: 0;
+    padding: 0 var(--spacing);
+    overflow: hidden;
+    color: var(--text-color);
+    text-overflow: ellipsis;
+  }
+
+  .selected-changes-review-diff-marker {
+    color: var(--text-secondary-color);
+    user-select: none;
+  }
+
+  .selected-changes-review-diff-ellipsis {
+    padding: 0 var(--spacing);
+    color: var(--text-secondary-color);
+    line-height: 20px;
+  }
+
+  .selected-changes-review-context-missing {
+    margin-top: var(--spacing);
+    color: var(--text-secondary-color);
+    font-size: var(--font-size-sm);
+  }
+
+  .selected-changes-review-again {
+    font-weight: var(--font-weight-semibold);
+  }
+}

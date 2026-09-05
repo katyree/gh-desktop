@@ -65,6 +65,7 @@ import { Emoji } from './emoji'
 import { IUpdateState } from '../ui/lib/update-store'
 import type { ICodexAccountStoreState } from './stores/codex-account-store'
 import type { ICodexModelSelection } from './codex-model-selection'
+import type { SelectedChangesReviewState } from './selected-changes-review-state'
 
 export enum SelectionType {
   Repository,
@@ -585,6 +586,12 @@ export interface IRepositoryState {
 
   /** Controller used to cancel an in-flight commit message generation. */
   readonly commitMessageGenerationAbortController: AbortController | null
+
+  /** The in-memory state of the current selected-changes review. */
+  readonly selectedChangesReview: SelectedChangesReviewState
+
+  /** Controller used to cancel an in-flight selected-changes review. */
+  readonly selectedChangesReviewAbortController: AbortController | null
 
   /** Commit being amended, or null if none. */
   readonly commitToAmend: Commit | null
