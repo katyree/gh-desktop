@@ -1,0 +1,145 @@
+<Project>
+  <!--
+    The native app consumes the pinned Windows x64 Codex package directly.
+    The package is a build-time input; published copies contain the complete
+    vendor tree under codex so they do not depend on the Electron tree.
+
+    The SHA-256 pins below were derived from the Yarn-lock-resolved
+    @openai/codex 0.151.0-win32-x64 tarball. Validate the package metadata
+    and entry points before copying any part of the cached distribution.
+  -->
+  <PropertyGroup>
+    <CodexRuntimePackageRoot Condition="'$(CodexRuntimePackageRoot)' == ''">$(MSBuildThisFileDirectory)..\..\app\node_modules\@openai\codex-win32-x64</CodexRuntimePackageRoot>
+    <CodexRuntimePackageName Condition="'$(CodexRuntimePackageName)' == ''">@openai/codex</CodexRuntimePackageName>
+    <CodexRuntimePackageVersion Condition="'$(CodexRuntimePackageVersion)' == ''">0.151.0-win32-x64</CodexRuntimePackageVersion>
+    <CodexRuntimeTargetTriple Condition="'$(CodexRuntimeTargetTriple)' == ''">x86_64-pc-windows-msvc</CodexRuntimeTargetTriple>
+    <CodexRuntimeSourceRoot Condition="'$(CodexRuntimeSourceRoot)' == ''">$(CodexRuntimePackageRoot)\vendor\$(CodexRuntimeTargetTriple)</CodexRuntimeSourceRoot>
+    <CodexRuntimePublishRoot Condition="'$(CodexRuntimePublishRoot)' == ''">codex\vendor\$(CodexRuntimeTargetTriple)</CodexRuntimePublishRoot>
+    <CodexRuntimeLicensePath Condition="'$(CodexRuntimeLicensePath)' == ''">$(MSBuildThisFileDirectory)CodexRuntimeLicense.txt</CodexRuntimeLicensePath>
+
+    <!-- Package source identity from app/yarn.lock and Yarn's cache metadata. -->
+    <CodexRuntimePackageResolved Condition="'$(CodexRuntimePackageResolved)' == ''">https://registry.yarnpkg.com/@openai/codex/-/codex-0.151.0-win32-x64.tgz#d4b6c32d1edd57d059d589209bd4bf401263fd79</CodexRuntimePackageResolved>
+    <CodexRuntimePackageIntegrity Condition="'$(CodexRuntimePackageIntegrity)' == ''">sha512-sLT7xvID3jhU6tkzcwRPnMEclKRwUPbpo0mtfxIF9KpdZH3VJV7sM2/kXWXyvUM7Zt/YeyOaeATTEysbRz8Yog==</CodexRuntimePackageIntegrity>
+    <CodexRuntimePackageArchiveSha1 Condition="'$(CodexRuntimePackageArchiveSha1)' == ''">d4b6c32d1edd57d059d589209bd4bf401263fd79</CodexRuntimePackageArchiveSha1>
+    <CodexRuntimePackageArchiveSha512 Condition="'$(CodexRuntimePackageArchiveSha512)' == ''">b0b4fbc6f203de3854ead93373044f9cc11c94a47050f6e9a349ad7f1205f4aa5d647dd5255eec336fe45d65f2bd433b66dfd87b239a7804d3132b1b473f18a2</CodexRuntimePackageArchiveSha512>
+
+    <!-- Hashes pin the checked-in package metadata and runtime entry points. -->
+    <CodexRuntimePackageJsonSha256 Condition="'$(CodexRuntimePackageJsonSha256)' == ''">D4DE69494014F15293053C2C41BA824A419B853310B1F75A5964D57B28658368</CodexRuntimePackageJsonSha256>
+    <CodexRuntimeReadmeSha256 Condition="'$(CodexRuntimeReadmeSha256)' == ''">BA4E1F69FF48386E72A9C5E1EDAF76AAD64A475C2D51AF79CCBA6D1128261BA7</CodexRuntimeReadmeSha256>
+    <CodexRuntimeVendorPackageJsonSha256 Condition="'$(CodexRuntimeVendorPackageJsonSha256)' == ''">8689B9E6CB755D4B35E335FD08A847CE5D19F6F4EF6D893D1A16D044FEEFDF34</CodexRuntimeVendorPackageJsonSha256>
+    <CodexRuntimeCodexExeSha256 Condition="'$(CodexRuntimeCodexExeSha256)' == ''">CF68265897197AC5F3BFF6A10C168EEC159842B353129726DA5E3ED6B91EF0F4</CodexRuntimeCodexExeSha256>
+    <CodexRuntimeCodeModeHostSha256 Condition="'$(CodexRuntimeCodeModeHostSha256)' == ''">4EA17CF938023F2D0C292B6DBCD4D51E7FBDF72F3885CF341017A380A87E77DC</CodexRuntimeCodeModeHostSha256>
+    <CodexRuntimeRgSha256 Condition="'$(CodexRuntimeRgSha256)' == ''">14231169855EC5205CF5A1B6F1DB358FF4AED4247C86B69CE8AAE647C77F6680</CodexRuntimeRgSha256>
+    <CodexRuntimeCommandRunnerSha256 Condition="'$(CodexRuntimeCommandRunnerSha256)' == ''">5A84820FC507E5E3C8689047434259D96197730E92D88E6A915B0DA97C758DA6</CodexRuntimeCommandRunnerSha256>
+    <CodexRuntimeSandboxSetupSha256 Condition="'$(CodexRuntimeSandboxSetupSha256)' == ''">46B9F3ADB62EA6030EA026647B6A29F10566BFF7307CA76D10F3A1C1189BD6E9</CodexRuntimeSandboxSetupSha256>
+    <CodexRuntimeLicenseSha256 Condition="'$(CodexRuntimeLicenseSha256)' == ''">D17F227E4DF5DA1600391338865CE0F3055211760A36688F816941D58232D8DC</CodexRuntimeLicenseSha256>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <_CodexRuntimeRequiredFile Include="$(CodexRuntimePackageRoot)\package.json" />
+    <_CodexRuntimeRequiredFile Include="$(CodexRuntimePackageRoot)\README.md" />
+    <_CodexRuntimeRequiredFile Include="$(CodexRuntimeSourceRoot)\codex-package.json" />
+    <_CodexRuntimeRequiredFile Include="$(CodexRuntimeSourceRoot)\bin\codex.exe" />
+    <_CodexRuntimeRequiredFile Include="$(CodexRuntimeSourceRoot)\bin\codex-code-mode-host.exe" />
+    <_CodexRuntimeRequiredFile Include="$(CodexRuntimeSourceRoot)\codex-path\rg.exe" />
+    <_CodexRuntimeRequiredFile Include="$(CodexRuntimeSourceRoot)\codex-resources\codex-command-runner.exe" />
+    <_CodexRuntimeRequiredFile Include="$(CodexRuntimeSourceRoot)\codex-resources\codex-windows-sandbox-setup.exe" />
+    <_CodexRuntimeLicense Include="$(CodexRuntimeLicensePath)" />
+    <_CodexRuntimeProvenance Include="$(MSBuildThisFileDirectory)CodexRuntimeProvenance.txt" />
+
+    <_CodexRuntimeIntegrityFile Include="$(CodexRuntimePackageRoot)\package.json">
+      <ExpectedHash>$(CodexRuntimePackageJsonSha256)</ExpectedHash>
+    </_CodexRuntimeIntegrityFile>
+    <_CodexRuntimeIntegrityFile Include="$(CodexRuntimePackageRoot)\README.md">
+      <ExpectedHash>$(CodexRuntimeReadmeSha256)</ExpectedHash>
+    </_CodexRuntimeIntegrityFile>
+    <_CodexRuntimeIntegrityFile Include="$(CodexRuntimeSourceRoot)\codex-package.json">
+      <ExpectedHash>$(CodexRuntimeVendorPackageJsonSha256)</ExpectedHash>
+    </_CodexRuntimeIntegrityFile>
+    <_CodexRuntimeIntegrityFile Include="$(CodexRuntimeSourceRoot)\bin\codex.exe">
+      <ExpectedHash>$(CodexRuntimeCodexExeSha256)</ExpectedHash>
+    </_CodexRuntimeIntegrityFile>
+    <_CodexRuntimeIntegrityFile Include="$(CodexRuntimeSourceRoot)\bin\codex-code-mode-host.exe">
+      <ExpectedHash>$(CodexRuntimeCodeModeHostSha256)</ExpectedHash>
+    </_CodexRuntimeIntegrityFile>
+    <_CodexRuntimeIntegrityFile Include="$(CodexRuntimeSourceRoot)\codex-path\rg.exe">
+      <ExpectedHash>$(CodexRuntimeRgSha256)</ExpectedHash>
+    </_CodexRuntimeIntegrityFile>
+    <_CodexRuntimeIntegrityFile Include="$(CodexRuntimeSourceRoot)\codex-resources\codex-command-runner.exe">
+      <ExpectedHash>$(CodexRuntimeCommandRunnerSha256)</ExpectedHash>
+    </_CodexRuntimeIntegrityFile>
+    <_CodexRuntimeIntegrityFile Include="$(CodexRuntimeSourceRoot)\codex-resources\codex-windows-sandbox-setup.exe">
+      <ExpectedHash>$(CodexRuntimeSandboxSetupSha256)</ExpectedHash>
+    </_CodexRuntimeIntegrityFile>
+    <_CodexRuntimeIntegrityFile Include="$(CodexRuntimeLicensePath)">
+      <ExpectedHash>$(CodexRuntimeLicenseSha256)</ExpectedHash>
+    </_CodexRuntimeIntegrityFile>
+  </ItemGroup>
+
+  <Target Name="ValidateCodexRuntime" BeforeTargets="Build;Publish" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_CodexRuntimeMissingFile Include="@(_CodexRuntimeRequiredFile)" Condition="!Exists('%(Identity)')" />
+      <_CodexRuntimeMissingFile Include="@(_CodexRuntimeLicense)" Condition="!Exists('%(Identity)')" />
+      <_CodexRuntimeMissingFile Include="@(_CodexRuntimeProvenance)" Condition="!Exists('%(Identity)')" />
+    </ItemGroup>
+    <Error
+      Condition="'@(_CodexRuntimeMissingFile)' != ''"
+      Text="The pinned Codex runtime is missing. Restore $(CodexRuntimePackageName) $(CodexRuntimePackageVersion) under app\node_modules or set CodexRuntimePackageRoot. Missing: @(_CodexRuntimeMissingFile)" />
+    <VerifyFileHash
+      File="%(_CodexRuntimeIntegrityFile.Identity)"
+      Hash="%(_CodexRuntimeIntegrityFile.ExpectedHash)"
+      Algorithm="SHA256" />
+  </Target>
+
+  <Target Name="CopyCodexRuntimeToBuildOutput" AfterTargets="Build" DependsOnTargets="ValidateCodexRuntime" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_CodexRuntimeFile Include="$(CodexRuntimeSourceRoot)\**\*" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(_CodexRuntimeFile)"
+      DestinationFiles="@(_CodexRuntimeFile->'$(TargetDir)$(CodexRuntimePublishRoot)\%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+    <Copy
+      SourceFiles="$(CodexRuntimePackageRoot)\package.json"
+      DestinationFiles="$(TargetDir)codex\package.json"
+      SkipUnchangedFiles="true" />
+    <Copy
+      SourceFiles="$(CodexRuntimePackageRoot)\README.md"
+      DestinationFiles="$(TargetDir)codex\README.md"
+      SkipUnchangedFiles="true" />
+    <Copy
+      SourceFiles="@(_CodexRuntimeLicense)"
+      DestinationFiles="$(TargetDir)codex\codex-LICENSE.txt"
+      SkipUnchangedFiles="true" />
+    <Copy
+      SourceFiles="@(_CodexRuntimeProvenance)"
+      DestinationFiles="$(TargetDir)codex\CodexRuntimeProvenance.txt"
+      SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="IncludeCodexRuntimeInPublish" AfterTargets="ComputeFilesToPublish" DependsOnTargets="ValidateCodexRuntime" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_CodexRuntimeFile Include="$(CodexRuntimeSourceRoot)\**\*" />
+      <ResolvedFileToPublish Include="@(_CodexRuntimeFile)">
+        <RelativePath>$(CodexRuntimePublishRoot)\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(CodexRuntimePackageRoot)\package.json">
+        <RelativePath>codex\package.json</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(CodexRuntimePackageRoot)\README.md">
+        <RelativePath>codex\README.md</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(_CodexRuntimeLicense)">
+        <RelativePath>codex\codex-LICENSE.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(_CodexRuntimeProvenance)">
+        <RelativePath>codex\CodexRuntimeProvenance.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+</Project>

@@ -1,0 +1,1794 @@
+<Window
+    x:Class="WinGit.Native.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="using:WinGit.Native"
+    mc:Ignorable="d"
+    Title="WinGit">
+    <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid.Resources>
+            <Style x:Key="PanelTitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="18" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+            </Style>
+            <Style x:Key="SecondaryTextStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            </Style>
+            <Style x:Key="ListItemStyle" TargetType="ListViewItem">
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="MinHeight" Value="22" />
+            </Style>
+            <DataTemplate x:Key="RepositoryChooserRowTemplate">
+                <Grid Padding="8,6" AutomationProperties.Name="{Binding AutomationName}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding DisplayName}"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Path}"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTipService.ToolTip="{Binding Path}" />
+                        <TextBlock Text="{Binding StatusText}"
+                                   Style="{StaticResource SecondaryTextStyle}" />
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Content="Remove"
+                            Tag="{Binding}"
+                            Click="RepositoryChooserRemoveButton_Click"
+                            Visibility="{Binding RemoveVisibility}"
+                            AutomationProperties.Name="Remove unavailable repository" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="RepositoryRecentRowTemplate">
+                <Grid Padding="8,6" AutomationProperties.Name="{Binding AutomationName}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding DisplayName}"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Path}"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTipService.ToolTip="{Binding Path}" />
+                        <TextBlock Text="{Binding StatusText}"
+                                   Style="{StaticResource SecondaryTextStyle}" />
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Content="Rename"
+                            Tag="{Binding}"
+                            Click="RecentRepositoryRenameButton_Click"
+                            AutomationProperties.Name="Rename repository alias" />
+                    <Button Grid.Column="2"
+                            Content="Remove"
+                            Tag="{Binding}"
+                            Click="RecentRepositoryRemoveButton_Click"
+                            AutomationProperties.Name="Remove repository from recents" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="ChangeRowTemplate">
+                <Grid MinHeight="62" Padding="10,8" AutomationProperties.Name="{Binding Path}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="28" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="26" Height="26" CornerRadius="6" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                        <TextBlock Text="{Binding KindGlyph}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="15" FontWeight="SemiBold" />
+                    </Border>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{Binding Path}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding StatusLabel}" Style="{StaticResource SecondaryTextStyle}" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="DiffRowTemplate">
+                <Grid MinWidth="850" MinHeight="24" Padding="0" AutomationProperties.Name="{Binding KindLabel}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="56" />
+                        <ColumnDefinition Width="56" />
+                        <ColumnDefinition Width="30" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.ColumnSpan="4" Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}" Visibility="{Binding AddedVisibility}" />
+                    <Border Grid.ColumnSpan="4" Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}" Visibility="{Binding RemovedVisibility}" />
+                    <Border Grid.ColumnSpan="4" Background="{ThemeResource SubtleFillColorSecondaryBrush}" Visibility="{Binding SectionVisibility}" />
+                    <TextBlock Text="{Binding OldLineNumber}" HorizontalAlignment="Right" Margin="0,0,12,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontFamily="Cascadia Mono" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding NewLineNumber}" HorizontalAlignment="Right" Margin="0,0,12,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontFamily="Cascadia Mono" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{Binding Marker}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{Binding NeutralMarkerVisibility}" FontFamily="Cascadia Mono" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{Binding Marker}" Foreground="{ThemeResource SystemFillColorSuccessBrush}" Visibility="{Binding AddedMarkerVisibility}" FontFamily="Cascadia Mono" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{Binding Marker}" Foreground="{ThemeResource SystemFillColorCriticalBrush}" Visibility="{Binding RemovedMarkerVisibility}" FontFamily="Cascadia Mono" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3" Text="{Binding Text, Mode=OneWay}" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Padding="0" Margin="0" FontFamily="Cascadia Mono" FontSize="12" TextWrapping="NoWrap" VerticalAlignment="Center" AutomationProperties.Name="{Binding KindLabel}" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="PartialDiffRowTemplate">
+                <Grid MinWidth="900" MinHeight="24" Padding="0" AutomationProperties.Name="{Binding AutomationName}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="56" />
+                        <ColumnDefinition Width="56" />
+                        <ColumnDefinition Width="30" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.ColumnSpan="5" Background="{ThemeResource SubtleFillColorSecondaryBrush}" Visibility="{Binding HunkVisibility}" />
+                    <Border Grid.ColumnSpan="5" Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}" Visibility="{Binding AddedVisibility}" />
+                    <Border Grid.ColumnSpan="5" Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}" Visibility="{Binding RemovedVisibility}" />
+                    <CheckBox Grid.Column="0"
+                              IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                              IsThreeState="{Binding IsHunk}"
+                              IsEnabled="{Binding CanSelect}"
+                              Click="PartialRowCheckBox_Click"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Visibility="{Binding SelectableVisibility}"
+                              AutomationProperties.Name="{Binding SelectionAutomationName}" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding OldLineNumber}"
+                               HorizontalAlignment="Right"
+                               Margin="0,0,12,0"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                               FontFamily="Cascadia Mono"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Visibility="{Binding LineVisibility}" />
+                    <TextBlock Grid.Column="2"
+                               Text="{Binding NewLineNumber}"
+                               HorizontalAlignment="Right"
+                               Margin="0,0,12,0"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                               FontFamily="Cascadia Mono"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Visibility="{Binding LineVisibility}" />
+                    <TextBlock Grid.Column="3"
+                               Text="{Binding Marker}"
+                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                               FontFamily="Cascadia Mono"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Visibility="{Binding LineVisibility}" />
+                    <TextBlock Grid.Column="4"
+                               Text="{Binding Text, Mode=OneWay}"
+                               IsTextSelectionEnabled="True"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                               FontFamily="Cascadia Mono"
+                               FontSize="12"
+                               TextWrapping="NoWrap"
+                               VerticalAlignment="Center"
+                               Visibility="{Binding LineVisibility}"
+                               AutomationProperties.Name="{Binding AutomationName}" />
+                    <TextBlock Grid.Column="1"
+                               Grid.ColumnSpan="4"
+                               Text="{Binding Header}"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                               FontFamily="Cascadia Mono"
+                               FontSize="12"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
+                               Visibility="{Binding HunkVisibility}"
+                               AutomationProperties.Name="{Binding AutomationName}" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="ConflictHunkTemplate">
+                <Border Margin="0,0,0,10"
+                        Padding="10"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="6"
+                        AutomationProperties.Name="{Binding Title}">
+                    <StackPanel Spacing="8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Title}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                       VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                <Button Content="Use ours"
+                                         Click="ConflictUseOursButton_Click"
+                                         AutomationProperties.Name="Use ours for this conflict" />
+                                <Button Content="Use theirs"
+                                         Click="ConflictUseTheirsButton_Click"
+                                         AutomationProperties.Name="Use theirs for this conflict" />
+                                <Button Content="Use both"
+                                        Click="ConflictUseBothButton_Click"
+                                        AutomationProperties.Name="Use both sides for this conflict" />
+                            </StackPanel>
+                        </Grid>
+                        <Border Padding="8,6"
+                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                Visibility="{Binding ContextBeforeVisibility}">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="Context before" Style="{StaticResource SecondaryTextStyle}" />
+                                <TextBlock Text="{Binding ContextBefore}"
+                                           IsTextSelectionEnabled="True"
+                                           FontFamily="Cascadia Mono"
+                                           FontSize="12"
+                                           TextWrapping="NoWrap"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </Border>
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Padding="8,6" Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Ours"
+                                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding OursContent}"
+                                               IsTextSelectionEnabled="True"
+                                               FontFamily="Cascadia Mono"
+                                               FontSize="12"
+                                               TextWrapping="Wrap"
+                                               Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Padding="8,6" Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Theirs"
+                                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding TheirsContent}"
+                                               IsTextSelectionEnabled="True"
+                                               FontFamily="Cascadia Mono"
+                                               FontSize="12"
+                                               TextWrapping="Wrap"
+                                               Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                        <Border Padding="8,6"
+                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                Visibility="{Binding BaseVisibility}">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="Base (diff3)" Style="{StaticResource SecondaryTextStyle}" />
+                                <TextBlock Text="{Binding BaseContent}"
+                                           IsTextSelectionEnabled="True"
+                                           FontFamily="Cascadia Mono"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="Resolved text"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   FontWeight="SemiBold" />
+                        <TextBox Text="{Binding ResolvedContent, Mode=OneWay}"
+                                 TextChanged="ConflictResolvedTextBox_TextChanged"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MinHeight="64"
+                                 MaxHeight="180"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 AutomationProperties.Name="Resolved text for conflict hunk" />
+                        <Border Padding="8,6"
+                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                Visibility="{Binding ContextAfterVisibility}">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="Context after" Style="{StaticResource SecondaryTextStyle}" />
+                                <TextBlock Text="{Binding ContextAfter}"
+                                           IsTextSelectionEnabled="True"
+                                           FontFamily="Cascadia Mono"
+                                           FontSize="12"
+                                           TextWrapping="NoWrap"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </DataTemplate>
+            <DataTemplate x:Key="CommitRowTemplate">
+                <Grid MinHeight="70" Padding="12,9" AutomationProperties.Name="{Binding Summary}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="66" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="52" Height="26" CornerRadius="6" Background="{ThemeResource SubtleFillColorSecondaryBrush}" VerticalAlignment="Top" ToolTipService.ToolTip="{Binding Commit.Id}">
+                        <TextBlock Text="{Binding ShortId}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" FontFamily="Cascadia Mono" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Spacing="3">
+                        <TextBlock Text="{Binding Summary}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Author}" Style="{StaticResource SecondaryTextStyle}" />
+                        <TextBlock Text="{Binding Date}" Style="{StaticResource SecondaryTextStyle}" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="ReflogRowTemplate">
+                <Grid MinHeight="70" Padding="12,8" AutomationProperties.Name="{Binding AutomationName}">
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="{Binding Subject}"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Details}"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding CommitId}"
+                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                   FontFamily="Cascadia Mono"
+                                   FontSize="11"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="CommitFileRowTemplate">
+                <Grid MinHeight="48" Padding="12,7" AutomationProperties.Name="{Binding Path}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="26" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding KindGlyph}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                    <StackPanel Grid.Column="2" Spacing="2">
+                        <TextBlock Text="{Binding Path}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding KindLabel}" Style="{StaticResource SecondaryTextStyle}" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="HistoryComparisonBranchRowTemplate">
+                <Grid MinHeight="44" Padding="10,6" AutomationProperties.Name="{Binding Name}">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="{Binding Name}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Details}" Style="{StaticResource SecondaryTextStyle}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="BranchRowTemplate">
+                <Grid MinHeight="68" Padding="12,9" AutomationProperties.Name="{Binding Name}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Marker}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Top" />
+                    <StackPanel Grid.Column="2" Spacing="3">
+                        <TextBlock Text="{Binding Name}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding StatusLabel}" Style="{StaticResource SecondaryTextStyle}" />
+                        <TextBlock Text="{Binding TrackingLabel}" Style="{StaticResource SecondaryTextStyle}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="WorktreeRowTemplate">
+                <Grid MinHeight="76" Padding="12,9" AutomationProperties.Name="{Binding Path}">
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="{Binding Path}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Branch}" Style="{StaticResource SecondaryTextStyle}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding StatusLabel}" Style="{StaticResource SecondaryTextStyle}" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="SubmoduleRowTemplate">
+                <Grid MinHeight="76" Padding="12,9" AutomationProperties.Name="{Binding AutomationName}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="30" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="26"
+                            Height="26"
+                            CornerRadius="6"
+                            Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                            VerticalAlignment="Top">
+                        <TextBlock Text="{Binding StatusGlyph}"
+                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontSize="15"
+                                   FontWeight="SemiBold" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Spacing="3">
+                        <TextBlock Text="{Binding Path}"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding StatusLabel}" Style="{StaticResource SecondaryTextStyle}" />
+                        <TextBlock Text="{Binding RevisionLabel}"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   FontFamily="Cascadia Mono"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="StashRowTemplate">
+                <Grid MinHeight="72" Padding="12,9" AutomationProperties.Name="{Binding Reference}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="76" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="66" Height="26" CornerRadius="6" Background="{ThemeResource SubtleFillColorSecondaryBrush}" VerticalAlignment="Top" ToolTipService.ToolTip="{Binding CommitId}">
+                        <TextBlock Text="{Binding Reference}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" FontFamily="Cascadia Mono" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="2" Spacing="3">
+                        <TextBlock Text="{Binding Summary}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Date}" Style="{StaticResource SecondaryTextStyle}" />
+                        <TextBlock Text="{Binding CommitId}" Style="{StaticResource SecondaryTextStyle}" FontFamily="Cascadia Mono" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="RemoteRowTemplate">
+                <Grid MinHeight="72" Padding="12,9" AutomationProperties.Name="{Binding Name}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="68" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="58" Height="26" CornerRadius="6" Background="{ThemeResource SubtleFillColorSecondaryBrush}" VerticalAlignment="Top">
+                        <TextBlock Text="{Binding Name}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" FontFamily="Cascadia Mono" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    </Border>
+                    <StackPanel Grid.Column="2" Spacing="3">
+                        <TextBlock Text="{Binding Name}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Url}" Style="{StaticResource SecondaryTextStyle}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding Url}" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="TagRowTemplate">
+                <Grid MinHeight="72" Padding="12,9" AutomationProperties.Name="{Binding Name}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="68" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="58" Height="26" CornerRadius="6" Background="{ThemeResource SubtleFillColorSecondaryBrush}" VerticalAlignment="Top" ToolTipService.ToolTip="{Binding ObjectId}">
+                        <TextBlock Text="tag" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" FontFamily="Cascadia Mono" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="2" Spacing="3">
+                        <TextBlock Text="{Binding Name}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding KindLabel}" Style="{StaticResource SecondaryTextStyle}" />
+                        <TextBlock Text="{Binding TargetLabel}" Style="{StaticResource SecondaryTextStyle}" FontFamily="Cascadia Mono" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+        </Grid.Resources>
+
+        <Grid x:Name="AppTitleBar" Height="48" Padding="16,0,150,0" VerticalAlignment="Top" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Width="28" Height="28" CornerRadius="7" Background="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center">
+                <Image Source="ms-appx:///Assets/icon-logo.ico" Width="20" Height="20" Stretch="Uniform" AutomationProperties.Name="WinGit logo" />
+            </Border>
+            <TextBlock Grid.Column="1" Text="WinGit" Margin="10,0,0,0" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+            <TextBlock Grid.Column="2" Text="Native preview" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" />
+        </Grid>
+
+        <MenuBar Grid.Row="1" AutomationProperties.Name="Application menu">
+            <MenuBarItem Title="File">
+                <MenuFlyoutItem Text="Create repository…"
+                                Tag="CreateRepository"
+                                Click="AppCommandMenuItem_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="N" Modifiers="Control" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Open repository…"
+                                Tag="OpenRepository"
+                                Click="AppCommandMenuItem_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="O" Modifiers="Control" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Clone repository…"
+                                Tag="CloneRepository"
+                                Click="AppCommandMenuItem_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="O" Modifiers="Control,Shift" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem x:Name="OpenRepositoryEditorMenuItem"
+                                Text="Open repository in editor"
+                                Tag="OpenRepositoryEditor"
+                                Click="IntegrationMenuItem_Click" />
+                <MenuFlyoutItem x:Name="OpenSelectedFileEditorMenuItem"
+                                Text="Open selected file in editor"
+                                Tag="OpenSelectedFileEditor"
+                                Click="IntegrationMenuItem_Click" />
+                <MenuFlyoutItem x:Name="OpenRepositoryShellMenuItem"
+                                Text="Open repository shell"
+                                Tag="OpenRepositoryShell"
+                                Click="IntegrationMenuItem_Click" />
+                <MenuFlyoutItem x:Name="RevealRepositoryMenuItem"
+                                Text="Reveal repository in File Explorer"
+                                Tag="RevealRepository"
+                                Click="IntegrationMenuItem_Click" />
+                <MenuFlyoutItem x:Name="RevealSelectedFileMenuItem"
+                                Text="Reveal selected file in File Explorer"
+                                Tag="RevealSelectedFile"
+                                Click="IntegrationMenuItem_Click" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem x:Name="SettingsMenuItem"
+                                Text="Settings"
+                                Tag="Settings"
+                                Click="AppCommandMenuItem_Click" />
+            </MenuBarItem>
+            <MenuBarItem Title="View">
+                <MenuFlyoutItem Text="Changes"
+                                Tag="Changes"
+                                Click="AppCommandMenuItem_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="Number1" Modifiers="Control" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="History"
+                                Tag="History"
+                                Click="AppCommandMenuItem_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="Number2" Modifiers="Control" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Repository chooser"
+                                Tag="ChooseRepository"
+                                Click="AppCommandMenuItem_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="T" Modifiers="Control" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Branches"
+                                Tag="Branches"
+                                Click="AppCommandMenuItem_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="B" Modifiers="Control" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Worktrees &amp; stashes"
+                                Tag="Worktrees"
+                                Click="AppCommandMenuItem_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="W" Modifiers="Control,Menu" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+            </MenuBarItem>
+        </MenuBar>
+
+        <NavigationView x:Name="MainNavigation" Grid.Row="2" IsBackButtonVisible="Collapsed" IsSettingsVisible="True" IsPaneToggleButtonVisible="True" OpenPaneLength="200" PaneDisplayMode="LeftCompact" SelectionChanged="MainNavigation_SelectionChanged" AutomationProperties.Name="WinGit navigation">
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="Changes" Tag="changes">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Document" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="History" Tag="history">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Clock" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Branches" Tag="branches">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="List" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Worktrees &amp; stashes" Tag="worktrees">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Folder" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Submodules" Tag="submodules">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Folder" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Remotes" Tag="remotes">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Link" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Tags" Tag="tags">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Tag" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+            <NavigationView.Content>
+                <Grid x:Name="WorkspaceRoot" Padding="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="54" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="32" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Padding="12,0" Background="Transparent">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button x:Name="RepositoryChooserButton"
+                                    AutomationProperties.Name="Choose repository">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <TextBlock Text="▣" FontSize="15" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="RepositoryChooserLabel"
+                                               Text="Choose repository"
+                                               MaxWidth="180"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="OpenRepositoryButton" Click="OpenRepositoryButton_Click" AutomationProperties.Name="Open repository">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <TextBlock Text="▣" FontSize="15" VerticalAlignment="Center" />
+                                    <TextBlock Text="Open repository" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="CreateRepositoryButton" Content="Create" Click="CreateRepositoryButton_Click" AutomationProperties.Name="Create repository" />
+                            <Button x:Name="CloneRepositoryButton" Content="Clone" Click="CloneRepositoryButton_Click" AutomationProperties.Name="Clone repository" />
+                            <Button x:Name="RefreshButton" Click="RefreshButton_Click" AutomationProperties.Name="Refresh repository">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <TextBlock Text="↻" FontSize="17" VerticalAlignment="Center" />
+                                    <TextBlock Text="Refresh" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="StageButton" Click="StageButton_Click" AutomationProperties.Name="Stage selected files">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <TextBlock Text="↑" FontSize="17" VerticalAlignment="Center" />
+                                    <TextBlock Text="Stage selected" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="UnstageButton" Click="UnstageButton_Click" AutomationProperties.Name="Unstage selected files">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <TextBlock Text="↓" FontSize="17" VerticalAlignment="Center" />
+                                    <TextBlock Text="Unstage selected" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button x:Name="CancelOperationButton" Content="Cancel" Click="CancelOperationButton_Click" Visibility="Collapsed" AutomationProperties.Name="Cancel current operation" />
+                            <ProgressRing x:Name="BusyRing" Width="18" Height="18" IsActive="False" Visibility="Collapsed" />
+                        </StackPanel>
+                    </Grid>
+
+                    <InfoBar x:Name="ErrorBar" Grid.Row="1" Margin="12,0,12,8" IsOpen="False" IsClosable="True" Severity="Error" Closing="ErrorBar_Closing" AutomationProperties.Name="Repository error" />
+
+                    <Grid x:Name="RepositoryHeader" Grid.Row="2" Padding="18,8,18,12" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="3">
+                            <TextBlock x:Name="RepositoryPathText" Text="Choose a repository to begin" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="BranchText" Text="" Style="{StaticResource SecondaryTextStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="18" VerticalAlignment="Center">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="CHANGES" Style="{StaticResource SecondaryTextStyle}" />
+                                <TextBlock x:Name="ChangeCountText" Text="0" HorizontalAlignment="Right" FontSize="15" FontWeight="SemiBold" />
+                            </StackPanel>
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="SYNC" Style="{StaticResource SecondaryTextStyle}" />
+                                <TextBlock x:Name="SyncText" Text="—" HorizontalAlignment="Right" FontSize="15" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </StackPanel>
+                        <Border x:Name="GitOperationPanel"
+                                Grid.Row="1"
+                                Grid.ColumnSpan="2"
+                                Margin="0,10,0,0"
+                                Padding="12,10"
+                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                CornerRadius="8"
+                                Visibility="Collapsed"
+                                AutomationProperties.Name="Active Git operation">
+                            <StackPanel Spacing="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock x:Name="GitOperationTitle"
+                                                   Text="Git operation in progress"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                                   AutomationProperties.Name="Git operation type" />
+                                        <TextBlock x:Name="GitOperationProgressText"
+                                                   Text=""
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   AutomationProperties.Name="Git operation progress" />
+                                    </StackPanel>
+                                    <Button x:Name="RefreshGitOperationButton"
+                                            Grid.Column="1"
+                                            Content="Refresh"
+                                            Click="RefreshGitOperationButton_Click"
+                                            AutomationProperties.Name="Refresh active Git operation" />
+                                </Grid>
+                                <TextBlock x:Name="GitOperationMessageText"
+                                           Text=""
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           TextWrapping="Wrap"
+                                           AutomationProperties.LiveSetting="Polite" />
+                                <ListView x:Name="GitOperationConflictList"
+                                          MaxHeight="96"
+                                          Visibility="Collapsed"
+                                          SelectionMode="Single"
+                                          SelectionChanged="GitOperationConflictList_SelectionChanged"
+                                          ItemContainerStyle="{StaticResource ListItemStyle}"
+                                          AutomationProperties.Name="Git operation conflict paths">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Path}"
+                                                       Padding="4,2"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                                       AutomationProperties.Name="{Binding Path}" />
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                                <TextBlock x:Name="GitOperationConflictHint"
+                                           Text="Select a path to inspect its diff in Changes. Resolve and stage paths explicitly before continuing."
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           TextWrapping="Wrap"
+                                           Visibility="Collapsed" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button x:Name="ContinueGitOperationButton"
+                                            Content="Continue"
+                                            Click="ContinueGitOperationButton_Click"
+                                            Visibility="Collapsed"
+                                            AutomationProperties.Name="Continue active Git operation" />
+                                    <Button x:Name="SkipGitOperationButton"
+                                            Content="Skip commit"
+                                            Click="SkipGitOperationButton_Click"
+                                            Visibility="Collapsed"
+                                            AutomationProperties.Name="Skip current rebase commit" />
+                                    <Button x:Name="AbortGitOperationButton"
+                                            Content="Abort"
+                                            Click="AbortGitOperationButton_Click"
+                                            Visibility="Collapsed"
+                                            AutomationProperties.Name="Abort active Git operation" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <Grid x:Name="ChangesWorkspace" Grid.Row="3" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="340" />
+                            <ColumnDefinition Width="1" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0" Padding="8,0,8,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="42" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="34" />
+                                <RowDefinition Height="150" />
+                                <RowDefinition Height="34" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid Padding="8,0">
+                                <TextBlock Text="Working changes" Style="{StaticResource PanelTitleStyle}" VerticalAlignment="Center" />
+                                <TextBlock x:Name="FilteredChangeCountText" Text="" Style="{StaticResource SecondaryTextStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                            </Grid>
+                            <TextBox x:Name="ChangesFilterBox" Grid.Row="1" Margin="8,0,8,8" PlaceholderText="Filter paths" TextChanged="ChangesFilterBox_TextChanged" AutomationProperties.Name="Filter changed files" />
+                            <Grid Grid.Row="2" Padding="8,0">
+                                <TextBlock Text="Staged" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBlock x:Name="StagedCountText" Text="0" Style="{StaticResource SecondaryTextStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                            </Grid>
+                            <ListView x:Name="StagedChangesList" Grid.Row="3" ItemTemplate="{StaticResource ChangeRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="StagedChangesList_SelectionChanged" SelectionMode="Multiple" AutomationProperties.Name="Staged changed files" />
+                            <Grid Grid.Row="4" Padding="8,0">
+                                <TextBlock Text="Unstaged" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBlock x:Name="UnstagedCountText" Text="0" Style="{StaticResource SecondaryTextStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                            </Grid>
+                            <ListView x:Name="UnstagedChangesList" Grid.Row="5" ItemTemplate="{StaticResource ChangeRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="UnstagedChangesList_SelectionChanged" SelectionMode="Multiple" AutomationProperties.Name="Unstaged changed files" />
+                        </Grid>
+                        <Border Grid.Column="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                        <Grid Grid.Column="2" Padding="18,0,18,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="48" />
+                                <RowDefinition Height="*" />
+                                 <RowDefinition x:Name="ChangesCommitRow" Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock x:Name="DiffFileText" Text="Select a changed file" Style="{StaticResource PanelTitleStyle}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock x:Name="DiffSummaryText" Text="" Style="{StaticResource SecondaryTextStyle}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <Button x:Name="OpenConflictEditorButton"
+                                            Content="Open conflict editor"
+                                            Click="OpenConflictEditorButton_Click"
+                                            Visibility="Collapsed"
+                                            AutomationProperties.Name="Open conflict editor" />
+                                    <CommandBar x:Name="IntegrationActionBar"
+                                                Padding="0"
+                                                IsDynamicOverflowEnabled="True"
+                                                Background="Transparent"
+                                                AutomationProperties.Name="External tool actions">
+                                        <CommandBar.PrimaryCommands>
+                                            <AppBarButton x:Name="OpenSelectedFileEditorButton"
+                                                          Label="Open file"
+                                                          Click="OpenSelectedFileEditorButton_Click"
+                                                          AutomationProperties.Name="Open selected file in editor">
+                                                <AppBarButton.Icon>
+                                                    <SymbolIcon Symbol="Document" />
+                                                </AppBarButton.Icon>
+                                            </AppBarButton>
+                                            <AppBarButton x:Name="RevealSelectedFileButton"
+                                                          Label="Reveal file"
+                                                          Click="RevealSelectedFileButton_Click"
+                                                          AutomationProperties.Name="Reveal selected file in File Explorer">
+                                                <AppBarButton.Icon>
+                                                    <SymbolIcon Symbol="Folder" />
+                                                </AppBarButton.Icon>
+                                            </AppBarButton>
+                                        </CommandBar.PrimaryCommands>
+                                        <CommandBar.SecondaryCommands>
+                                            <AppBarButton x:Name="OpenRepositoryEditorButton"
+                                                          Label="Open repository in editor"
+                                                          Click="OpenRepositoryEditorButton_Click"
+                                                          AutomationProperties.Name="Open repository in selected editor">
+                                                <AppBarButton.Icon>
+                                                    <SymbolIcon Symbol="Folder" />
+                                                </AppBarButton.Icon>
+                                            </AppBarButton>
+                                            <AppBarButton x:Name="OpenRepositoryShellButton"
+                                                          Label="Open repository shell"
+                                                          Click="OpenRepositoryShellButton_Click"
+                                                          AutomationProperties.Name="Open repository shell">
+                                                <AppBarButton.Icon>
+                                                    <SymbolIcon Symbol="Folder" />
+                                                </AppBarButton.Icon>
+                                            </AppBarButton>
+                                            <AppBarButton x:Name="RevealRepositoryButton"
+                                                          Label="Reveal repository"
+                                                          Click="RevealRepositoryButton_Click"
+                                                          AutomationProperties.Name="Reveal repository in File Explorer">
+                                                <AppBarButton.Icon>
+                                                    <SymbolIcon Symbol="Folder" />
+                                                </AppBarButton.Icon>
+                                            </AppBarButton>
+                                        </CommandBar.SecondaryCommands>
+                                    </CommandBar>
+                                </StackPanel>
+                            </Grid>
+                            <Grid Grid.Row="1">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Border x:Name="PartialSelectionBar"
+                                        Grid.Row="0"
+                                        Margin="0,0,0,8"
+                                        Padding="10,6"
+                                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                        CornerRadius="6"
+                                        Visibility="Collapsed">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="PartialSelectionStatusText"
+                                                   Text="Select changed lines or a whole hunk"
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Partial selection status" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                            <Button x:Name="StagePartialButton"
+                                                    Content="Stage lines"
+                                                    Click="StagePartialButton_Click"
+                                                    Visibility="Collapsed"
+                                                    AutomationProperties.Name="Stage selected changed lines or hunk" />
+                                            <Button x:Name="UnstagePartialButton"
+                                                    Content="Unstage lines"
+                                                    Click="UnstagePartialButton_Click"
+                                                    Visibility="Collapsed"
+                                                    AutomationProperties.Name="Unstage selected changed lines or hunk" />
+                                            <Button x:Name="ClearPartialSelectionButton"
+                                                    Content="Clear selection"
+                                                    Click="ClearPartialSelectionButton_Click"
+                                                    Visibility="Collapsed"
+                                                    AutomationProperties.Name="Clear partial line selection" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <Grid Grid.Row="1">
+                                    <ListView x:Name="DiffList" ItemTemplate="{StaticResource DiffRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionMode="None" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollMode="Enabled" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Working directory diff" />
+                                     <ListView x:Name="PartialDiffList"
+                                               ItemTemplate="{StaticResource PartialDiffRowTemplate}"
+                                               ItemContainerStyle="{StaticResource ListItemStyle}"
+                                              SelectionMode="None"
+                                              Visibility="Collapsed"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                              ScrollViewer.HorizontalScrollMode="Enabled"
+                                               ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                               AutomationProperties.Name="Partial working directory diff with hunk and changed line selection" />
+                                     <local:NativeImageDiffView x:Name="DiffImageView"
+                                                                Visibility="Collapsed"
+                                                                AutomationProperties.Name="Working directory image diff" />
+                                     <local:NativeSubmoduleDiffView x:Name="DiffSubmoduleView"
+                                                                    Visibility="Collapsed"
+                                                                    AutomationProperties.Name="Working directory submodule diff" />
+                                     <StackPanel x:Name="DiffMessagePanel" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="560" Spacing="10" Visibility="Visible">
+                                        <TextBlock x:Name="DiffMessageTitle" Text="Select a changed file" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                        <TextBlock x:Name="DiffMessageText" Text="The native diff viewer will show line numbers, context, and selected text here." Style="{StaticResource SecondaryTextStyle}" TextAlignment="Center" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <Border x:Name="ConflictEditorPanel"
+                                            Padding="12"
+                                            Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                            CornerRadius="8"
+                                            Visibility="Collapsed"
+                                            AutomationProperties.Name="Conflict editor">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Spacing="3">
+                                                    <TextBlock x:Name="ConflictEditorTitle"
+                                                               Text="Resolve conflict"
+                                                               Style="{StaticResource PanelTitleStyle}" />
+                                                    <TextBlock x:Name="ConflictEditorPathText"
+                                                               Text=""
+                                                               Style="{StaticResource SecondaryTextStyle}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                                <Button x:Name="CloseConflictEditorButton"
+                                                        Grid.Column="1"
+                                                        Content="Show full diff"
+                                                        Click="CloseConflictEditorButton_Click"
+                                                        AutomationProperties.Name="Show full conflict diff" />
+                                            </Grid>
+                                            <StackPanel Grid.Row="1" Spacing="8" Margin="0,10,0,8">
+                                                <TextBlock x:Name="ConflictEditorSemanticsText"
+                                                           Style="{StaticResource SecondaryTextStyle}"
+                                                           TextWrapping="Wrap" />
+                                                <StackPanel x:Name="ConflictStaleDraftPanel"
+                                                            Spacing="4"
+                                                            Visibility="Collapsed">
+                                                    <TextBlock Text="Previous draft (copy before refreshing)"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                                    <TextBox x:Name="ConflictStaleDraftTextBox"
+                                                             IsReadOnly="True"
+                                                             AcceptsReturn="True"
+                                                             TextWrapping="NoWrap"
+                                                             MaxHeight="150"
+                                                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                             AutomationProperties.Name="Previous conflict draft, copyable" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <Grid Grid.Row="2">
+                                                <ListView x:Name="ConflictHunksList"
+                                                          ItemTemplate="{StaticResource ConflictHunkTemplate}"
+                                                          ItemContainerStyle="{StaticResource ListItemStyle}"
+                                                          SelectionMode="None"
+                                                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                                          ScrollViewer.HorizontalScrollMode="Enabled"
+                                                          ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                          AutomationProperties.Name="Conflict hunks" />
+                                                <StackPanel x:Name="ConflictDeleteModifyPanel"
+                                                            Spacing="10"
+                                                            Visibility="Collapsed"
+                                                            VerticalAlignment="Top">
+                                                    <TextBlock x:Name="ConflictDeleteModifyDescription"
+                                                               Style="{StaticResource SecondaryTextStyle}"
+                                                               TextWrapping="Wrap" />
+                                                    <RadioButton x:Name="KeepConflictRadio"
+                                                                 Content="Keep the working file"
+                                                                 Click="KeepConflictRadio_Click"
+                                                                 AutomationProperties.Name="Keep the working file for this conflict" />
+                                                    <RadioButton x:Name="DeleteConflictRadio"
+                                                                 Content="Delete the working file"
+                                                                 Click="DeleteConflictRadio_Click"
+                                                                 AutomationProperties.Name="Delete the working file for this conflict" />
+                                                </StackPanel>
+                                                <StackPanel x:Name="ConflictUnsupportedPanel"
+                                                            Spacing="8"
+                                                            Visibility="Collapsed"
+                                                            VerticalAlignment="Top">
+                                                    <TextBlock Text="Native conflict editor unavailable"
+                                                               FontSize="16"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                                    <TextBlock x:Name="ConflictUnsupportedText"
+                                                               Style="{StaticResource SecondaryTextStyle}"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Text="Close this panel to use the normal diff and the existing Stage or Unstage controls."
+                                                               Style="{StaticResource SecondaryTextStyle}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Grid>
+                                            <StackPanel x:Name="ConflictEditorActionBar"
+                                                        Grid.Row="3"
+                                                        Margin="0,10,0,0"
+                                                        Spacing="8">
+                                                <TextBlock x:Name="ConflictEditorValidationText"
+                                                           Style="{StaticResource SecondaryTextStyle}"
+                                                           TextWrapping="Wrap" />
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Button x:Name="ApplyConflictButton"
+                                                            Content="Apply resolution"
+                                                            Click="ApplyConflictButton_Click"
+                                                            AutomationProperties.Name="Apply conflict resolution" />
+                                                    <Button x:Name="ApplyAndStageConflictButton"
+                                                            Content="Apply and stage"
+                                                            Click="ApplyAndStageConflictButton_Click"
+                                                            AutomationProperties.Name="Apply conflict resolution and stage file" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </Grid>
+                            <Border x:Name="CommitPanel" Grid.Row="2" Margin="0,10,0,0" Padding="12,10" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="8">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="58" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="CommitSummaryBox" PlaceholderText="Commit summary" MaxLength="200" TextChanged="CommitSummaryBox_TextChanged" AutomationProperties.Name="Commit summary" />
+                                        <Button x:Name="GenerateCommitMessageButton" Grid.Column="1" Content="Generate with Codex" Click="GenerateCommitMessageButton_Click" AutomationProperties.Name="Generate commit message with Codex" />
+                                    </Grid>
+                                    <TextBox x:Name="CommitDescriptionBox" Grid.Row="1" Margin="0,8,0,0" PlaceholderText="Description (optional)" AcceptsReturn="True" TextWrapping="Wrap" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Commit description" />
+                                    <StackPanel Grid.Row="2" Margin="0,8,0,0" Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <ProgressRing x:Name="CommitMessageGenerationRing" Width="18" Height="18" IsActive="False" Visibility="Collapsed" />
+                                            <TextBlock x:Name="CommitMessageGenerationStatusText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="CommitMessageGenerationAvailabilityText" Text="Stage changes first, or sign in to Codex in Settings." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.Name="Commit message generation status" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="14" Margin="0,8,0,0" VerticalAlignment="Center">
+                                        <CheckBox x:Name="AmendCheckBox" IsChecked="False" Content="Amend previous commit" Click="AmendCheckBox_Click" ToolTipService.ToolTip="Replace the current HEAD commit, including a message-only amend." AutomationProperties.Name="Amend previous commit" />
+                                        <Button x:Name="CommitButton" Content="Commit staged changes" Click="CommitButton_Click" AutomationProperties.Name="Commit staged changes" />
+                                        <TextBlock x:Name="CommitIdentityText" Text="" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+
+                    <Grid x:Name="HistoryWorkspace" Grid.Row="3" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="340" />
+                            <ColumnDefinition Width="1" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0" Padding="8,0,8,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="48" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="34" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid Padding="8,0">
+                                <TextBlock Text="History" Style="{StaticResource PanelTitleStyle}" VerticalAlignment="Center" />
+                                <Button x:Name="ClearHistoryComparisonButton"
+                                        Content="Clear compare"
+                                        Click="ClearHistoryComparisonButton_Click"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center"
+                                        AutomationProperties.Name="Clear history branch comparison" />
+                            </Grid>
+                            <StackPanel Grid.Row="1" Margin="8,0,8,8" Spacing="6">
+                                <TextBox x:Name="HistoryBranchFilterBox"
+                                         PlaceholderText="Filter branches to compare"
+                                         TextChanged="HistoryBranchFilterBox_TextChanged"
+                                         AutomationProperties.Name="Filter history comparison branches" />
+                                <TextBlock Text="Compare with" Style="{StaticResource SecondaryTextStyle}" />
+                                <ListView x:Name="HistoryComparisonBranchList"
+                                          ItemTemplate="{StaticResource HistoryComparisonBranchRowTemplate}"
+                                          ItemContainerStyle="{StaticResource ListItemStyle}"
+                                          SelectionChanged="HistoryComparisonBranchList_SelectionChanged"
+                                          SelectionMode="Single"
+                                          MaxHeight="142"
+                                          AutomationProperties.Name="Branches to compare with" />
+                                <TextBlock x:Name="HistoryComparisonBranchStatusText"
+                                           Text="Choose a local branch to compare with the current branch."
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           TextWrapping="Wrap"
+                                           AutomationProperties.Name="History comparison branch status" />
+                            </StackPanel>
+                            <TextBlock x:Name="HistorySelectionListHintText"
+                                       Grid.Row="2"
+                                       Text="Select one commit or several consecutive commits"
+                                       Style="{StaticResource SecondaryTextStyle}"
+                                       Margin="8,0"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                            <ListView x:Name="HistoryList"
+                                      Grid.Row="3"
+                                      ItemTemplate="{StaticResource CommitRowTemplate}"
+                                      ItemContainerStyle="{StaticResource ListItemStyle}"
+                                      SelectionChanged="HistoryList_SelectionChanged"
+                                      SelectionMode="Multiple"
+                                      AutomationProperties.Name="Commit history; select one or several commits" />
+                        </Grid>
+                        <Border Grid.Column="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                        <Grid Grid.Column="2" Padding="18,0,18,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="2*" />
+                                <RowDefinition Height="5*" />
+                            </Grid.RowDefinitions>
+                            <Grid Padding="0,8,0,4">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock x:Name="HistoryCommitText" Text="Select a commit" Style="{StaticResource PanelTitleStyle}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock x:Name="HistoryCommitSummaryText" Text="" Style="{StaticResource SecondaryTextStyle}" />
+                                    <TextBlock x:Name="UndoHeadTargetText" Text="" Style="{StaticResource SecondaryTextStyle}" TextTrimming="CharacterEllipsis" AutomationProperties.Name="Current HEAD for undo" />
+                                </StackPanel>
+                                <StackPanel x:Name="HistoryComparisonDetailsPanel"
+                                            Grid.Row="1"
+                                            Grid.ColumnSpan="2"
+                                            Margin="0,4,0,0"
+                                            Spacing="2"
+                                            Visibility="Collapsed">
+                                    <TextBlock x:Name="HistoryComparisonSummaryText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.Name="History comparison summary" />
+                                    <TextBlock x:Name="HistoryComparisonEndpointsText" Text="" Style="{StaticResource SecondaryTextStyle}" FontFamily="Cascadia Mono" TextTrimming="CharacterEllipsis" AutomationProperties.Name="History comparison endpoints" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+                                        <RadioButton x:Name="HistoryComparisonBehindButton" Content="Behind" GroupName="HistoryComparisonMode" Click="HistoryComparisonBehindButton_Click" AutomationProperties.Name="Show commits behind the current branch" />
+                                        <RadioButton x:Name="HistoryComparisonAheadButton" Content="Ahead" GroupName="HistoryComparisonMode" Click="HistoryComparisonAheadButton_Click" AutomationProperties.Name="Show commits ahead of the current branch" />
+                                        <TextBlock x:Name="HistoryComparisonTruncatedText" Text="" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel x:Name="HistorySelectionDetailsPanel"
+                                            Grid.Row="2"
+                                            Grid.ColumnSpan="2"
+                                            Orientation="Horizontal"
+                                            Spacing="8"
+                                            Margin="0,4,0,0"
+                                            Visibility="Collapsed">
+                                    <TextBlock x:Name="HistorySelectionInfoText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" VerticalAlignment="Center" AutomationProperties.Name="History selection information" />
+                                    <Button x:Name="ShowHistoryOmittedCommitsButton" Content="Show omitted commits" Click="ShowHistoryOmittedCommitsButton_Click" Visibility="Collapsed" AutomationProperties.Name="Show merge-side commits omitted from the combined diff" />
+                                </StackPanel>
+                                 <CommandBar x:Name="HistoryActionBar"
+                                             Grid.Row="3"
+                                             Grid.ColumnSpan="2"
+                                             Margin="0,4,0,0"
+                                             Padding="0"
+                                             IsDynamicOverflowEnabled="True"
+                                            Background="Transparent"
+                                            AutomationProperties.Name="History commit actions">
+                                    <CommandBar.PrimaryCommands>
+                                         <AppBarButton x:Name="CreateTagFromHistoryButton"
+                                                       Label="Create tag"
+                                                       Click="CreateTagFromHistoryButton_Click"
+                                                       AutomationProperties.Name="Create tag at selected commit">
+                                             <AppBarButton.Icon>
+                                                 <SymbolIcon Symbol="Tag" />
+                                             </AppBarButton.Icon>
+                                         </AppBarButton>
+                                         <AppBarButton x:Name="UndoHeadButton"
+                                                       Label="Undo current commit"
+                                                       Click="UndoHeadButton_Click"
+                                                       AutomationProperties.Name="Undo current HEAD commit">
+                                             <AppBarButton.Icon>
+                                                 <SymbolIcon Symbol="Undo" />
+                                             </AppBarButton.Icon>
+                                         </AppBarButton>
+                                         <AppBarButton x:Name="HistoryCherryPickButton"
+                                                       Label="Cherry-pick selected"
+                                                       Click="HistoryCherryPickButton_Click"
+                                                       AutomationProperties.Name="Cherry-pick selected history commits">
+                                             <AppBarButton.Icon>
+                                                 <SymbolIcon Symbol="Forward" />
+                                             </AppBarButton.Icon>
+                                         </AppBarButton>
+                                         <AppBarButton x:Name="HistoryRevertButton"
+                                                       Label="Revert commit"
+                                                       Click="HistoryRevertButton_Click"
+                                                       AutomationProperties.Name="Revert selected history commit">
+                                             <AppBarButton.Icon>
+                                                 <SymbolIcon Symbol="Redo" />
+                                             </AppBarButton.Icon>
+                                         </AppBarButton>
+                                    </CommandBar.PrimaryCommands>
+                                    <CommandBar.SecondaryCommands>
+                                        <AppBarButton x:Name="HistoryResetButton"
+                                                      Label="Reset to selected commit"
+                                                      Click="HistoryResetButton_Click"
+                                                      AutomationProperties.Name="Reset current branch to selected history commit" />
+                                        <AppBarButton x:Name="HistoryReflogButton"
+                                                      Label="HEAD reflog"
+                                                      Click="HistoryReflogButton_Click"
+                                                      AutomationProperties.Name="Show HEAD reflog and recover a commit" />
+                                        <AppBarButton x:Name="HistoryReorderButton"
+                                                      Label="Reorder selected"
+                                                      Click="HistoryReorderButton_Click"
+                                                      AutomationProperties.Name="Reorder selected history commits" />
+                                        <AppBarButton x:Name="HistorySquashButton"
+                                                      Label="Squash selected"
+                                                      Click="HistorySquashButton_Click"
+                                                      AutomationProperties.Name="Squash selected history commits" />
+                                    </CommandBar.SecondaryCommands>
+                                </CommandBar>
+                            </Grid>
+                            <ListView x:Name="HistoryFilesList" Grid.Row="1" ItemTemplate="{StaticResource CommitFileRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="HistoryFilesList_SelectionChanged" SelectionMode="Single" AutomationProperties.Name="Files in selected commit" />
+                            <Grid Grid.Row="2">
+                                <ListView x:Name="HistoryDiffList" ItemTemplate="{StaticResource DiffRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionMode="None" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollMode="Enabled" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Commit diff" />
+                                <local:NativeImageDiffView x:Name="HistoryDiffImageView"
+                                                           Visibility="Collapsed"
+                                                           AutomationProperties.Name="Commit image diff" />
+                                <local:NativeSubmoduleDiffView x:Name="HistorySubmoduleView"
+                                                               Visibility="Collapsed"
+                                                               AutomationProperties.Name="Commit submodule diff" />
+                                <StackPanel x:Name="HistoryDiffMessagePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                                    <TextBlock x:Name="HistoryDiffMessageTitle" Text="Select a file" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                    <TextBlock x:Name="HistoryDiffMessageText" Text="Choose a commit and file to inspect its diff." Style="{StaticResource SecondaryTextStyle}" TextAlignment="Center" />
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+
+                    <Grid x:Name="BranchesWorkspace" Grid.Row="3" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="390" />
+                            <ColumnDefinition Width="1" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0" Padding="8,0,8,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="54" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid Padding="8,0">
+                                <TextBlock Text="Branches" Style="{StaticResource PanelTitleStyle}" VerticalAlignment="Center" />
+                                <Button x:Name="CreateBranchButton" Content="New branch" Click="CreateBranchButton_Click" HorizontalAlignment="Right" VerticalAlignment="Center" AutomationProperties.Name="Create branch" />
+                            </Grid>
+                            <ListView x:Name="BranchesList" Grid.Row="1" ItemTemplate="{StaticResource BranchRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="BranchesList_SelectionChanged" SelectionMode="Single" AutomationProperties.Name="Local branches" />
+                        </Grid>
+                        <Border Grid.Column="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                        <Grid Grid.Column="2" Padding="24,18">
+                            <StackPanel MaxWidth="640" Spacing="14">
+                                <TextBlock Text="Branch details" Style="{StaticResource PanelTitleStyle}" />
+                                <TextBlock x:Name="SelectedBranchNameText" Text="Select a branch" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="SelectedBranchStatusText" Text="Choose a local branch to inspect or switch." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedBranchTrackingText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedBranchWorktreeText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
+                                    <Button x:Name="SwitchBranchButton" Content="Switch branch" Click="SwitchBranchButton_Click" AutomationProperties.Name="Switch selected branch" />
+                                    <Button x:Name="MergeBranchButton" Content="Merge into current" Click="MergeBranchButton_Click" AutomationProperties.Name="Merge selected branch into current branch" />
+                                    <Button x:Name="RebaseBranchButton" Content="Rebase onto" Click="RebaseBranchButton_Click" AutomationProperties.Name="Rebase current branch onto selected branch" />
+                                    <Button x:Name="RenameBranchButton" Content="Rename" Click="RenameBranchButton_Click" AutomationProperties.Name="Rename selected branch" />
+                                    <Button x:Name="DeleteBranchButton" Content="Delete" Click="DeleteBranchButton_Click" AutomationProperties.Name="Delete selected branch" />
+                                </StackPanel>
+                                <TextBlock Text="When local changes are present, bring them if Git permits the switch or save them in a named stash on the current branch. Git never discards local changes." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+
+                    <Grid x:Name="WorktreesWorkspace" Grid.Row="3" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1*" />
+                            <ColumnDefinition Width="1" />
+                            <ColumnDefinition Width="1*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0" Padding="8,0,8,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="54" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="48" />
+                            </Grid.RowDefinitions>
+                            <Grid Padding="8,0">
+                                <TextBlock Text="Worktrees" Style="{StaticResource PanelTitleStyle}" VerticalAlignment="Center" />
+                                <Button x:Name="AddWorktreeButton" Content="Add worktree" Click="AddWorktreeButton_Click" HorizontalAlignment="Right" VerticalAlignment="Center" AutomationProperties.Name="Add worktree" />
+                            </Grid>
+                            <ListView x:Name="WorktreesList" Grid.Row="1" ItemTemplate="{StaticResource WorktreeRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="WorktreesList_SelectionChanged" SelectionMode="Single" AutomationProperties.Name="Git worktrees" />
+                            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Padding="8,6">
+                                <Button x:Name="OpenWorktreeButton" Content="Open selected" Click="OpenWorktreeButton_Click" AutomationProperties.Name="Open selected worktree" />
+                                <Button x:Name="RemoveWorktreeButton" Content="Remove selected" Click="RemoveWorktreeButton_Click" AutomationProperties.Name="Remove selected worktree" />
+                            </StackPanel>
+                        </Grid>
+                        <Border Grid.Column="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                        <Grid Grid.Column="2" Padding="8,0,8,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="54" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="48" />
+                            </Grid.RowDefinitions>
+                            <Grid Padding="8,0">
+                                <TextBlock Text="Stashes" Style="{StaticResource PanelTitleStyle}" VerticalAlignment="Center" />
+                                <Button x:Name="CreateStashButton" Content="Create stash" Click="CreateStashButton_Click" HorizontalAlignment="Right" VerticalAlignment="Center" AutomationProperties.Name="Create stash" />
+                            </Grid>
+                            <Grid Grid.Row="1">
+                                <ListView x:Name="StashesList" ItemTemplate="{StaticResource StashRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="StashesList_SelectionChanged" SelectionMode="Single" AutomationProperties.Name="Git stashes" />
+                                <TextBlock x:Name="StashesEmptyText" Text="No saved stashes" Style="{StaticResource SecondaryTextStyle}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed" />
+                            </Grid>
+                            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Padding="8,6">
+                                <Button x:Name="ApplyStashButton" Content="Apply selected" Click="ApplyStashButton_Click" AutomationProperties.Name="Apply selected stash" />
+                                <Button x:Name="DropStashButton" Content="Drop selected" Click="DropStashButton_Click" AutomationProperties.Name="Drop selected stash" />
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+
+                    <Grid x:Name="SubmodulesWorkspace" Grid.Row="3" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="390" />
+                            <ColumnDefinition Width="1" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0" Padding="8,0,8,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="54" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="48" />
+                            </Grid.RowDefinitions>
+                            <Grid Padding="8,0">
+                                <TextBlock Text="Submodules" Style="{StaticResource PanelTitleStyle}" VerticalAlignment="Center" />
+                                <Button x:Name="RefreshSubmodulesButton"
+                                        Content="Refresh"
+                                        Click="RefreshSubmodulesButton_Click"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center"
+                                        AutomationProperties.Name="Refresh submodules" />
+                            </Grid>
+                            <Grid Grid.Row="1">
+                                <ListView x:Name="SubmodulesList"
+                                          ItemTemplate="{StaticResource SubmoduleRowTemplate}"
+                                          ItemContainerStyle="{StaticResource ListItemStyle}"
+                                          SelectionChanged="SubmodulesList_SelectionChanged"
+                                          SelectionMode="Single"
+                                          AutomationProperties.Name="Repository submodules" />
+                                <TextBlock x:Name="SubmodulesEmptyText"
+                                           Text="No submodules configured"
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           IsHitTestVisible="False"
+                                           Visibility="Collapsed" />
+                            </Grid>
+                            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Padding="8,6">
+                                <Button x:Name="OpenSubmoduleButton"
+                                        Content="Open selected"
+                                        Click="OpenSubmoduleButton_Click"
+                                        AutomationProperties.Name="Open selected submodule" />
+                                <Button x:Name="UpdateSubmoduleButton"
+                                        Content="Update to index"
+                                        Click="UpdateSubmoduleButton_Click"
+                                        AutomationProperties.Name="Update selected submodule to index commit" />
+                            </StackPanel>
+                        </Grid>
+                        <Border Grid.Column="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                        <Grid Grid.Column="2" Padding="24,18">
+                            <StackPanel MaxWidth="680" Spacing="14">
+                                <TextBlock Text="Submodule details" Style="{StaticResource PanelTitleStyle}" />
+                                <TextBlock x:Name="SelectedSubmodulePathText"
+                                           Text="Select a submodule"
+                                           FontSize="20"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="SelectedSubmoduleStatusText"
+                                           Text="Choose a submodule to inspect its recorded commit and local worktree state."
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedSubmoduleExpectedText"
+                                           Text=""
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           FontFamily="Cascadia Mono"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedSubmoduleHeadText"
+                                           Text=""
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           FontFamily="Cascadia Mono"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedSubmoduleChangesText"
+                                           Text=""
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="SubmodulesStatusText"
+                                           Text=""
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           TextWrapping="Wrap"
+                                           AutomationProperties.LiveSetting="Polite" />
+                                <TextBlock Text="Updating may download missing commits. WinGit preserves local changes and refuses an update when they would be overwritten."
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,8,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+
+                    <Grid x:Name="RemotesWorkspace" Grid.Row="3" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="390" />
+                            <ColumnDefinition Width="1" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0" Padding="8,0,8,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="54" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="48" />
+                            </Grid.RowDefinitions>
+                            <Grid Padding="8,0">
+                                <TextBlock Text="Remotes" Style="{StaticResource PanelTitleStyle}" VerticalAlignment="Center" />
+                                <Button x:Name="AddRemoteButton" Content="Add remote" Click="AddRemoteButton_Click" HorizontalAlignment="Right" VerticalAlignment="Center" AutomationProperties.Name="Add remote" />
+                            </Grid>
+                            <Grid Grid.Row="1">
+                                <ListView x:Name="RemoteList" ItemTemplate="{StaticResource RemoteRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="RemoteList_SelectionChanged" SelectionMode="Single" AutomationProperties.Name="Git remotes" />
+                                <TextBlock x:Name="RemoteEmptyText" Text="No remotes configured" Style="{StaticResource SecondaryTextStyle}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed" />
+                            </Grid>
+                            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Padding="8,6">
+                                <Button x:Name="EditRemoteButton" Content="Edit URL" Click="EditRemoteButton_Click" AutomationProperties.Name="Edit selected remote URL" />
+                                <Button x:Name="RemoveRemoteButton" Content="Remove" Click="RemoveRemoteButton_Click" AutomationProperties.Name="Remove selected remote" />
+                            </StackPanel>
+                        </Grid>
+                        <Border Grid.Column="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                        <Grid Grid.Column="2" Padding="24,18">
+                            <StackPanel MaxWidth="680" Spacing="14">
+                                <TextBlock Text="Remote transport" Style="{StaticResource PanelTitleStyle}" />
+                                <TextBlock x:Name="SelectedRemoteNameText" Text="Select a remote" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="SelectedRemoteUrlText" Text="Choose a remote to view its URL and run a transport action." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                <TextBlock x:Name="RemoteTransportBranchText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
+                                    <Button x:Name="FetchRemoteButton" Content="Fetch" Click="FetchRemoteButton_Click" AutomationProperties.Name="Fetch selected remote" />
+                                    <Button x:Name="PullRemoteButton" Content="Pull (fast-forward only)" Click="PullRemoteButton_Click" AutomationProperties.Name="Pull selected remote fast-forward only" />
+                                    <Button x:Name="PushRemoteButton" Content="Push" Click="PushRemoteButton_Click" AutomationProperties.Name="Push selected remote" />
+                                    <Button x:Name="BrowsePullRequestsButton" Content="Browse pull requests" Click="BrowsePullRequestsButton_Click" AutomationProperties.Name="Browse pull requests for selected remote" />
+                                </StackPanel>
+                                <TextBlock Text="Fetch, pull, and push always name the selected remote and target branch. Pull refuses divergence instead of rebasing or forcing; push never uses force." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+
+                    <Grid x:Name="TagsWorkspace" Grid.Row="3" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="390" />
+                            <ColumnDefinition Width="1" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0" Padding="8,0,8,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="54" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid Padding="8,0">
+                                <TextBlock Text="Tags" Style="{StaticResource PanelTitleStyle}" VerticalAlignment="Center" />
+                                <Button x:Name="CreateTagButton" Content="New tag" Click="CreateTagButton_Click" HorizontalAlignment="Right" VerticalAlignment="Center" AutomationProperties.Name="Create local tag" />
+                            </Grid>
+                            <Grid Grid.Row="1">
+                                <ListView x:Name="TagsList" ItemTemplate="{StaticResource TagRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="TagsList_SelectionChanged" SelectionMode="Single" AutomationProperties.Name="Local tags" />
+                                <TextBlock x:Name="TagsEmptyText" Text="No local tags" Style="{StaticResource SecondaryTextStyle}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed" />
+                            </Grid>
+                        </Grid>
+                        <Border Grid.Column="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                        <Grid Grid.Column="2" Padding="24,18">
+                            <StackPanel MaxWidth="680" Spacing="14">
+                                <TextBlock Text="Tag details" Style="{StaticResource PanelTitleStyle}" />
+                                <TextBlock x:Name="SelectedTagNameText" Text="Select a tag" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="SelectedTagKindText" Text="Choose a local tag to inspect its target." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedTagTargetText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedTagObjectText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" FontFamily="Cascadia Mono" />
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
+                                    <Button x:Name="DeleteTagButton" Content="Delete tag" Click="DeleteTagButton_Click" AutomationProperties.Name="Delete selected local tag" />
+                                </StackPanel>
+                                <TextBlock Text="Deleting a tag removes its local reference. The commit it points to remains in the repository." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+
+                    <Grid x:Name="SettingsWorkspace" Grid.Row="3" Padding="30,18" Visibility="Collapsed">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel MaxWidth="820" Spacing="14">
+                                <TextBlock Text="Settings" Style="{StaticResource PanelTitleStyle}" />
+                                <TextBlock Text="Native preferences are stored separately for this WinUI app." Style="{StaticResource SecondaryTextStyle}" />
+                                <TextBlock Text="Theme" FontWeight="SemiBold" Margin="0,10,0,0" />
+                                <ComboBox x:Name="ThemeComboBox" Width="220" SelectedValuePath="Tag" SelectionChanged="ThemeComboBox_SelectionChanged" AutomationProperties.Name="Native app theme">
+                                    <ComboBoxItem Content="Use system setting" Tag="System" />
+                                    <ComboBoxItem Content="Light" Tag="Light" />
+                                    <ComboBoxItem Content="Dark" Tag="Dark" />
+                                </ComboBox>
+
+                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Text="External tools" FontSize="16" FontWeight="SemiBold" />
+                                                <TextBlock Text="Choose an installed supported editor and shell for repository actions." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <Button x:Name="RefreshIntegrationsButton"
+                                                    Grid.Column="1"
+                                                    Content="Refresh"
+                                                    Click="RefreshIntegrationsButton_Click"
+                                                    VerticalAlignment="Top"
+                                                    AutomationProperties.Name="Refresh supported external tools" />
+                                        </Grid>
+                                        <TextBlock Text="Editor" FontWeight="SemiBold" />
+                                        <ComboBox x:Name="EditorIntegrationComboBox"
+                                                  DisplayMemberPath="DisplayName"
+                                                  SelectionChanged="IntegrationComboBox_SelectionChanged"
+                                                  AutomationProperties.Name="Selected editor" />
+                                        <TextBlock x:Name="EditorIntegrationStatusText"
+                                                   Text="No supported editor is installed."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Editor discovery status" />
+                                        <TextBlock x:Name="EditorIntegrationDiagnosticsText"
+                                                   Text=""
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Unavailable editor choices" />
+                                        <TextBlock Text="Shell" FontWeight="SemiBold" Margin="0,6,0,0" />
+                                        <ComboBox x:Name="ShellIntegrationComboBox"
+                                                  DisplayMemberPath="DisplayName"
+                                                  SelectionChanged="IntegrationComboBox_SelectionChanged"
+                                                  AutomationProperties.Name="Selected shell" />
+                                        <TextBlock x:Name="ShellIntegrationStatusText"
+                                                   Text="No supported shell is installed."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Shell discovery status" />
+                                        <TextBlock x:Name="ShellIntegrationDiagnosticsText"
+                                                   Text=""
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Unavailable shell choices" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Git configuration" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock Text="Edit the selected Git scope. Local values apply to the open repository; global values provide the fallback for repositories without a local value." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                        <TextBlock Text="Scope" FontWeight="SemiBold" />
+                                        <ComboBox x:Name="GitConfigScopeComboBox"
+                                                  Width="260"
+                                                  SelectedValuePath="Tag"
+                                                  SelectionChanged="GitConfigScopeComboBox_SelectionChanged"
+                                                  AutomationProperties.Name="Git configuration scope">
+                                            <ComboBoxItem Content="Repository local" Tag="Local" />
+                                            <ComboBoxItem Content="Global Git" Tag="Global" />
+                                        </ComboBox>
+                                        <TextBlock x:Name="GitConfigScopeStatusText"
+                                                   Text="Select a scope to read Git configuration."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Git configuration scope status" />
+                                        <TextBox x:Name="GitConfigUserNameBox"
+                                                 Header="User name"
+                                                 PlaceholderText="Your Git author name"
+                                                 AutomationProperties.Name="Git user name" />
+                                        <TextBlock x:Name="GitConfigUserNameScopeText"
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Git user name scope details" />
+                                        <TextBox x:Name="GitConfigUserEmailBox"
+                                                 Header="User email"
+                                                 PlaceholderText="you@example.com"
+                                                 AutomationProperties.Name="Git user email" />
+                                        <TextBlock x:Name="GitConfigUserEmailScopeText"
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Git user email scope details" />
+                                        <TextBox x:Name="GitConfigDefaultBranchBox"
+                                                 Header="Default branch for new repositories"
+                                                 PlaceholderText="main"
+                                                 AutomationProperties.Name="Git default branch" />
+                                        <TextBlock x:Name="GitConfigDefaultBranchScopeText"
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Git default branch scope details" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                            <Button x:Name="RefreshGitConfigButton"
+                                                    Content="Refresh"
+                                                    Click="RefreshGitConfigButton_Click"
+                                                    AutomationProperties.Name="Refresh Git configuration" />
+                                            <Button x:Name="SaveGitConfigButton"
+                                                    Content="Save Git configuration"
+                                                    Click="SaveGitConfigButton_Click"
+                                                    AutomationProperties.Name="Save Git configuration" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Text="Codex account" FontSize="16" FontWeight="SemiBold" />
+                                                <TextBlock x:Name="CodexAccountStatusText" Text="Not loaded" FontWeight="SemiBold" AutomationProperties.Name="Codex account status" />
+                                                <TextBlock x:Name="CodexAccountDetailsText" Text="Open Settings to read the local Codex account state." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.Name="Codex account details" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                                <Button x:Name="RefreshCodexButton" Content="Refresh" Click="RefreshCodexButton_Click" AutomationProperties.Name="Refresh Codex account, usage, and model information" />
+                                                <Button x:Name="SignOutCodexButton" Content="Sign out" Click="SignOutCodexButton_Click" AutomationProperties.Name="Sign out of Codex" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button x:Name="BrowserLoginCodexButton" Content="Sign in with browser" Click="BrowserLoginCodexButton_Click" AutomationProperties.Name="Sign in to Codex with a browser" />
+                                            <Button x:Name="DeviceLoginCodexButton" Content="Use device code" Click="DeviceLoginCodexButton_Click" AutomationProperties.Name="Sign in to Codex with a device code" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="CodexLoginStatusText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                                        <StackPanel x:Name="CodexDeviceCodePanel" Visibility="Collapsed" Spacing="6">
+                                            <TextBlock Text="Enter this code in the verification page" FontWeight="SemiBold" />
+                                            <TextBlock x:Name="CodexDeviceCodeText" Text="" FontFamily="Cascadia Mono" FontSize="18" AutomationProperties.Name="Codex device code" />
+                                            <TextBlock x:Name="CodexDeviceVerificationUrlText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.Name="Codex device verification page" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button x:Name="OpenCodexDeviceUrlButton" Content="Open verification page" Click="OpenCodexDeviceUrlButton_Click" AutomationProperties.Name="Open Codex device verification page" />
+                                                <Button x:Name="CopyCodexDeviceCodeButton" Content="Copy code" Click="CopyCodexDeviceCodeButton_Click" AutomationProperties.Name="Copy Codex device code" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <Button x:Name="CancelCodexLoginButton" Content="Cancel sign-in" Click="CancelCodexLoginButton_Click" HorizontalAlignment="Left" AutomationProperties.Name="Cancel Codex sign-in" />
+                                        <ProgressRing x:Name="CodexLoadingRing" Width="20" Height="20" IsActive="False" Visibility="Collapsed" HorizontalAlignment="Left" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Text="GitHub accounts" FontSize="16" FontWeight="SemiBold" />
+                                                <TextBlock x:Name="GitHubAccountsStatusText" Text="Not loaded" FontWeight="SemiBold" AutomationProperties.Name="GitHub accounts status" />
+                                                <TextBlock x:Name="GitHubAccountsConfigurationText" Text="GitHub sign-in isn’t configured in this preview." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.Name="GitHub account configuration" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                                <Button x:Name="RefreshGitHubAccountsButton" Content="Refresh" Click="RefreshGitHubAccountsButton_Click" AutomationProperties.Name="Refresh GitHub accounts" />
+                                                <Button x:Name="SignInGitHubButton" Content="Sign in to GitHub" Click="SignInGitHubButton_Click" AutomationProperties.Name="Sign in to GitHub" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock x:Name="GitHubAccountLoginStatusText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                                        <StackPanel x:Name="GitHubDeviceAuthorizationPanel" Visibility="Collapsed" Spacing="6">
+                                            <TextBlock Text="Enter this code on GitHub" FontWeight="SemiBold" />
+                                            <TextBlock x:Name="GitHubDeviceCodeText" Text="" FontFamily="Cascadia Mono" FontSize="18" AutomationProperties.Name="GitHub device code" />
+                                            <TextBlock x:Name="GitHubDeviceVerificationUrlText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.Name="GitHub device verification page" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button x:Name="OpenGitHubDeviceUrlButton" Content="Open verification page" Click="OpenGitHubDeviceUrlButton_Click" AutomationProperties.Name="Open GitHub device verification page" />
+                                                <Button x:Name="CopyGitHubDeviceCodeButton" Content="Copy code" Click="CopyGitHubDeviceCodeButton_Click" AutomationProperties.Name="Copy GitHub device code" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <Button x:Name="CancelGitHubLoginButton" Content="Cancel sign-in" Click="CancelGitHubLoginButton_Click" HorizontalAlignment="Left" Visibility="Collapsed" AutomationProperties.Name="Cancel GitHub sign-in" />
+                                        <ProgressRing x:Name="GitHubAccountsLoadingRing" Width="20" Height="20" IsActive="False" Visibility="Collapsed" HorizontalAlignment="Left" />
+                                        <ListView x:Name="GitHubAccountsList" MaxHeight="220" SelectionMode="Single" SelectionChanged="GitHubAccountsList_SelectionChanged" AutomationProperties.Name="Connected GitHub accounts">
+                                            <ListView.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Padding="8,6">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="Auto" />
+                                                        </Grid.RowDefinitions>
+                                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Grid.Row="1" Text="{Binding Details}" Style="{StaticResource SecondaryTextStyle}" TextTrimming="CharacterEllipsis" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListView.ItemTemplate>
+                                        </ListView>
+                                        <TextBlock x:Name="GitHubAccountsEmptyText" Text="No GitHub accounts are connected." Style="{StaticResource SecondaryTextStyle}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button x:Name="RemoveGitHubAccountButton" Content="Remove selected account" Click="RemoveGitHubAccountButton_Click" AutomationProperties.Name="Remove selected GitHub account" />
+                                            <TextBlock x:Name="GitHubSelectedAccountText" Text="" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" AutomationProperties.Name="Selected GitHub account" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Usage" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="CodexUsageStatusText" Text="Usage is unavailable until Codex responds." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.Name="Codex usage status" />
+                                        <Grid ColumnSpacing="10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="92" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Primary" VerticalAlignment="Center" />
+                                            <ProgressBar x:Name="CodexPrimaryUsageBar" Grid.Column="1" Minimum="0" Maximum="100" Value="0" VerticalAlignment="Center" AutomationProperties.Name="Codex primary usage" />
+                                            <TextBlock x:Name="CodexPrimaryUsageText" Grid.Column="2" Text="—" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" />
+                                        </Grid>
+                                        <Grid ColumnSpacing="10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="92" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Secondary" VerticalAlignment="Center" />
+                                            <ProgressBar x:Name="CodexSecondaryUsageBar" Grid.Column="1" Minimum="0" Maximum="100" Value="0" VerticalAlignment="Center" AutomationProperties.Name="Codex secondary usage" />
+                                            <TextBlock x:Name="CodexSecondaryUsageText" Grid.Column="2" Text="—" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" />
+                                        </Grid>
+                                        <TextBlock x:Name="CodexUsageResetText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="AI assistance" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock Text="Use one model and reasoning choice for future commit and review actions." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                        <TextBlock Text="Model" FontWeight="SemiBold" />
+                                        <ComboBox x:Name="CodexModelComboBox" DisplayMemberPath="DisplayName" SelectionChanged="CodexModelComboBox_SelectionChanged" AutomationProperties.Name="Shared Codex model" />
+                                        <TextBlock x:Name="CodexSelectedModelDescriptionText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                        <TextBlock Text="Reasoning effort" FontWeight="SemiBold" />
+                                        <ComboBox x:Name="CodexReasoningComboBox" DisplayMemberPath="DisplayName" SelectionChanged="CodexReasoningComboBox_SelectionChanged" AutomationProperties.Name="Shared Codex reasoning effort" />
+                                        <TextBlock x:Name="CodexCatalogStatusText" Text="Model choices are unavailable until Codex responds." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Text="Recent repositories" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock Text="Removing a row only forgets it from native recents. It does not delete repository files." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                <ListView x:Name="RecentRepositoriesList" ItemTemplate="{StaticResource RepositoryRecentRowTemplate}" MaxHeight="220" SelectionMode="Single" SelectionChanged="RecentRepositoriesList_SelectionChanged" AutomationProperties.Name="Recent repositories" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Grid x:Name="WelcomePanel" Grid.Row="3" Padding="28" Visibility="Visible">
+                        <StackPanel MaxWidth="600" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                            <Border Width="64" Height="64" CornerRadius="16" Background="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center">
+                                <Image Source="ms-appx:///Assets/icon-logo.ico" Width="42" Height="42" Stretch="Uniform" AutomationProperties.Name="WinGit logo" />
+                            </Border>
+                            <TextBlock Text="A focused Git workspace" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                            <TextBlock Text="Open a local repository to inspect changes, read line-level diffs, and browse commit history with native Windows controls." Style="{StaticResource SecondaryTextStyle}" TextAlignment="Center" TextWrapping="Wrap" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,10,0,0">
+                                <Button Content="Open repository" Click="OpenRepositoryButton_Click" AutomationProperties.Name="Open repository from welcome page" />
+                                <Button Content="Create repository" Click="CreateRepositoryButton_Click" AutomationProperties.Name="Create repository from welcome page" />
+                                <Button Content="Clone repository" Click="CloneRepositoryButton_Click" AutomationProperties.Name="Clone repository from welcome page" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="4" Padding="18,0" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+                        <TextBlock x:Name="StatusText" Text="Ready" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite" />
+                        <TextBlock x:Name="NativeVersionText" Text="Native preview" Style="{StaticResource SecondaryTextStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                    </Grid>
+                </Grid>
+            </NavigationView.Content>
+        </NavigationView>
+    </Grid>
+</Window>
