@@ -1,0 +1,9 @@
+WinGit.Native bundled Git runtime
+
+Dugite package: 3.2.3
+Git for Windows runtime: 2.53.0.windows.4
+Architecture: Windows x64 (Dugite manifest key: win32-x64)
+Distribution: desktop/dugite-native v2.53.0-4
+Archive: dugite-native-v2.53.0-4098283-windows-x64.tar.gz
+Archive SHA-256: 7b76bc5c32c0d7c5984efdc2a8a32697cf1e8a43bc55176fbf9869c0ee995130
+Source license: LICENSE.txt and dugite-LICENSE

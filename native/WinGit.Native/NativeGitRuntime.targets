@@ -1,0 +1,103 @@
+<Project>
+  <!--
+    The native app uses the x64 Git distribution already supplied by Dugite.
+    This path is a build-time input only. Published copies contain the whole
+    Git tree under git so the native app does not depend on the Electron tree
+    or on the machine PATH.
+  -->
+  <PropertyGroup>
+    <GitRuntimePackageRoot Condition="'$(GitRuntimePackageRoot)' == ''">$(MSBuildThisFileDirectory)..\..\app\node_modules\dugite</GitRuntimePackageRoot>
+    <GitRuntimeSourceRoot Condition="'$(GitRuntimeSourceRoot)' == ''">$(GitRuntimePackageRoot)\git</GitRuntimeSourceRoot>
+    <GitRuntimePublishRoot>git</GitRuntimePublishRoot>
+    <GitRuntimeDugiteVersion>3.2.3</GitRuntimeDugiteVersion>
+    <GitRuntimeVersion>2.53.0.windows.4</GitRuntimeVersion>
+    <GitRuntimeArchiveUrl>https://github.com/desktop/dugite-native/releases/download/v2.53.0-4/dugite-native-v2.53.0-4098283-windows-x64.tar.gz</GitRuntimeArchiveUrl>
+    <GitRuntimeArchiveSha256>7b76bc5c32c0d7c5984efdc2a8a32697cf1e8a43bc55176fbf9869c0ee995130</GitRuntimeArchiveSha256>
+    <!-- SHA-256 values for the pinned source tree's executable entry points.
+         VerifyFileHash makes a changed or damaged cached distribution fail
+         before it can be copied into a native build. -->
+    <GitRuntimeGitExecutableSha256>32BC406CBAFABD33B2F236325F98DCEA988CFA86F0519229176F5DB19D526CE3</GitRuntimeGitExecutableSha256>
+    <GitRuntimeMingwGitExecutableSha256>987381598C5CC4E7B6D7FB2C6B82E5D072DC47CCE3D9D64FFB097352FEE708C8</GitRuntimeMingwGitExecutableSha256>
+    <GitRuntimeGitLfsSha256>690F49B6AAA4D9DD707E08419D18F11AC2CB18051AA6779A6BADFF7D7C4EE95A</GitRuntimeGitLfsSha256>
+    <GitRuntimeCredentialHelperSha256>246AE96449D0B93B56B558A5BEC857D5C9CBEE2019786C3BAF337664086B820D</GitRuntimeCredentialHelperSha256>
+    <GitRuntimeShSha256>FC362AAE1F217D34D02237D99527839DD6CF85B37C7A0277109400BFA0FAA594</GitRuntimeShSha256>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <_GitRuntimeRequiredFile Include="$(GitRuntimeSourceRoot)\cmd\git.exe" />
+    <_GitRuntimeRequiredFile Include="$(GitRuntimeSourceRoot)\mingw64\bin\git.exe" />
+    <_GitRuntimeRequiredFile Include="$(GitRuntimeSourceRoot)\mingw64\libexec\git-core\git-lfs.exe" />
+    <_GitRuntimeRequiredFile Include="$(GitRuntimeSourceRoot)\mingw64\libexec\git-core\git-credential-wincred.exe" />
+    <_GitRuntimeRequiredFile Include="$(GitRuntimeSourceRoot)\usr\bin\sh.exe" />
+    <_GitRuntimeRequiredFile Include="$(GitRuntimeSourceRoot)\etc\gitconfig" />
+    <_GitRuntimeRequiredFile Include="$(GitRuntimeSourceRoot)\LICENSE.txt" />
+    <_GitRuntimeLicense Include="$(GitRuntimePackageRoot)\LICENSE" />
+    <_GitRuntimeProvenance Include="$(MSBuildThisFileDirectory)GitRuntimeProvenance.txt" />
+    <_GitRuntimeIntegrityFile Include="$(GitRuntimeSourceRoot)\cmd\git.exe">
+      <ExpectedHash>$(GitRuntimeGitExecutableSha256)</ExpectedHash>
+    </_GitRuntimeIntegrityFile>
+    <_GitRuntimeIntegrityFile Include="$(GitRuntimeSourceRoot)\mingw64\bin\git.exe">
+      <ExpectedHash>$(GitRuntimeMingwGitExecutableSha256)</ExpectedHash>
+    </_GitRuntimeIntegrityFile>
+    <_GitRuntimeIntegrityFile Include="$(GitRuntimeSourceRoot)\mingw64\libexec\git-core\git-lfs.exe">
+      <ExpectedHash>$(GitRuntimeGitLfsSha256)</ExpectedHash>
+    </_GitRuntimeIntegrityFile>
+    <_GitRuntimeIntegrityFile Include="$(GitRuntimeSourceRoot)\mingw64\libexec\git-core\git-credential-wincred.exe">
+      <ExpectedHash>$(GitRuntimeCredentialHelperSha256)</ExpectedHash>
+    </_GitRuntimeIntegrityFile>
+    <_GitRuntimeIntegrityFile Include="$(GitRuntimeSourceRoot)\usr\bin\sh.exe">
+      <ExpectedHash>$(GitRuntimeShSha256)</ExpectedHash>
+    </_GitRuntimeIntegrityFile>
+  </ItemGroup>
+
+  <Target Name="ValidateNativeGitRuntime" BeforeTargets="Build;Publish" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_GitRuntimeMissingFile Include="@(_GitRuntimeRequiredFile)" Condition="!Exists('%(Identity)')" />
+      <_GitRuntimeMissingFile Include="@(_GitRuntimeLicense)" Condition="!Exists('%(Identity)')" />
+      <_GitRuntimeMissingFile Include="@(_GitRuntimeProvenance)" Condition="!Exists('%(Identity)')" />
+    </ItemGroup>
+    <Error
+      Condition="'@(_GitRuntimeMissingFile)' != ''"
+      Text="The pinned Dugite Git runtime is missing. Restore dugite $(GitRuntimeDugiteVersion) under app\node_modules\dugite or set GitRuntimeSourceRoot/GitRuntimePackageRoot. Expected Git for Windows $(GitRuntimeVersion); missing: @(_GitRuntimeMissingFile)" />
+    <VerifyFileHash
+      File="%(_GitRuntimeIntegrityFile.Identity)"
+      Hash="%(_GitRuntimeIntegrityFile.ExpectedHash)"
+      Algorithm="SHA256" />
+  </Target>
+
+  <Target Name="CopyNativeGitRuntimeToBuildOutput" AfterTargets="Build" DependsOnTargets="ValidateNativeGitRuntime" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_GitRuntimeFile Include="$(GitRuntimeSourceRoot)\**\*" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(_GitRuntimeFile)"
+      DestinationFiles="@(_GitRuntimeFile->'$(TargetDir)$(GitRuntimePublishRoot)\%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+    <Copy
+      SourceFiles="@(_GitRuntimeLicense)"
+      DestinationFiles="@(_GitRuntimeLicense->'$(TargetDir)$(GitRuntimePublishRoot)\dugite-LICENSE')"
+      SkipUnchangedFiles="true" />
+    <Copy
+      SourceFiles="@(_GitRuntimeProvenance)"
+      DestinationFiles="@(_GitRuntimeProvenance->'$(TargetDir)$(GitRuntimePublishRoot)\GitRuntimeProvenance.txt')"
+      SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="IncludeNativeGitRuntimeInPublish" AfterTargets="ComputeFilesToPublish" DependsOnTargets="ValidateNativeGitRuntime" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_GitRuntimeFile Include="$(GitRuntimeSourceRoot)\**\*" />
+      <ResolvedFileToPublish Include="@(_GitRuntimeFile)">
+        <RelativePath>$(GitRuntimePublishRoot)\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(_GitRuntimeLicense)">
+        <RelativePath>$(GitRuntimePublishRoot)\dugite-LICENSE</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(_GitRuntimeProvenance)">
+        <RelativePath>$(GitRuntimePublishRoot)\GitRuntimeProvenance.txt</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+</Project>

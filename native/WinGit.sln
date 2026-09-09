@@ -1,0 +1,33 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinGit.Native", "WinGit.Native\WinGit.Native.csproj", "{E739CD49-891B-4D86-AE50-90BDF5E8CB40}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinGit.Core", "WinGit.Core\WinGit.Core.csproj", "{E3D9A9F9-4C4E-4A56-8B63-9184D9A5B6F1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinGit.Core.Tests", "WinGit.Core.Tests\WinGit.Core.Tests.csproj", "{07D88D1D-6EAF-4DC3-9AE0-D7B9E4C5D1F5}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E739CD49-891B-4D86-AE50-90BDF5E8CB40}.Debug|x64.ActiveCfg = Debug|x64
+		{E739CD49-891B-4D86-AE50-90BDF5E8CB40}.Debug|x64.Build.0 = Debug|x64
+		{E739CD49-891B-4D86-AE50-90BDF5E8CB40}.Release|x64.ActiveCfg = Release|x64
+		{E739CD49-891B-4D86-AE50-90BDF5E8CB40}.Release|x64.Build.0 = Release|x64
+		{E3D9A9F9-4C4E-4A56-8B63-9184D9A5B6F1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E3D9A9F9-4C4E-4A56-8B63-9184D9A5B6F1}.Debug|x64.Build.0 = Debug|Any CPU
+		{E3D9A9F9-4C4E-4A56-8B63-9184D9A5B6F1}.Release|x64.ActiveCfg = Release|Any CPU
+		{E3D9A9F9-4C4E-4A56-8B63-9184D9A5B6F1}.Release|x64.Build.0 = Release|Any CPU
+		{07D88D1D-6EAF-4DC3-9AE0-D7B9E4C5D1F5}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{07D88D1D-6EAF-4DC3-9AE0-D7B9E4C5D1F5}.Debug|x64.Build.0 = Debug|Any CPU
+		{07D88D1D-6EAF-4DC3-9AE0-D7B9E4C5D1F5}.Release|x64.ActiveCfg = Release|Any CPU
+		{07D88D1D-6EAF-4DC3-9AE0-D7B9E4C5D1F5}.Release|x64.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

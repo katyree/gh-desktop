@@ -1,0 +1,134 @@
+<UserControl
+    x:Class="WinGit.Native.NativeSubmoduleDiffView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <UserControl.Resources>
+        <Style x:Key="SubmoduleDiffSecondaryTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="SubmoduleDiffRevisionTextBoxStyle" TargetType="TextBox">
+            <Setter Property="FontFamily" Value="Cascadia Mono" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="TextWrapping" Value="NoWrap" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+        </Style>
+    </UserControl.Resources>
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+        <StackPanel x:Name="RootPanel"
+                    Padding="0,12"
+                    Spacing="14"
+                    MaxWidth="680">
+            <StackPanel Spacing="3">
+                <TextBlock Text="Submodule changes"
+                           FontSize="18"
+                           FontWeight="SemiBold" />
+                <TextBlock x:Name="SubmodulePathText"
+                           Style="{StaticResource SubmoduleDiffSecondaryTextStyle}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTipService.ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                           AutomationProperties.Name="Submodule path" />
+            </StackPanel>
+
+            <Border Padding="12"
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                    CornerRadius="8">
+                <StackPanel Spacing="8">
+                    <TextBlock x:Name="ChangeExplanationText"
+                               FontSize="15"
+                               TextWrapping="Wrap"
+                               AutomationProperties.Name="Submodule change explanation" />
+                    <TextBlock x:Name="ContextText"
+                               Style="{StaticResource SubmoduleDiffSecondaryTextStyle}"
+                               AutomationProperties.Name="Submodule diff context" />
+                </StackPanel>
+            </Border>
+
+            <StackPanel x:Name="RevisionPanel" Spacing="8">
+                <TextBlock Text="Revisions"
+                           FontWeight="SemiBold" />
+                <Grid x:Name="OldRevisionRow">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Previous"
+                               Margin="0,0,10,0"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource SubmoduleDiffSecondaryTextStyle}" />
+                    <TextBox x:Name="OldRevisionTextBox"
+                             Grid.Column="1"
+                             Style="{StaticResource SubmoduleDiffRevisionTextBoxStyle}"
+                             AutomationProperties.Name="Previous submodule revision" />
+                    <Button x:Name="CopyOldRevisionButton"
+                            Grid.Column="2"
+                            Margin="8,0,0,0"
+                            Content="Copy"
+                            Click="CopyOldRevisionButton_Click"
+                            AutomationProperties.Name="Copy previous submodule revision" />
+                </Grid>
+                <Grid x:Name="NewRevisionRow">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="New"
+                               Margin="0,0,10,0"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource SubmoduleDiffSecondaryTextStyle}" />
+                    <TextBox x:Name="NewRevisionTextBox"
+                             Grid.Column="1"
+                             Style="{StaticResource SubmoduleDiffRevisionTextBoxStyle}"
+                             AutomationProperties.Name="New submodule revision" />
+                    <Button x:Name="CopyNewRevisionButton"
+                            Grid.Column="2"
+                            Margin="8,0,0,0"
+                            Content="Copy"
+                            Click="CopyNewRevisionButton_Click"
+                            AutomationProperties.Name="Copy new submodule revision" />
+                </Grid>
+                <TextBlock x:Name="CopyStatusText"
+                           Style="{StaticResource SubmoduleDiffSecondaryTextStyle}"
+                           Visibility="Collapsed"
+                           AutomationProperties.LiveSetting="Polite" />
+            </StackPanel>
+
+            <Border x:Name="DirtyChangesPanel"
+                    Padding="12"
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                    CornerRadius="8"
+                    Visibility="Collapsed">
+                <TextBlock x:Name="DirtyChangesText"
+                           TextWrapping="Wrap"
+                           AutomationProperties.Name="Submodule local changes explanation" />
+            </Border>
+
+            <Border x:Name="OpenSubmodulePanel"
+                    Padding="12"
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                    CornerRadius="8"
+                    Visibility="Collapsed">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Open submodule"
+                               FontWeight="SemiBold" />
+                    <TextBlock x:Name="OpenSubmoduleReasonText"
+                               Style="{StaticResource SubmoduleDiffSecondaryTextStyle}"
+                               AutomationProperties.Name="Open submodule availability" />
+                    <Button x:Name="OpenSubmoduleButton"
+                            Content="Open repository"
+                            HorizontalAlignment="Left"
+                            Click="OpenSubmoduleButton_Click"
+                            AutomationProperties.Name="Open submodule repository" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,239 @@
+<UserControl
+    x:Class="WinGit.Native.NativeImageDiffView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <UserControl.Resources>
+        <Style x:Key="ImageDiffSecondaryTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+    </UserControl.Resources>
+    <Grid Padding="0,4">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="ImageDiffStatusText"
+                   Margin="0,0,0,8"
+                   Style="{StaticResource ImageDiffSecondaryTextStyle}"
+                   TextWrapping="Wrap"
+                   AutomationProperties.Name="Image diff status" />
+        <Grid Grid.Row="1" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Mode"
+                       Margin="0,0,8,0"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource ImageDiffSecondaryTextStyle}" />
+            <ComboBox x:Name="ModeComboBox"
+                      Grid.Column="1"
+                      Width="170"
+                      SelectedValuePath="Tag"
+                      SelectionChanged="ModeComboBox_SelectionChanged"
+                      AutomationProperties.Name="Image comparison mode">
+                <ComboBoxItem Content="2-up" Tag="TwoUp" />
+                <ComboBoxItem Content="Swipe" Tag="Swipe" />
+                <ComboBoxItem Content="Onion Skin" Tag="OnionSkin" />
+                <ComboBoxItem Content="Difference" Tag="Difference" />
+            </ComboBox>
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center">
+                <TextBlock x:Name="ModeSliderLabel"
+                           VerticalAlignment="Center"
+                           Style="{StaticResource ImageDiffSecondaryTextStyle}"
+                           Visibility="Collapsed" />
+                <Slider x:Name="ModeSlider"
+                        Width="170"
+                        Minimum="0"
+                        Maximum="100"
+                        Value="50"
+                        StepFrequency="1"
+                        ValueChanged="ModeSlider_ValueChanged"
+                        Visibility="Collapsed"
+                        AutomationProperties.Name="Image comparison mode amount" />
+                <TextBlock x:Name="ModeSliderValueText"
+                           Width="38"
+                           Text="50%"
+                           TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Style="{StaticResource ImageDiffSecondaryTextStyle}"
+                           Visibility="Collapsed" />
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="2">
+            <Grid x:Name="TwoUpPanel" ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Padding="10"
+                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                        CornerRadius="8"
+                        AutomationProperties.Name="Before image">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="BeforeLabel"
+                                   Text="Before"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                        <TextBlock x:Name="BeforePathText"
+                                   Grid.Row="1"
+                                   Margin="0,2,0,6"
+                                   Style="{StaticResource ImageDiffSecondaryTextStyle}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTipService.ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                        <ScrollViewer Grid.Row="2"
+                                      MaxHeight="420"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Auto">
+                            <Grid MinHeight="180">
+                                <Image x:Name="BeforeImage"
+                                       Stretch="Uniform"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       AutomationProperties.Name="Before image preview" />
+                                <TextBlock x:Name="BeforeFallbackText"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           MaxWidth="300"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           Style="{StaticResource ImageDiffSecondaryTextStyle}" />
+                            </Grid>
+                        </ScrollViewer>
+                        <TextBlock x:Name="BeforeDetailsText"
+                                   Grid.Row="3"
+                                   Margin="0,8,0,0"
+                                   Style="{StaticResource ImageDiffSecondaryTextStyle}"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+                </Border>
+                <Border Grid.Column="1"
+                        Padding="10"
+                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                        CornerRadius="8"
+                        AutomationProperties.Name="After image">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="AfterLabel"
+                                   Text="After"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                        <TextBlock x:Name="AfterPathText"
+                                   Grid.Row="1"
+                                   Margin="0,2,0,6"
+                                   Style="{StaticResource ImageDiffSecondaryTextStyle}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTipService.ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                        <ScrollViewer Grid.Row="2"
+                                      MaxHeight="420"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Auto">
+                            <Grid MinHeight="180">
+                                <Image x:Name="AfterImage"
+                                       Stretch="Uniform"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       AutomationProperties.Name="After image preview" />
+                                <TextBlock x:Name="AfterFallbackText"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           MaxWidth="300"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           Style="{StaticResource ImageDiffSecondaryTextStyle}" />
+                            </Grid>
+                        </ScrollViewer>
+                        <TextBlock x:Name="AfterDetailsText"
+                                   Grid.Row="3"
+                                   Margin="0,8,0,0"
+                                   Style="{StaticResource ImageDiffSecondaryTextStyle}"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+                </Border>
+            </Grid>
+            <Grid x:Name="AdvancedModePanel" Visibility="Collapsed">
+                <Border Padding="10"
+                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                        CornerRadius="8"
+                        AutomationProperties.Name="Advanced image comparison">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="AdvancedModeDetailsText"
+                                   Style="{StaticResource ImageDiffSecondaryTextStyle}"
+                                   TextWrapping="Wrap" />
+                        <Grid x:Name="ModeOverlayGrid"
+                              Grid.Row="1"
+                              MinHeight="180"
+                              SizeChanged="ModeOverlayGrid_SizeChanged">
+                            <Image x:Name="ModeBeforeImage"
+                                   Stretch="Uniform"
+                                   HorizontalAlignment="Stretch"
+                                   VerticalAlignment="Stretch"
+                                   AutomationProperties.Name="Before image overlay" />
+                            <Image x:Name="ModeAfterImage"
+                                   Stretch="Uniform"
+                                   HorizontalAlignment="Stretch"
+                                   VerticalAlignment="Stretch"
+                                   AutomationProperties.Name="After image overlay" />
+                            <Border x:Name="ModeBeforeBadge"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Top"
+                                    Margin="6"
+                                    Padding="6,3"
+                                    Background="#99000000"
+                                    CornerRadius="4">
+                                <TextBlock x:Name="ModeBeforeLabel"
+                                           Text="Before"
+                                           Foreground="White"
+                                           FontWeight="SemiBold" />
+                            </Border>
+                            <Border x:Name="ModeAfterBadge"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    Margin="6"
+                                    Padding="6,3"
+                                    Background="#99000000"
+                                    CornerRadius="4">
+                                <TextBlock x:Name="ModeAfterLabel"
+                                           Text="After"
+                                           Foreground="White"
+                                           FontWeight="SemiBold" />
+                            </Border>
+                        </Grid>
+                        <TextBlock x:Name="AdvancedModeFooterText"
+                                   Grid.Row="2"
+                                   Margin="0,8,0,0"
+                                   Style="{StaticResource ImageDiffSecondaryTextStyle}"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>
