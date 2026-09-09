@@ -8,10 +8,15 @@ internal sealed class NativeSettings
 {
     public const int MaximumRepositoryAliasLength = 100;
     public const string DefaultImageDiffMode = "TwoUp";
+    public const string DefaultTextDiffMode = "Unified";
 
     public string Theme { get; set; } = "System";
 
     public string ImageDiffMode { get; set; } = DefaultImageDiffMode;
+
+    public string TextDiffMode { get; set; } = DefaultTextDiffMode;
+
+    public bool HideWhitespaceChanges { get; set; }
 
     public string? EditorId { get; set; }
 
@@ -53,15 +58,47 @@ internal sealed class NativeSettings
 /// </summary>
 internal static class NativeSettingsStore
 {
+    private const string SettingsDirectoryEnvironmentVariable =
+        "WINGIT_NATIVE_SETTINGS_DIRECTORY";
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
     };
     private static readonly SemaphoreSlim SaveGate = new(1, 1);
 
-    private static string SettingsDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "WinGit.Native");
+    private static string SettingsDirectory
+    {
+        get
+        {
+            var overridePath = Environment.GetEnvironmentVariable(
+                SettingsDirectoryEnvironmentVariable);
+            if (overridePath is null)
+            {
+                var localAppData = Environment.GetFolderPath(
+                    Environment.SpecialFolder.LocalApplicationData);
+                if (string.IsNullOrWhiteSpace(localAppData))
+                {
+                    throw new InvalidOperationException(
+                        "The native LocalAppData path is unavailable.");
+                }
+
+                return Path.Combine(
+                    localAppData,
+                    "WinGit.Native");
+            }
+
+            if (Path.IsPathFullyQualified(overridePath))
+            {
+                return overridePath;
+            }
+
+            throw new InvalidOperationException(
+                $"{SettingsDirectoryEnvironmentVariable} must contain a fully qualified path.");
+        }
+    }
+
+    internal static string ProfileDirectory => SettingsDirectory;
 
     private static string SettingsPath => Path.Combine(SettingsDirectory, "settings.json");
 
@@ -104,6 +141,8 @@ internal static class NativeSettingsStore
             {
                 Theme = settings.Theme,
                 ImageDiffMode = settings.ImageDiffMode,
+                TextDiffMode = settings.TextDiffMode,
+                HideWhitespaceChanges = settings.HideWhitespaceChanges,
                 EditorId = settings.EditorId,
                 ShellId = settings.ShellId,
                 RecentRepositories = settings.RecentRepositories is null
@@ -283,6 +322,7 @@ internal static class NativeSettingsStore
     {
         settings.Theme = settings.Theme is "System" or "Light" or "Dark" ? settings.Theme : "System";
         settings.ImageDiffMode = NormalizeImageDiffMode(settings.ImageDiffMode);
+        settings.TextDiffMode = NormalizeTextDiffMode(settings.TextDiffMode);
         settings.EditorId = NormalizeSelectionValue(settings.EditorId);
         settings.ShellId = NormalizeSelectionValue(settings.ShellId);
         settings.RecentRepositories ??= [];
@@ -361,6 +401,11 @@ internal static class NativeSettingsStore
             "TwoUp" or "Swipe" or "OnionSkin" or "Difference" => value,
             _ => NativeSettings.DefaultImageDiffMode,
         };
+
+    internal static string NormalizeTextDiffMode(string? value) =>
+        value is "Unified" or "Split"
+            ? value
+            : NativeSettings.DefaultTextDiffMode;
 
     private static string? NormalizeRepositoryAlias(string? alias)
     {

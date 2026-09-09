@@ -724,21 +724,10 @@ public sealed partial class MainWindow
             return githubAccountStore;
         }
 
-        var localAppData = Environment.GetFolderPath(
-            Environment.SpecialFolder.LocalApplicationData);
-        if (string.IsNullOrWhiteSpace(localAppData))
-        {
-            ShowGitHubError(
-                "GitHub accounts unavailable",
-                new InvalidOperationException(
-                    "The native LocalAppData path is unavailable."));
-            return null;
-        }
-
         try
         {
             githubAccountStore = new GitHubAccountStore(
-                Path.Combine(localAppData, "WinGit.Native", "github-accounts.json"));
+                Path.Combine(NativeSettingsStore.ProfileDirectory, "github-accounts.json"));
             return githubAccountStore;
         }
         catch (Exception exception)

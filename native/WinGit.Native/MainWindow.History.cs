@@ -202,6 +202,7 @@ public sealed partial class MainWindow
 
         historyDiffRows.Clear();
         HistoryDiffList.ItemsSource = historyDiffRows;
+        InvalidateTextDiffCache(history: true);
         ShowHistoryDiffMessage("Loading diff…", "Reading the selected path from Git.");
         var operation = BeginOperation($"Loading {file.Path}…");
         try
@@ -210,7 +211,8 @@ public sealed partial class MainWindow
                 repositoryRoot,
                 commit.Commit.Id,
                 file.File,
-                operation.Token);
+                operation.Token,
+                hideWhitespaceChanges);
             if (!IsCurrent(operation.Generation, operation.Token)
                 || !ReferenceEquals(selectedCommit, commit)
                 || !ReferenceEquals(selectedCommitFile, file))
@@ -222,6 +224,7 @@ public sealed partial class MainWindow
                 historyDiffRows,
                 diff,
                 HistoryDiffList,
+                HistoryDiffSideBySideList,
                 HistoryDiffImageView,
                 HistoryDiffMessagePanel,
                 HistoryDiffMessageTitle,

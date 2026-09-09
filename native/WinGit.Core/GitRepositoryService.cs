@@ -66,7 +66,8 @@ public sealed partial class GitRepositoryService
     public async Task<FileDiff> GetWorkingDiffAsync(
         string root,
         FileChange file,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool hideWhitespaceChanges = false)
     {
         ArgumentNullException.ThrowIfNull(file);
         var repositoryRoot = ValidateDirectory(root, nameof(root));
@@ -97,9 +98,14 @@ public sealed partial class GitRepositoryService
             "--unified=3",
             "--find-renames",
             "HEAD",
-            "--",
-            ToLiteralPathSpec(path),
         };
+        if (hideWhitespaceChanges)
+        {
+            arguments.Add("--ignore-all-space");
+        }
+
+        arguments.Add("--");
+        arguments.Add(ToLiteralPathSpec(path));
         AddOldPath(arguments, repositoryRoot, file.OldPath, path);
 
         var result = await processRunner.RunAsync(
@@ -176,18 +182,20 @@ public sealed partial class GitRepositoryService
     public Task<FileDiff> GetIndexDiffAsync(
         string root,
         FileChange file,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool hideWhitespaceChanges = false)
     {
-        return GetScopedDiffAsync(root, file, staged: true, cancellationToken);
+        return GetScopedDiffAsync(root, file, staged: true, cancellationToken, hideWhitespaceChanges);
     }
 
     /// <summary>Reads the work-tree-to-index patch for one path.</summary>
     public Task<FileDiff> GetUnstagedDiffAsync(
         string root,
         FileChange file,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool hideWhitespaceChanges = false)
     {
-        return GetScopedDiffAsync(root, file, staged: false, cancellationToken);
+        return GetScopedDiffAsync(root, file, staged: false, cancellationToken, hideWhitespaceChanges);
     }
 
     /// <summary>Creates a commit from the current index and returns its full SHA.</summary>
@@ -294,7 +302,8 @@ public sealed partial class GitRepositoryService
         string root,
         FileChange file,
         bool staged,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool hideWhitespaceChanges)
     {
         ArgumentNullException.ThrowIfNull(file);
         var repositoryRoot = ValidateDirectory(root, nameof(root));
@@ -324,6 +333,11 @@ public sealed partial class GitRepositoryService
         if (staged)
         {
             arguments.Add("--cached");
+        }
+
+        if (hideWhitespaceChanges)
+        {
+            arguments.Add("--ignore-all-space");
         }
 
         arguments.Add("--");
@@ -521,7 +535,8 @@ public sealed partial class GitRepositoryService
         string root,
         string commitId,
         FileChange file,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool hideWhitespaceChanges = false)
     {
         ValidateCommitId(commitId);
         ArgumentNullException.ThrowIfNull(file);
@@ -540,9 +555,14 @@ public sealed partial class GitRepositoryService
             "--find-renames",
             "--diff-merges=first-parent",
             commitId,
-            "--",
-            ToLiteralPathSpec(path),
         };
+        if (hideWhitespaceChanges)
+        {
+            arguments.Add("--ignore-all-space");
+        }
+
+        arguments.Add("--");
+        arguments.Add(ToLiteralPathSpec(path));
         AddOldPath(arguments, repositoryRoot, file.OldPath, path);
 
         var result = await processRunner.RunAsync(
