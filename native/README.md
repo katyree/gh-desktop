@@ -119,6 +119,14 @@ client reads protocol state only. It does not log in, log out, migrate
 credentials, or write tokens. The native app does not import the Electron
 profile or host a WebView2 control.
 
+For an isolated process, set `WINGIT_NATIVE_SETTINGS_DIRECTORY` to a fully
+qualified directory. `NativeSettingsStore` then reads and writes only that
+directory's `settings.json`. When the variable is unset, the default remains
+`%LOCALAPPDATA%\WinGit.Native\settings.json`. The override does not change the
+native GitHub account file or Codex profile paths. If the variable is set to a
+non-fully-qualified path, the store throws `InvalidOperationException` instead
+of using the default directory.
+
 ### GitHub sign-in preview configuration
 
 The native GitHub account flow uses an explicit device-code sign-in. A build

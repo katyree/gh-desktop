@@ -27,6 +27,11 @@ login uses a separate `%LOCALAPPDATA%\WinGit.Native\codex` profile when that
 work unit is implemented. The native app uses WinUI controls and its C# core.
 The Electron renderer and profile are not runtime dependencies.
 
+Use `WINGIT_NATIVE_SETTINGS_DIRECTORY` with a fully qualified per-process
+directory for isolated UI verification. The override covers only
+`settings.json`; the GitHub account store and Codex profile keep their shared
+paths. Run isolated checks only for surfaces backed by `settings.json`.
+
 ## Native-specific pitfalls
 
 - Normalize CRLF and lone CR from WinUI multiline `TextBox` values to LF at the

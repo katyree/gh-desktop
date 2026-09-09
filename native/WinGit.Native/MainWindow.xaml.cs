@@ -114,6 +114,13 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (captureOptions is { View: "repository-open-check" or "repository-picker-check" }
+            && TryGetHandlerCheckSettingsError() is { } settingsError)
+        {
+            await FailCaptureAsync(settingsError, App.CommandLineArguments);
+            return;
+        }
+
         settings = await NativeSettingsStore.LoadAsync();
         NormalizeSettings();
         ApplyImageDiffModeToControls();

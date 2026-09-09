@@ -13,6 +13,28 @@ public sealed partial class MainWindow
     {
         try
         {
+            if (options.View is "repository-open-check" or "repository-picker-check")
+            {
+                if (string.IsNullOrWhiteSpace(options.RepositoryPath))
+                {
+                    await FailCaptureAsync(
+                        $"--view {options.View} requires --repository <fixture parent>.",
+                        App.CommandLineArguments);
+                    return;
+                }
+
+                if (options.View == "repository-open-check")
+                {
+                    await RunRepositoryOpenCheckAsync(options);
+                }
+                else
+                {
+                    await RunRepositoryPickerCheckAsync(options);
+                }
+
+                return;
+            }
+
             if (options.View is "changes" or "history" or "branches" or "worktrees" or "stashes" or "remotes" or "tags")
             {
                 if (string.IsNullOrWhiteSpace(options.RepositoryPath))
