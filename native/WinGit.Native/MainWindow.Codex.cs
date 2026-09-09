@@ -159,15 +159,7 @@ public sealed partial class MainWindow
 
             if (codexClient is null)
             {
-                var localAppData = Environment.GetFolderPath(
-                    Environment.SpecialFolder.LocalApplicationData);
-                if (string.IsNullOrWhiteSpace(localAppData))
-                {
-                    throw new InvalidOperationException(
-                        "The native LocalAppData path is unavailable.");
-                }
-
-                var codexHome = Path.Combine(localAppData, "WinGit.Native", "codex");
+                var codexHome = Path.Combine(NativeSettingsStore.ProfileDirectory, "codex");
                 codexClient = new CodexAppServerClient(
                     new CodexAppServerClientOptions
                     {

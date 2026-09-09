@@ -21,7 +21,6 @@ public sealed partial class MainWindow
         PartialDiffList.ItemsSource = partialDiffRows;
         PartialSelectionBar.Visibility = Visibility.Collapsed;
         PartialDiffList.Visibility = Visibility.Collapsed;
-        DiffList.Visibility = Visibility.Visible;
         PartialSelectionStatusText.Text = string.Empty;
         UpdatePartialSelectionControls();
     }
@@ -306,6 +305,8 @@ public sealed partial class MainWindow
         var hasDiffState = selectedPartialDiff is not null || partialSelectionMessage is not null;
         var supported = selectedPartialDiff?.IsSupported == true;
         var selectionCount = partialSelections.Count;
+        var selectionBlocked = supported && TextDiffBlocksPartialSelection();
+        var canShowPartial = supported && inChangesWorkspace && !selectionBlocked;
         var canInteract = inChangesWorkspace
             && !mutationInProgress
             && !BusyRing.IsActive;
@@ -313,13 +314,10 @@ public sealed partial class MainWindow
         PartialSelectionBar.Visibility = hasDiffState && inChangesWorkspace
             ? Visibility.Visible
             : Visibility.Collapsed;
-        PartialDiffList.Visibility = supported && inChangesWorkspace
+        PartialDiffList.Visibility = canShowPartial
             ? Visibility.Visible
             : Visibility.Collapsed;
-        DiffList.Visibility = supported && inChangesWorkspace
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-        PartialDiffList.IsEnabled = canInteract && supported;
+        PartialDiffList.IsEnabled = canInteract && canShowPartial;
 
         if (!hasDiffState)
         {
@@ -331,6 +329,14 @@ public sealed partial class MainWindow
                 + (partialSelectionMessage
                     ?? selectedPartialDiff?.Message
                     ?? "Git did not return selectable text changes.");
+        }
+        else if (selectionBlocked)
+        {
+            PartialSelectionStatusText.Text = hideWhitespaceChanges
+                ? "Line selection is unavailable while hiding whitespace changes. Turn off Hide whitespace changes to select lines."
+                : textDiffMode == "Split"
+                    ? "Line selection is unavailable in Split view. Switch to Unified to stage or unstage selected lines."
+                    : "Line selection is unavailable while searching. Clear the search to select lines.";
         }
         else if (selectionCount == 0)
         {
@@ -356,32 +362,40 @@ public sealed partial class MainWindow
 
         StagePartialButton.Visibility = supported
             && inChangesWorkspace
+            && !selectionBlocked
             && !selectedChangeIsStaged
             ? Visibility.Visible
             : Visibility.Collapsed;
         UnstagePartialButton.Visibility = supported
             && inChangesWorkspace
+            && !selectionBlocked
             && selectedChangeIsStaged
             ? Visibility.Visible
             : Visibility.Collapsed;
         ClearPartialSelectionButton.Visibility = supported
             && inChangesWorkspace
+            && !selectionBlocked
             && selectionCount > 0
             ? Visibility.Visible
             : Visibility.Collapsed;
         StagePartialButton.IsEnabled = canInteract
+            && !selectionBlocked
             && !selectedChangeIsStaged
             && selectionCount > 0;
         UnstagePartialButton.IsEnabled = canInteract
+            && !selectionBlocked
             && selectedChangeIsStaged
             && selectionCount > 0;
-        ClearPartialSelectionButton.IsEnabled = canInteract && selectionCount > 0;
+        ClearPartialSelectionButton.IsEnabled = canInteract && !selectionBlocked && selectionCount > 0;
+        UpdateTextDiffListVisibility();
         ApplyConflictEditorListVisibility();
     }
 
     private void SelectFirstPartialLineForCapture()
     {
-        if (!diagnosticCaptureMode || selectedPartialDiff?.IsSupported != true)
+        if (!diagnosticCaptureMode
+            || selectedPartialDiff?.IsSupported != true
+            || TextDiffBlocksPartialSelection())
         {
             return;
         }

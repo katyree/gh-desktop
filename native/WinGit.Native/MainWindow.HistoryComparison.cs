@@ -641,6 +641,7 @@ public sealed partial class MainWindow
         var root = repositoryRoot;
         historyDiffRows.Clear();
         HistoryDiffList.ItemsSource = historyDiffRows;
+        InvalidateTextDiffCache(history: true);
         ShowHistoryDiffMessage("Loading combined diff…", "Reading the captured history range from Git.");
         var operation = BeginOperation($"Loading {file.Path}…");
         try
@@ -658,7 +659,8 @@ public sealed partial class MainWindow
                 root,
                 snapshot,
                 file.File,
-                operation.Token);
+                operation.Token,
+                hideWhitespaceChanges);
             if (!IsCurrent(operation.Generation, operation.Token)
                 || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
                 || !ReferenceEquals(historyCommitSelectionSnapshot, snapshot)
@@ -671,6 +673,7 @@ public sealed partial class MainWindow
                 historyDiffRows,
                 diff,
                 HistoryDiffList,
+                HistoryDiffSideBySideList,
                 HistoryDiffImageView,
                 HistoryDiffMessagePanel,
                 HistoryDiffMessageTitle,

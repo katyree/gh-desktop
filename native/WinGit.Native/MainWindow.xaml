@@ -117,7 +117,33 @@
                     <TextBlock Grid.Column="2" Text="{Binding Marker}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{Binding NeutralMarkerVisibility}" FontFamily="Cascadia Mono" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="2" Text="{Binding Marker}" Foreground="{ThemeResource SystemFillColorSuccessBrush}" Visibility="{Binding AddedMarkerVisibility}" FontFamily="Cascadia Mono" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="2" Text="{Binding Marker}" Foreground="{ThemeResource SystemFillColorCriticalBrush}" Visibility="{Binding RemovedMarkerVisibility}" FontFamily="Cascadia Mono" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="3" Text="{Binding Text, Mode=OneWay}" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Padding="0" Margin="0" FontFamily="Cascadia Mono" FontSize="12" TextWrapping="NoWrap" VerticalAlignment="Center" AutomationProperties.Name="{Binding KindLabel}" />
+                    <TextBlock Grid.Column="3" IsTextSelectionEnabled="True" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Padding="0" Margin="0" FontFamily="Cascadia Mono" FontSize="12" TextWrapping="NoWrap" VerticalAlignment="Center" AutomationProperties.Name="{Binding KindLabel}" Loaded="DiffTextBlock_Loaded" DataContextChanged="DiffTextBlock_DataContextChanged" />
+                    <Border Grid.ColumnSpan="4" Background="{ThemeResource SubtleFillColorSecondaryBrush}" Opacity="0.6" IsHitTestVisible="False" Visibility="{Binding SearchMatchVisibility}" />
+                    <Border Grid.ColumnSpan="4" Background="{ThemeResource AccentFillColorDefaultBrush}" Opacity="0.35" IsHitTestVisible="False" Visibility="{Binding CurrentSearchMatchVisibility}" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="DiffSideBySideRowTemplate">
+                <Grid MinHeight="24" Padding="0" HorizontalAlignment="Stretch" AutomationProperties.Name="{Binding KindLabel}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="52" />
+                        <ColumnDefinition Width="28" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="52" />
+                        <ColumnDefinition Width="28" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.ColumnSpan="3" Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}" Visibility="{Binding OldRemovedVisibility}" />
+                    <Border Grid.Column="3" Grid.ColumnSpan="3" Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}" Visibility="{Binding NewAddedVisibility}" />
+                    <Border Grid.ColumnSpan="6" Background="{ThemeResource SubtleFillColorSecondaryBrush}" Visibility="{Binding HeaderVisibility}" />
+                    <TextBlock Grid.Column="0" Text="{Binding OldLineNumber}" HorizontalAlignment="Right" Margin="0,0,10,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontFamily="Cascadia Mono" FontSize="12" VerticalAlignment="Center" Visibility="{Binding LineVisibility}" />
+                    <TextBlock Grid.Column="1" Text="{Binding OldMarker}" Foreground="{ThemeResource SystemFillColorCriticalBrush}" FontFamily="Cascadia Mono" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Visibility="{Binding LineVisibility}" />
+                    <TextBlock Grid.Column="2" Tag="Old" IsTextSelectionEnabled="True" ToolTipService.ToolTip="{Binding OldText}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" FontFamily="Cascadia Mono" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Visibility="{Binding LineVisibility}" Loaded="DiffTextBlock_Loaded" DataContextChanged="DiffTextBlock_DataContextChanged" />
+                    <TextBlock Grid.Column="3" Text="{Binding NewLineNumber}" HorizontalAlignment="Right" Margin="0,0,10,0" Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontFamily="Cascadia Mono" FontSize="12" VerticalAlignment="Center" Visibility="{Binding LineVisibility}" />
+                    <TextBlock Grid.Column="4" Text="{Binding NewMarker}" Foreground="{ThemeResource SystemFillColorSuccessBrush}" FontFamily="Cascadia Mono" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Visibility="{Binding LineVisibility}" />
+                    <TextBlock Grid.Column="5" Tag="New" IsTextSelectionEnabled="True" ToolTipService.ToolTip="{Binding NewText}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" FontFamily="Cascadia Mono" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Visibility="{Binding LineVisibility}" Loaded="DiffTextBlock_Loaded" DataContextChanged="DiffTextBlock_DataContextChanged" />
+                    <TextBlock Grid.ColumnSpan="6" Text="{Binding Header}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" FontFamily="Cascadia Mono" FontSize="12" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding Header}" VerticalAlignment="Center" Visibility="{Binding HeaderVisibility}" />
+                    <Border Grid.ColumnSpan="6" Background="{ThemeResource SubtleFillColorSecondaryBrush}" Opacity="0.6" IsHitTestVisible="False" Visibility="{Binding SearchMatchVisibility}" />
+                    <Border Grid.ColumnSpan="6" Background="{ThemeResource AccentFillColorDefaultBrush}" Opacity="0.35" IsHitTestVisible="False" Visibility="{Binding CurrentSearchMatchVisibility}" />
                 </Grid>
             </DataTemplate>
             <DataTemplate x:Key="PartialDiffRowTemplate">
@@ -876,14 +902,53 @@
                             <Grid Grid.Row="1">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0"
+                                            Orientation="Horizontal"
+                                            Spacing="8"
+                                            Margin="0,0,0,8"
+                                            AutomationProperties.Name="Changes diff controls">
+                                    <TextBlock Text="View" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" />
+                                    <ComboBox x:Name="DiffModeComboBox"
+                                              Width="110"
+                                              SelectionChanged="DiffModeComboBox_SelectionChanged"
+                                              AutomationProperties.Name="Changes diff view mode">
+                                        <ComboBoxItem Content="Unified" Tag="Unified" />
+                                        <ComboBoxItem Content="Split" Tag="Split" />
+                                    </ComboBox>
+                                    <CheckBox x:Name="HideWhitespaceChangesCheckBox"
+                                              Content="Hide whitespace changes"
+                                              Click="HideWhitespaceChangesCheckBox_Click"
+                                              VerticalAlignment="Center"
+                                              AutomationProperties.Name="Hide whitespace changes in Changes diff" />
+                                    <TextBox x:Name="DiffSearchBox"
+                                             Width="220"
+                                             PlaceholderText="Find in diff"
+                                             TextChanged="DiffSearchBox_TextChanged"
+                                             KeyDown="DiffSearchBox_KeyDown"
+                                             AutomationProperties.Name="Search current Changes diff" />
+                                    <Button x:Name="DiffSearchPreviousButton"
+                                            Content="Previous"
+                                            Click="DiffSearchPreviousButton_Click"
+                                            AutomationProperties.Name="Find previous Changes diff match" />
+                                    <Button x:Name="DiffSearchNextButton"
+                                            Content="Next"
+                                            Click="DiffSearchNextButton_Click"
+                                            AutomationProperties.Name="Find next Changes diff match" />
+                                    <TextBlock x:Name="DiffSearchStatusText"
+                                               Style="{StaticResource SecondaryTextStyle}"
+                                               VerticalAlignment="Center"
+                                               AutomationProperties.Name="Changes diff search status" />
+                                </StackPanel>
                                 <Border x:Name="PartialSelectionBar"
-                                        Grid.Row="0"
+                                        Grid.Row="1"
                                         Margin="0,0,0,8"
                                         Padding="10,6"
                                         Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                                         CornerRadius="6"
+                                        VerticalAlignment="Top"
                                         Visibility="Collapsed">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -915,10 +980,11 @@
                                         </StackPanel>
                                     </Grid>
                                 </Border>
-                                <Grid Grid.Row="1">
+                                <Grid Grid.Row="2" VerticalAlignment="Stretch">
                                     <ListView x:Name="DiffList" ItemTemplate="{StaticResource DiffRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionMode="None" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollMode="Enabled" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Working directory diff" />
-                                     <ListView x:Name="PartialDiffList"
-                                               ItemTemplate="{StaticResource PartialDiffRowTemplate}"
+                                    <ListView x:Name="DiffSideBySideList" ItemTemplate="{StaticResource DiffSideBySideRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionMode="None" Visibility="Collapsed" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Working directory split diff" />
+                                    <ListView x:Name="PartialDiffList"
+                                              ItemTemplate="{StaticResource PartialDiffRowTemplate}"
                                                ItemContainerStyle="{StaticResource ListItemStyle}"
                                               SelectionMode="None"
                                               Visibility="Collapsed"
@@ -1253,17 +1319,61 @@
                             </Grid>
                             <ListView x:Name="HistoryFilesList" Grid.Row="1" ItemTemplate="{StaticResource CommitFileRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="HistoryFilesList_SelectionChanged" SelectionMode="Single" AutomationProperties.Name="Files in selected commit" />
                             <Grid Grid.Row="2">
-                                <ListView x:Name="HistoryDiffList" ItemTemplate="{StaticResource DiffRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionMode="None" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollMode="Enabled" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Commit diff" />
-                                <local:NativeImageDiffView x:Name="HistoryDiffImageView"
-                                                           Visibility="Collapsed"
-                                                           AutomationProperties.Name="Commit image diff" />
-                                <local:NativeSubmoduleDiffView x:Name="HistorySubmoduleView"
-                                                               Visibility="Collapsed"
-                                                               AutomationProperties.Name="Commit submodule diff" />
-                                <StackPanel x:Name="HistoryDiffMessagePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
-                                    <TextBlock x:Name="HistoryDiffMessageTitle" Text="Select a file" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                                    <TextBlock x:Name="HistoryDiffMessageText" Text="Choose a commit and file to inspect its diff." Style="{StaticResource SecondaryTextStyle}" TextAlignment="Center" />
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0"
+                                            Orientation="Horizontal"
+                                            Spacing="8"
+                                            Margin="0,0,0,8"
+                                            AutomationProperties.Name="History diff controls">
+                                    <TextBlock Text="View" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" />
+                                    <ComboBox x:Name="HistoryDiffModeComboBox"
+                                              Width="110"
+                                              SelectionChanged="DiffModeComboBox_SelectionChanged"
+                                              AutomationProperties.Name="History diff view mode">
+                                        <ComboBoxItem Content="Unified" Tag="Unified" />
+                                        <ComboBoxItem Content="Split" Tag="Split" />
+                                    </ComboBox>
+                                    <CheckBox x:Name="HistoryHideWhitespaceChangesCheckBox"
+                                              Content="Hide whitespace changes"
+                                              Click="HideWhitespaceChangesCheckBox_Click"
+                                              VerticalAlignment="Center"
+                                              AutomationProperties.Name="Hide whitespace changes in History diff" />
+                                    <TextBox x:Name="HistoryDiffSearchBox"
+                                             Width="220"
+                                             PlaceholderText="Find in diff"
+                                             TextChanged="DiffSearchBox_TextChanged"
+                                             KeyDown="DiffSearchBox_KeyDown"
+                                             AutomationProperties.Name="Search current History diff" />
+                                    <Button x:Name="HistoryDiffSearchPreviousButton"
+                                            Content="Previous"
+                                            Click="HistoryDiffSearchPreviousButton_Click"
+                                            AutomationProperties.Name="Find previous History diff match" />
+                                    <Button x:Name="HistoryDiffSearchNextButton"
+                                            Content="Next"
+                                            Click="HistoryDiffSearchNextButton_Click"
+                                            AutomationProperties.Name="Find next History diff match" />
+                                    <TextBlock x:Name="HistoryDiffSearchStatusText"
+                                               Style="{StaticResource SecondaryTextStyle}"
+                                               VerticalAlignment="Center"
+                                               AutomationProperties.Name="History diff search status" />
                                 </StackPanel>
+                                <Grid Grid.Row="1">
+                                    <ListView x:Name="HistoryDiffList" ItemTemplate="{StaticResource DiffRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionMode="None" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollMode="Enabled" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Commit diff" />
+                                    <ListView x:Name="HistoryDiffSideBySideList" ItemTemplate="{StaticResource DiffSideBySideRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionMode="None" Visibility="Collapsed" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Commit split diff" />
+                                    <local:NativeImageDiffView x:Name="HistoryDiffImageView"
+                                                               Visibility="Collapsed"
+                                                               AutomationProperties.Name="Commit image diff" />
+                                    <local:NativeSubmoduleDiffView x:Name="HistorySubmoduleView"
+                                                                   Visibility="Collapsed"
+                                                                   AutomationProperties.Name="Commit submodule diff" />
+                                    <StackPanel x:Name="HistoryDiffMessagePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                                        <TextBlock x:Name="HistoryDiffMessageTitle" Text="Select a file" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                        <TextBlock x:Name="HistoryDiffMessageText" Text="Choose a commit and file to inspect its diff." Style="{StaticResource SecondaryTextStyle}" TextAlignment="Center" />
+                                    </StackPanel>
+                                </Grid>
                             </Grid>
                         </Grid>
                     </Grid>
@@ -1769,18 +1879,31 @@
                     </Grid>
 
                     <Grid x:Name="WelcomePanel" Grid.Row="3" Padding="28" Visibility="Visible">
-                        <StackPanel MaxWidth="600" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
-                            <Border Width="64" Height="64" CornerRadius="16" Background="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center">
-                                <Image Source="ms-appx:///Assets/icon-logo.ico" Width="42" Height="42" Stretch="Uniform" AutomationProperties.Name="WinGit logo" />
-                            </Border>
-                            <TextBlock Text="A focused Git workspace" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                            <TextBlock Text="Open a local repository to inspect changes, read line-level diffs, and browse commit history with native Windows controls." Style="{StaticResource SecondaryTextStyle}" TextAlignment="Center" TextWrapping="Wrap" />
-                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,10,0,0">
-                                <Button Content="Open repository" Click="OpenRepositoryButton_Click" AutomationProperties.Name="Open repository from welcome page" />
-                                <Button Content="Create repository" Click="CreateRepositoryButton_Click" AutomationProperties.Name="Create repository from welcome page" />
-                                <Button Content="Clone repository" Click="CloneRepositoryButton_Click" AutomationProperties.Name="Clone repository from welcome page" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel MaxWidth="600" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                                <Border Width="64" Height="64" CornerRadius="16" Background="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center">
+                                    <Image Source="ms-appx:///Assets/icon-logo.ico" Width="42" Height="42" Stretch="Uniform" AutomationProperties.Name="WinGit logo" />
+                                </Border>
+                                <TextBlock Text="Welcome to WinGit" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                <TextBlock Text="Choose how you want to start: create a repository, add an existing repository, or clone a repository." Style="{StaticResource SecondaryTextStyle}" TextAlignment="Center" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,10,0,0">
+                                    <Button Content="Create a new repository" Click="CreateRepositoryButton_Click" AutomationProperties.Name="Create a new repository" />
+                                    <Button Content="Add an existing repository" Click="OpenRepositoryButton_Click" AutomationProperties.Name="Add an existing repository" />
+                                    <Button Content="Clone a repository" Click="CloneRepositoryButton_Click" AutomationProperties.Name="Clone a repository" />
+                                </StackPanel>
+                                <Expander Header="Getting started with Git" IsExpanded="False" HorizontalAlignment="Stretch" AutomationProperties.Name="Getting started with Git">
+                                    <Border Padding="12" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                        <StackPanel Spacing="7">
+                                            <TextBlock Text="Git tracks versions. GitHub hosts shared projects. WinGit works locally with Git repositories." TextWrapping="Wrap" />
+                                            <TextBlock Text="1. Configure your name and email in Settings > Git configuration." TextWrapping="Wrap" />
+                                            <TextBlock Text="2. Create a repository, add an existing repository, or clone a repository." TextWrapping="Wrap" />
+                                            <TextBlock Text="3. Edit files, inspect Changes, stage files, and commit." TextWrapping="Wrap" />
+                                            <TextBlock Text="4. Review commits in History." TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+                                </Expander>
                             </StackPanel>
-                        </StackPanel>
+                        </ScrollViewer>
                     </Grid>
 
                     <Grid Grid.Row="4" Padding="18,0" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">

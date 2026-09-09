@@ -66,11 +66,32 @@ internal sealed class ChangeRow
 
 }
 
+internal enum DiffSearchColumn
+{
+    Unified,
+    Old,
+    New,
+}
+
+internal readonly record struct DiffSearchMatch(
+    int LineIndex,
+    int Start,
+    int Length,
+    DiffSearchColumn Column);
+
+internal readonly record struct DiffSearchRange(
+    int Start,
+    int Length,
+    bool IsCurrent);
+
 internal sealed class DiffRow
 {
-    public DiffRow(DiffLine line)
+    public DiffRow(
+        DiffLine line,
+        IReadOnlyList<DiffSearchRange>? searchMatches = null)
     {
         Line = line;
+        SearchMatches = searchMatches ?? [];
     }
 
     public DiffLine Line { get; }
@@ -103,6 +124,20 @@ internal sealed class DiffRow
 
     public string Text => Line.Text;
 
+    public IReadOnlyList<DiffSearchRange> SearchMatches { get; }
+
+    public bool IsSearchMatch => SearchMatches.Count > 0;
+
+    public bool IsCurrentSearchMatch => SearchMatches.Any(match => match.IsCurrent);
+
+    public Visibility SearchMatchVisibility => IsSearchMatch && !IsCurrentSearchMatch
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
+    public Visibility CurrentSearchMatchVisibility => IsCurrentSearchMatch
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
     public Visibility AddedVisibility => Line.Kind == DiffLineKind.Added
         ? Visibility.Visible
         : Visibility.Collapsed;
@@ -127,6 +162,106 @@ internal sealed class DiffRow
         ? Visibility.Visible
         : Visibility.Collapsed;
 
+}
+
+internal sealed class DiffSideBySideRow
+{
+    public DiffSideBySideRow(
+        DiffLine line,
+        IReadOnlyList<DiffSearchRange>? searchMatches = null)
+        : this(
+            line.Kind == DiffLineKind.Removed ? line : null,
+            line.Kind == DiffLineKind.Added ? line : null,
+            line.Kind is DiffLineKind.Context ? line : null,
+            line,
+            line.Kind is DiffLineKind.Removed or DiffLineKind.Context ? searchMatches : null,
+            line.Kind is DiffLineKind.Added or DiffLineKind.Context ? searchMatches : null)
+    {
+    }
+
+    public DiffSideBySideRow(
+        DiffLine? oldLine,
+        DiffLine? newLine,
+        DiffLine? sharedLine,
+        DiffLine headerLine,
+        IReadOnlyList<DiffSearchRange>? oldSearchMatches = null,
+        IReadOnlyList<DiffSearchRange>? newSearchMatches = null)
+    {
+        OldLine = oldLine;
+        NewLine = newLine;
+        SharedLine = sharedLine;
+        HeaderLine = headerLine;
+        OldSearchMatches = oldSearchMatches ?? [];
+        NewSearchMatches = newSearchMatches ?? [];
+    }
+
+    public DiffLine? OldLine { get; }
+
+    public DiffLine? NewLine { get; }
+
+    public DiffLine? SharedLine { get; }
+
+    public DiffLine HeaderLine { get; }
+
+    public DiffLine Line => SharedLine ?? OldLine ?? NewLine ?? HeaderLine;
+
+    public string OldLineNumber => (SharedLine ?? OldLine)?.OldLineNumber?.ToString() ?? string.Empty;
+
+    public string NewLineNumber => (SharedLine ?? NewLine)?.NewLineNumber?.ToString() ?? string.Empty;
+
+    public string OldMarker => OldLine is not null && OldLine.Kind == DiffLineKind.Removed ? "−" : string.Empty;
+
+    public string NewMarker => NewLine is not null && NewLine.Kind == DiffLineKind.Added ? "+" : string.Empty;
+
+    public string OldText => (SharedLine ?? OldLine)?.Text ?? string.Empty;
+
+    public string NewText => (SharedLine ?? NewLine)?.Text ?? string.Empty;
+
+    public string Header => HeaderLine.Text;
+
+    public IReadOnlyList<DiffSearchRange> OldSearchMatches { get; }
+
+    public IReadOnlyList<DiffSearchRange> NewSearchMatches { get; }
+
+    public bool IsSearchMatch => OldSearchMatches.Count > 0 || NewSearchMatches.Count > 0;
+
+    public bool IsCurrentSearchMatch => OldSearchMatches.Any(match => match.IsCurrent)
+        || NewSearchMatches.Any(match => match.IsCurrent);
+
+    public Visibility SearchMatchVisibility => IsSearchMatch && !IsCurrentSearchMatch
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
+    public Visibility CurrentSearchMatchVisibility => IsCurrentSearchMatch
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
+    public Visibility LineVisibility => SharedLine is not null || OldLine is not null || NewLine is not null
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
+    public Visibility HeaderVisibility => LineVisibility == Visibility.Visible
+        ? Visibility.Collapsed
+        : Visibility.Visible;
+
+    public Visibility OldRemovedVisibility => OldLine?.Kind == DiffLineKind.Removed
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
+    public Visibility NewAddedVisibility => NewLine?.Kind == DiffLineKind.Added
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
+    public string KindLabel => Line.Kind switch
+    {
+        DiffLineKind.Added => "Added line",
+        DiffLineKind.Removed => "Removed line",
+        DiffLineKind.HunkHeader => "Hunk header",
+        DiffLineKind.FileHeader => "File header",
+        DiffLineKind.NoNewline => "No trailing newline",
+        DiffLineKind.Binary => "Binary content",
+        _ => "Context line",
+    };
 }
 
 internal sealed class CommitRow

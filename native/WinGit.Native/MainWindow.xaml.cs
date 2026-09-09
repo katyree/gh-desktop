@@ -39,6 +39,8 @@ public sealed partial class MainWindow : Window
     private ChangeRow? selectedChange;
     private string? selectedChangePath;
     private bool selectedChangeIsStaged;
+    private bool applyingChangeFilter;
+    private bool initialChangePreviewPending;
     private CommitRow? selectedCommit;
     private CommitFileRow? selectedCommitFile;
     private BranchRow? selectedBranch;
@@ -88,6 +90,7 @@ public sealed partial class MainWindow : Window
         HistoryDiffList.ItemsSource = historyDiffRows;
         InitializeHistoryComparison();
         InitializeImageDiffControls();
+        InitializeTextDiffControls();
         InitializeSubmoduleDiffControls();
         BranchesList.ItemsSource = branchRows;
         WorktreesList.ItemsSource = worktreeRows;
@@ -125,6 +128,7 @@ public sealed partial class MainWindow : Window
         settings = await NativeSettingsStore.LoadAsync();
         NormalizeSettings();
         ApplyImageDiffModeToControls();
+        ApplyTextDiffSettingsToControls();
         if (captureOptions?.Theme is string captureTheme)
         {
             settings.Theme = captureTheme is "light" ? "Light" : "Dark";
@@ -353,6 +357,37 @@ public sealed partial class MainWindow : Window
             latestOperationTask = LoadTagsAsync();
             await latestOperationTask;
         }
+
+        if (tag == "changes"
+            && repositoryRoot is not null
+            && selectedChange is not null
+            && currentChangesDiff is null)
+        {
+            latestOperationTask = LoadWorkingDiffAsync(selectedChange);
+            await latestOperationTask;
+        }
+        else if (tag == "history"
+            && repositoryRoot is not null
+            && selectedCommitFile is not null
+            && currentHistoryDiff is null)
+        {
+            Task? reloadTask = null;
+            if (historyCommitSelectionSnapshot is { } snapshot)
+            {
+                latestOperationTask = LoadCommitSelectionDiffAsync(snapshot, selectedCommitFile);
+                reloadTask = latestOperationTask;
+            }
+            else if (selectedCommit is { } commit)
+            {
+                latestOperationTask = LoadCommitDiffAsync(commit, selectedCommitFile);
+                reloadTask = latestOperationTask;
+            }
+
+            if (reloadTask is not null)
+            {
+                await reloadTask;
+            }
+        }
     }
 
     private void ShowWorkspace(string workspace)
@@ -409,7 +444,9 @@ public sealed partial class MainWindow : Window
 
         if (showingChanges && selectedChange is null && changeRows.Count > 0)
         {
-            ApplyChangeFilter();
+            var selectInitialPreview = initialChangePreviewPending;
+            initialChangePreviewPending = false;
+            ApplyChangeFilter(selectInitialPreview);
         }
 
         if (!hasRepository && workspace != "settings")
@@ -423,6 +460,7 @@ public sealed partial class MainWindow : Window
         UpdateSubmoduleDiffInteraction();
         UpdateSubmoduleControls();
         UpdateIntegrationCommandStates();
+        UpdateTextDiffControls();
     }
 
     private async Task OpenRepositoryAsync(string path)
@@ -667,6 +705,9 @@ public sealed partial class MainWindow : Window
         selectedChange = null;
         selectedChangePath = null;
         selectedChangeIsStaged = false;
+        initialChangePreviewPending = true;
+        StagedChangesList.SelectedItems.Clear();
+        UnstagedChangesList.SelectedItems.Clear();
         StagedChangesList.SelectedIndex = -1;
         UnstagedChangesList.SelectedIndex = -1;
         RepositoryPathText.Text = status.RootPath;
@@ -732,47 +773,82 @@ public sealed partial class MainWindow : Window
         ApplyChangeFilter();
     }
 
-    private void ApplyChangeFilter()
+    private void ApplyChangeFilter(bool selectInitialPreview = false)
     {
         ClearPartialDiffState();
+        var selectedStagedPaths = StagedChangesList.SelectedItems
+            .OfType<ChangeRow>()
+            .Select(row => row.Path)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var selectedUnstagedPaths = UnstagedChangesList.SelectedItems
+            .OfType<ChangeRow>()
+            .Select(row => row.Path)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var preferStagedPreview = selectedChangeIsStaged;
         var query = ChangesFilterBox?.Text?.Trim() ?? string.Empty;
         var visibleRows = string.IsNullOrWhiteSpace(query)
             ? changeRows.ToArray()
             : changeRows.Where(row => row.SearchText.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
 
-        stagedChangeRows.Clear();
-        unstagedChangeRows.Clear();
-        foreach (var row in visibleRows)
+        applyingChangeFilter = true;
+        try
         {
-            var isConflict = IsConflictChange(row.Change);
-            if (!isConflict && row.HasStagedChanges)
+            stagedChangeRows.Clear();
+            unstagedChangeRows.Clear();
+            foreach (var row in visibleRows)
             {
-                stagedChangeRows.Add(new ChangeRow(row.Change, isStaged: true));
+                var isConflict = IsConflictChange(row.Change);
+                if (!isConflict && row.HasStagedChanges)
+                {
+                    stagedChangeRows.Add(new ChangeRow(row.Change, isStaged: true));
+                }
+
+                if (isConflict || row.HasUnstagedChanges)
+                {
+                    unstagedChangeRows.Add(new ChangeRow(row.Change));
+                }
             }
 
-            if (isConflict || row.HasUnstagedChanges)
+            StagedChangesList.ItemsSource = stagedChangeRows;
+            UnstagedChangesList.ItemsSource = unstagedChangeRows;
+            StagedChangesList.SelectedItems.Clear();
+            UnstagedChangesList.SelectedItems.Clear();
+            foreach (var row in stagedChangeRows)
             {
-                unstagedChangeRows.Add(new ChangeRow(row.Change));
+                if (selectedStagedPaths.Contains(row.Path))
+                {
+                    StagedChangesList.SelectedItems.Add(row);
+                }
+            }
+
+            foreach (var row in unstagedChangeRows)
+            {
+                if (selectedUnstagedPaths.Contains(row.Path))
+                {
+                    UnstagedChangesList.SelectedItems.Add(row);
+                }
             }
         }
+        finally
+        {
+            applyingChangeFilter = false;
+        }
 
-        StagedChangesList.ItemsSource = stagedChangeRows;
-        UnstagedChangesList.ItemsSource = unstagedChangeRows;
         StagedCountText.Text = stagedChangeRows.Count.ToString();
         UnstagedCountText.Text = unstagedChangeRows.Count.ToString();
         FilteredChangeCountText.Text = string.IsNullOrWhiteSpace(query)
             ? string.Empty
             : $"{visibleRows.Length} of {changeRows.Count}";
 
+        var previewWasHidden = false;
         if (visibleRows.Length == 0)
         {
             ClearConflictEditorState(discardPendingDraft: true);
             selectedChange = null;
             selectedChangePath = null;
+            selectedChangeIsStaged = false;
             DiffFileText.Text = "Select a changed file";
             DiffSummaryText.Text = string.Empty;
-            StagedChangesList.SelectedIndex = -1;
-            UnstagedChangesList.SelectedIndex = -1;
             diffRows.Clear();
             DiffList.ItemsSource = diffRows;
             ShowDiffMessage("No matching files", "Try a different path or clear the filter.");
@@ -788,13 +864,39 @@ public sealed partial class MainWindow : Window
             ClearConflictEditorState(discardPendingDraft: true);
             selectedChange = null;
             selectedChangePath = null;
-            StagedChangesList.SelectedIndex = -1;
-            UnstagedChangesList.SelectedIndex = -1;
-            if (currentWorkspace == "changes" && unstagedChangeRows.Count > 0)
+            selectedChangeIsStaged = false;
+            DiffFileText.Text = "Select a changed file";
+            DiffSummaryText.Text = string.Empty;
+            diffRows.Clear();
+            DiffList.ItemsSource = diffRows;
+            ShowDiffMessage("Select a changed file", "Choose a path from the working changes list.");
+            previewWasHidden = true;
+        }
+
+        if (previewWasHidden && (selectedStagedPaths.Count > 0 || selectedUnstagedPaths.Count > 0))
+        {
+            var selectedStagedRow = StagedChangesList.SelectedItems.OfType<ChangeRow>().FirstOrDefault();
+            var selectedUnstagedRow = UnstagedChangesList.SelectedItems.OfType<ChangeRow>().FirstOrDefault();
+            var previewRow = preferStagedPreview
+                ? selectedStagedRow ?? selectedUnstagedRow
+                : selectedUnstagedRow ?? selectedStagedRow;
+            if (previewRow is not null)
+            {
+                latestOperationTask = LoadSelectedChangeAsync(previewRow);
+            }
+        }
+
+        if (selectInitialPreview
+            && selectedChange is null
+            && selectedStagedPaths.Count == 0
+            && selectedUnstagedPaths.Count == 0
+            && currentWorkspace == "changes")
+        {
+            if (unstagedChangeRows.Count > 0)
             {
                 UnstagedChangesList.SelectedIndex = 0;
             }
-            else if (currentWorkspace == "changes" && stagedChangeRows.Count > 0)
+            else if (stagedChangeRows.Count > 0)
             {
                 StagedChangesList.SelectedIndex = 0;
             }
@@ -807,6 +909,11 @@ public sealed partial class MainWindow : Window
 
     private async void StagedChangesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (applyingChangeFilter)
+        {
+            return;
+        }
+
         if (StagedChangesList.SelectedItem is not ChangeRow row)
         {
             UpdateMutationButtons();
@@ -832,6 +939,11 @@ public sealed partial class MainWindow : Window
 
     private async void UnstagedChangesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (applyingChangeFilter)
+        {
+            return;
+        }
+
         if (UnstagedChangesList.SelectedItem is not ChangeRow row)
         {
             UpdateMutationButtons();
@@ -878,6 +990,7 @@ public sealed partial class MainWindow : Window
 
         DiffFileText.Text = $"{(row.IsStaged ? "Staged" : "Unstaged")} · {row.Path}";
         DiffSummaryText.Text = "Loading diff…";
+        InvalidateTextDiffCache(history: false);
         ClearPartialDiffState();
         diffRows.Clear();
         DiffList.ItemsSource = diffRows;
@@ -886,8 +999,16 @@ public sealed partial class MainWindow : Window
         try
         {
             var diff = row.IsStaged
-                ? await repositoryService.GetIndexDiffAsync(repositoryRoot, row.Change, operation.Token)
-                : await repositoryService.GetUnstagedDiffAsync(repositoryRoot, row.Change, operation.Token);
+                ? await repositoryService.GetIndexDiffAsync(
+                    repositoryRoot,
+                    row.Change,
+                    operation.Token,
+                    hideWhitespaceChanges)
+                : await repositoryService.GetUnstagedDiffAsync(
+                    repositoryRoot,
+                    row.Change,
+                    operation.Token,
+                    hideWhitespaceChanges);
             if (!IsCurrent(operation.Generation, operation.Token) || !ReferenceEquals(selectedChange, row))
             {
                 return;
@@ -897,6 +1018,7 @@ public sealed partial class MainWindow : Window
                 diffRows,
                 diff,
                 DiffList,
+                DiffSideBySideList,
                 DiffImageView,
                 DiffMessagePanel,
                 DiffMessageTitle,
@@ -949,13 +1071,19 @@ public sealed partial class MainWindow : Window
         ObservableCollection<DiffRow> target,
         FileDiff diff,
         ListView list,
+        ListView splitList,
         NativeImageDiffView imageView,
         FrameworkElement messagePanel,
         TextBlock messageTitle,
         TextBlock messageText,
         CancellationToken cancellationToken)
     {
+        BeginTextDiffRender(list, diff);
         target.Clear();
+        splitList.ItemsSource = ReferenceEquals(list, DiffList)
+            ? diffSideBySideRows
+            : historyDiffSideBySideRows;
+        splitList.Visibility = Visibility.Collapsed;
         imageView.Clear();
         imageView.Visibility = Visibility.Collapsed;
         var submoduleView = ReferenceEquals(list, DiffList)
@@ -977,6 +1105,7 @@ public sealed partial class MainWindow : Window
             if (string.IsNullOrWhiteSpace(submodulePath))
             {
                 list.ItemsSource = target;
+                splitList.Visibility = Visibility.Collapsed;
                 messageTitle.Text = "Submodule path unavailable";
                 messageText.Text = "Git returned a submodule diff without a repository-relative path.";
                 messagePanel.Visibility = Visibility.Visible;
@@ -986,6 +1115,7 @@ public sealed partial class MainWindow : Window
             if (submoduleView is null)
             {
                 list.ItemsSource = target;
+                splitList.Visibility = Visibility.Collapsed;
                 messageTitle.Text = "Submodule diff unavailable";
                 messageText.Text = "This view has no submodule renderer.";
                 messagePanel.Visibility = Visibility.Visible;
@@ -1022,6 +1152,7 @@ public sealed partial class MainWindow : Window
             }
 
             list.ItemsSource = target;
+            splitList.Visibility = Visibility.Collapsed;
             list.Visibility = Visibility.Collapsed;
             messagePanel.Visibility = Visibility.Collapsed;
             submoduleView.Visibility = Visibility.Visible;
@@ -1034,6 +1165,7 @@ public sealed partial class MainWindow : Window
         {
             list.ItemsSource = target;
             list.Visibility = Visibility.Collapsed;
+            splitList.Visibility = Visibility.Collapsed;
             messagePanel.Visibility = Visibility.Collapsed;
             imageView.Visibility = Visibility.Visible;
             await imageView.SetComparisonAsync(imageComparison, cancellationToken);
@@ -1043,17 +1175,18 @@ public sealed partial class MainWindow : Window
         if (diff.IsBinary)
         {
             list.ItemsSource = target;
+            splitList.Visibility = Visibility.Collapsed;
             messageTitle.Text = "Binary file";
             messageText.Text = diff.Message ?? "Git reported binary content for this path.";
             messagePanel.Visibility = Visibility.Visible;
             return;
         }
 
-        foreach (var line in diff.Lines)
-        {
-            target.Add(new DiffRow(line));
-        }
-
+        list.ItemsSource = target;
+        splitList.ItemsSource = ReferenceEquals(list, DiffList)
+            ? diffSideBySideRows
+            : historyDiffSideBySideRows;
+        MarkTextDiffReady(list);
         list.ItemsSource = target;
         if (target.Count == 0)
         {
@@ -1099,6 +1232,7 @@ public sealed partial class MainWindow : Window
 
     private void ShowDiffMessage(string title, string message)
     {
+        InvalidateTextDiffCache(history: false);
         DiffImageView.Clear();
         DiffImageView.Visibility = Visibility.Collapsed;
         DiffSubmoduleView.Clear();
@@ -1115,6 +1249,7 @@ public sealed partial class MainWindow : Window
 
     private void ShowHistoryDiffMessage(string title, string message)
     {
+        InvalidateTextDiffCache(history: true);
         HistoryDiffImageView.Clear();
         HistoryDiffImageView.Visibility = Visibility.Collapsed;
         HistorySubmoduleView.Clear();
@@ -1142,6 +1277,7 @@ public sealed partial class MainWindow : Window
         selectedChange = null;
         selectedChangePath = null;
         selectedChangeIsStaged = false;
+        initialChangePreviewPending = false;
         selectedCommit = null;
         selectedCommitFile = null;
         selectedBranch = null;
@@ -1157,6 +1293,7 @@ public sealed partial class MainWindow : Window
         commitFileRows.Clear();
         diffRows.Clear();
         historyDiffRows.Clear();
+        ClearTextDiffState();
         DiffImageView.Clear();
         DiffImageView.Visibility = Visibility.Collapsed;
         DiffSubmoduleView.Clear();
@@ -1239,6 +1376,7 @@ public sealed partial class MainWindow : Window
     {
         settings.Theme = settings.Theme is "System" or "Light" or "Dark" ? settings.Theme : "System";
         settings.ImageDiffMode = NativeSettingsStore.NormalizeImageDiffMode(settings.ImageDiffMode);
+        settings.TextDiffMode = NativeSettingsStore.NormalizeTextDiffMode(settings.TextDiffMode);
         settings.RecentRepositories ??= [];
         settings.RecentRepositories = settings.RecentRepositories
             .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -1400,5 +1538,6 @@ public sealed partial class MainWindow : Window
         UpdateGitHubAccountControls();
         UpdateIntegrationCommandStates();
         UpdateGitConfigControls();
+        UpdateTextDiffControls();
     }
 }

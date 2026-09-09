@@ -56,6 +56,34 @@ public sealed class GitRepositoryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task WorkingDiffCanHideWhitespaceOnlyChangesWithoutChangingDefault()
+    {
+        WriteFile(
+            "tracked.txt",
+            "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\n");
+        Commit("initial");
+        WriteFile(
+            "tracked.txt",
+            "one\n two  \nthree\nfour\nfive\nsix\nseven\neight\nchanged\nten\neleven\ntwelve\n");
+
+        var service = new GitRepositoryService();
+        var change = Assert.Single((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+
+        var baseline = await service.GetUnstagedDiffAsync(repositoryRoot, change, CancellationToken.None);
+        Assert.Contains(baseline.Lines, line => line.Kind == DiffLineKind.Added && line.Text == " two  ");
+        Assert.Contains(baseline.Lines, line => line.Kind == DiffLineKind.Added && line.Text == "changed");
+
+        var hidden = await service.GetUnstagedDiffAsync(
+            repositoryRoot,
+            change,
+            CancellationToken.None,
+            hideWhitespaceChanges: true);
+        Assert.DoesNotContain(hidden.Lines, line => line.Text == " two  ");
+        Assert.Contains(hidden.Lines, line => line.Kind == DiffLineKind.Added && line.Text == "changed");
+        Assert.Equal(" two  ", File.ReadAllLines(Path.Combine(repositoryRoot, "tracked.txt"))[1]);
+    }
+
+    [Fact]
     public void StatusAheadBehindParsingPreservesDivergedCounts()
     {
         GitRepositoryService.ParseAheadBehind("+3 -2", out var ahead, out var behind);

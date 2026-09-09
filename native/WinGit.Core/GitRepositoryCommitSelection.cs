@@ -159,7 +159,8 @@ public sealed partial class GitRepositoryService
         string root,
         CommitSelectionSnapshot snapshot,
         FileChange file,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool hideWhitespaceChanges = false)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(file);
@@ -195,9 +196,14 @@ public sealed partial class GitRepositoryService
             "--find-copies",
             snapshot.FirstParentBaselineId,
             snapshot.LastSelectedCommitId,
-            "--",
-            ToLiteralPathSpec(path),
         };
+        if (hideWhitespaceChanges)
+        {
+            arguments.Add("--ignore-all-space");
+        }
+
+        arguments.Add("--");
+        arguments.Add(ToLiteralPathSpec(path));
         AddOldPath(arguments, repositoryRoot, file.OldPath, path);
 
         var result = await processRunner.RunAsync(
