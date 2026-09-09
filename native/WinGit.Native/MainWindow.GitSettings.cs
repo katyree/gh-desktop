@@ -6,12 +6,17 @@ namespace WinGit.Native;
 
 public sealed partial class MainWindow
 {
+    private readonly Dictionary<string, GitConfigValues> gitConfigDrafts =
+        new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenSource? gitConfigCancellation;
     private GitConfigValues? globalGitConfigValues;
     private GitConfigValues? localGitConfigValues;
     private string? gitConfigLoadedRoot;
+    private GitConfigScope? gitConfigFieldScope;
+    private string? gitConfigFieldRoot;
     private long gitConfigGeneration;
     private bool gitConfigControlsInitialized;
+    private bool gitConfigFieldsReady;
     private bool loadingGitConfigScope;
     private bool gitConfigLoading;
 
@@ -36,6 +41,7 @@ public sealed partial class MainWindow
             return;
         }
 
+        CaptureCurrentGitConfigDraft();
         gitConfigCancellation?.Cancel();
         var cancellation = new CancellationTokenSource();
         gitConfigCancellation = cancellation;
@@ -62,6 +68,7 @@ public sealed partial class MainWindow
             globalGitConfigValues = await globalTask;
             localGitConfigValues = await localTask;
             gitConfigLoadedRoot = root;
+            gitConfigFieldsReady = true;
             ApplySelectedGitConfigValues();
             GitConfigScopeStatusText.Text = BuildGitConfigScopeStatus();
         }
@@ -76,6 +83,7 @@ public sealed partial class MainWindow
                 globalGitConfigValues = null;
                 localGitConfigValues = null;
                 gitConfigLoadedRoot = null;
+                gitConfigFieldsReady = true;
                 ApplySelectedGitConfigValues();
                 GitConfigScopeStatusText.Text = "Git configuration could not be read. Refresh to try again.";
                 ShowError("Unable to read Git configuration", exception);
@@ -103,6 +111,7 @@ public sealed partial class MainWindow
             return;
         }
 
+        CaptureCurrentGitConfigDraft();
         ApplySelectedGitConfigValues();
         UpdateGitConfigControls();
         _ = EnsureGitConfigLoadedAsync();
@@ -135,6 +144,7 @@ public sealed partial class MainWindow
             return;
         }
 
+        CaptureCurrentGitConfigDraft();
         if (!string.Equals(gitConfigLoadedRoot, root, StringComparison.OrdinalIgnoreCase))
         {
             GitConfigScopeStatusText.Text = "Git configuration changed context. Refreshing before save…";
@@ -228,6 +238,26 @@ public sealed partial class MainWindow
                 return;
             }
 
+            var savedValues = new GitConfigValues(
+                userNameChanged ? userName : original?.UserName,
+                userEmailChanged ? userEmail : original?.UserEmail,
+                defaultBranchChanged ? defaultBranch : original?.DefaultBranch);
+            if (scope == GitConfigScope.Local)
+            {
+                localGitConfigValues = savedValues;
+            }
+            else
+            {
+                globalGitConfigValues = savedValues;
+            }
+
+            var draftKey = GetGitConfigDraftKey(scope, root);
+            if (draftKey is not null)
+            {
+                gitConfigDrafts.Remove(draftKey);
+            }
+
+            ApplySelectedGitConfigValues();
             StatusText.Text = $"Saved {FormatGitConfigScope(scope)} Git configuration.";
             await EnsureGitConfigLoadedAsync();
         }
@@ -252,9 +282,12 @@ public sealed partial class MainWindow
         var selected = scope == GitConfigScope.Local
             ? localGitConfigValues
             : globalGitConfigValues;
-        GitConfigUserNameBox.Text = selected?.UserName ?? string.Empty;
-        GitConfigUserEmailBox.Text = selected?.UserEmail ?? string.Empty;
-        GitConfigDefaultBranchBox.Text = selected?.DefaultBranch ?? string.Empty;
+        var displayed = GetGitConfigDraft(scope, repositoryRoot) ?? selected;
+        gitConfigFieldScope = scope;
+        gitConfigFieldRoot = repositoryRoot;
+        GitConfigUserNameBox.Text = displayed?.UserName ?? string.Empty;
+        GitConfigUserEmailBox.Text = displayed?.UserEmail ?? string.Empty;
+        GitConfigDefaultBranchBox.Text = displayed?.DefaultBranch ?? string.Empty;
         GitConfigUserNameScopeText.Text = DescribeGitConfigValue(
             "user.name",
             selected?.UserName,
@@ -271,6 +304,106 @@ public sealed partial class MainWindow
             globalGitConfigValues?.DefaultBranch,
             scope);
     }
+
+    private void CaptureCurrentGitConfigDraft()
+    {
+        if (!gitConfigControlsInitialized
+            || !gitConfigFieldsReady
+            || gitConfigFieldScope is not GitConfigScope scope)
+        {
+            return;
+        }
+
+        var draftKey = GetGitConfigDraftKey(scope, gitConfigFieldRoot);
+        if (draftKey is null)
+        {
+            return;
+        }
+
+        var draft = new GitConfigValues(
+            GitConfigUserNameBox.Text,
+            GitConfigUserEmailBox.Text,
+            GitConfigDefaultBranchBox.Text);
+        var loaded = GetLoadedGitConfigValues(scope, gitConfigFieldRoot);
+        if (loaded is null)
+        {
+            if (gitConfigDrafts.ContainsKey(draftKey) || HasGitConfigValues(draft))
+            {
+                gitConfigDrafts[draftKey] = draft;
+            }
+
+            return;
+        }
+
+        if (GitConfigValuesEqual(draft, loaded))
+        {
+            gitConfigDrafts.Remove(draftKey);
+        }
+        else
+        {
+            gitConfigDrafts[draftKey] = draft;
+        }
+    }
+
+    private GitConfigValues? GetLoadedGitConfigValues(
+        GitConfigScope scope,
+        string? root)
+    {
+        if (!string.Equals(gitConfigLoadedRoot, root, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return scope == GitConfigScope.Local
+            ? localGitConfigValues
+            : globalGitConfigValues;
+    }
+
+    private GitConfigValues? GetGitConfigDraft(
+        GitConfigScope scope,
+        string? root)
+    {
+        var draftKey = GetGitConfigDraftKey(scope, root);
+        return draftKey is not null && gitConfigDrafts.TryGetValue(draftKey, out var draft)
+            ? draft
+            : null;
+    }
+
+    private static string? GetGitConfigDraftKey(GitConfigScope scope, string? root)
+    {
+        if (scope == GitConfigScope.Global)
+        {
+            return "global";
+        }
+
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            return null;
+        }
+
+        return $"local:{NormalizeGitConfigRoot(root)}";
+    }
+
+    private static string NormalizeGitConfigRoot(string root)
+    {
+        var fullPath = Path.GetFullPath(root);
+        var pathRoot = Path.GetPathRoot(fullPath);
+        return string.Equals(fullPath, pathRoot, StringComparison.OrdinalIgnoreCase)
+            ? fullPath
+            : fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    private static bool GitConfigValuesEqual(
+        GitConfigValues left,
+        GitConfigValues right) =>
+        string.Equals(left.UserName ?? string.Empty, right.UserName ?? string.Empty, StringComparison.Ordinal)
+        && string.Equals(left.UserEmail ?? string.Empty, right.UserEmail ?? string.Empty, StringComparison.Ordinal)
+        && string.Equals(left.DefaultBranch ?? string.Empty, right.DefaultBranch ?? string.Empty, StringComparison.Ordinal);
+
+    private static bool HasGitConfigValues(GitConfigValues values) =>
+        !string.IsNullOrEmpty(values.UserName)
+        || !string.IsNullOrEmpty(values.UserEmail)
+        || !string.IsNullOrEmpty(values.DefaultBranch);
 
     private void UpdateGitConfigControls()
     {
