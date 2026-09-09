@@ -53,15 +53,37 @@ internal sealed class NativeSettings
 /// </summary>
 internal static class NativeSettingsStore
 {
+    private const string SettingsDirectoryEnvironmentVariable =
+        "WINGIT_NATIVE_SETTINGS_DIRECTORY";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
     };
     private static readonly SemaphoreSlim SaveGate = new(1, 1);
 
-    private static string SettingsDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "WinGit.Native");
+    private static string SettingsDirectory
+    {
+        get
+        {
+            var overridePath = Environment.GetEnvironmentVariable(
+                SettingsDirectoryEnvironmentVariable,
+                EnvironmentVariableTarget.Process);
+            if (overridePath is null)
+            {
+                return Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "WinGit.Native");
+            }
+
+            if (string.IsNullOrWhiteSpace(overridePath) || !Path.IsPathFullyQualified(overridePath))
+            {
+                throw new InvalidOperationException(
+                    $"{SettingsDirectoryEnvironmentVariable} must be an absolute, non-empty path when set.");
+            }
+
+            return overridePath;
+        }
+    }
 
     private static string SettingsPath => Path.Combine(SettingsDirectory, "settings.json");
 

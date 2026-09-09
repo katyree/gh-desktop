@@ -27,6 +27,13 @@ login uses a separate `%LOCALAPPDATA%\WinGit.Native\codex` profile when that
 work unit is implemented. The native app uses WinUI controls and its C# core.
 The Electron renderer and profile are not runtime dependencies.
 
+For isolated native UI verification, set the process-local
+`WINGIT_NATIVE_SETTINGS_DIRECTORY` to an absolute, writable path. Setting
+`LOCALAPPDATA` for a child process does not redirect Windows
+`Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)`.
+This override applies only to `NativeSettingsStore`. Isolate account storage
+separately before using account screens.
+
 ## Native-specific pitfalls
 
 - Normalize CRLF and lone CR from WinUI multiline `TextBox` values to LF at the

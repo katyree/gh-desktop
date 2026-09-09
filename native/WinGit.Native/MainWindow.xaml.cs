@@ -18,7 +18,7 @@ namespace WinGit.Native;
 
 public sealed partial class MainWindow : Window
 {
-    private readonly GitRepositoryService repositoryService = NativeGitRuntime.CreateRepositoryService();
+    private readonly GitRepositoryService repositoryService;
     private readonly ObservableCollection<ChangeRow> changeRows = [];
     private readonly ObservableCollection<ChangeRow> stagedChangeRows = [];
     private readonly ObservableCollection<ChangeRow> unstagedChangeRows = [];
@@ -68,8 +68,9 @@ public sealed partial class MainWindow : Window
     private string? historyCacheRoot;
     private string? historyCacheHeadId;
 
-    public MainWindow()
+    public MainWindow(string gitExecutablePath)
     {
+        repositoryService = new GitRepositoryService(gitExecutablePath);
         InitializeComponent();
         InitializeApplicationCommandAccelerators();
         InitializeThemeSynchronization();

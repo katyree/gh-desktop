@@ -13,10 +13,15 @@ public partial class App : Application
         InitializeComponent();
     }
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         CommandLineArguments = Environment.GetCommandLineArgs();
-        mainWindow = new MainWindow();
+        var gitRuntime = await NativeGitRuntime.ValidateAsync();
+        mainWindow = gitRuntime.IsValid
+            ? new MainWindow(gitRuntime.GitExecutablePath)
+            : new NativeGitRecoveryWindow(
+                gitRuntime.GitExecutablePath,
+                gitRuntime.FailureReason);
         mainWindow.Activate();
     }
 }
