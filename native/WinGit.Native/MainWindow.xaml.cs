@@ -350,6 +350,11 @@ public sealed partial class MainWindow : Window
 
     private void ShowWorkspace(string workspace)
     {
+        if (currentWorkspace == "settings" && workspace != "settings")
+        {
+            CaptureCurrentGitConfigDraft();
+        }
+
         if (workspace != "changes")
         {
             ClearConflictEditorState(discardPendingDraft: true);
@@ -438,6 +443,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        CaptureCurrentGitConfigDraft();
         InvalidateSelectedChangesReviewState();
         CancelCommitMessageGeneration();
         var operation = BeginOperation("Opening repository…");
@@ -501,6 +507,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        CaptureCurrentGitConfigDraft();
         InvalidateSelectedChangesReviewState();
         var workspaceBeforeRefresh = currentWorkspace;
         var previousRoot = repositoryRoot;
@@ -1112,6 +1119,7 @@ public sealed partial class MainWindow : Window
 
     private void ResetRepositoryView()
     {
+        CaptureCurrentGitConfigDraft();
         repositoryRoot = null;
         currentStatus = null;
         ClearRepositoryScopedState();
