@@ -60,6 +60,7 @@ internal static class NativeSettingsStore
 {
     private const string SettingsDirectoryEnvironmentVariable =
         "WINGIT_NATIVE_SETTINGS_DIRECTORY";
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
@@ -88,13 +89,13 @@ internal static class NativeSettingsStore
                     "WinGit.Native");
             }
 
-            if (string.IsNullOrWhiteSpace(overridePath) || !Path.IsPathFullyQualified(overridePath))
+            if (Path.IsPathFullyQualified(overridePath))
             {
-                throw new InvalidOperationException(
-                    $"{SettingsDirectoryEnvironmentVariable} must contain a fully qualified path.");
+                return overridePath;
             }
 
-            return overridePath;
+            throw new InvalidOperationException(
+                $"{SettingsDirectoryEnvironmentVariable} must contain a fully qualified path.");
         }
     }
 
