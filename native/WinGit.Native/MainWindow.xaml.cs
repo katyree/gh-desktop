@@ -118,7 +118,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (captureOptions is { View: "repository-open-check" or "repository-picker-check" }
+        if (captureOptions is { View: "repository-open-check" or "repository-picker-check" or "history-selection-check" }
             && TryGetHandlerCheckSettingsError() is { } settingsError)
         {
             await FailCaptureAsync(settingsError, App.CommandLineArguments);
@@ -1470,7 +1470,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private (long Generation, CancellationToken Token) BeginOperation(string status)
+    private (long Generation, CancellationToken Token) BeginOperation(string status, bool allowHistorySelection = false)
     {
         // Mutation entry points mark the shared state before asking for an
         // operation token. Keep review capture eligible: it starts while
@@ -1484,7 +1484,7 @@ public sealed partial class MainWindow : Window
         operationCancellation?.Dispose();
         operationCancellation = new CancellationTokenSource();
         operationGeneration++;
-        SetBusy(true, status);
+        SetBusy(true, status, allowHistorySelection: allowHistorySelection);
         return (operationGeneration, operationCancellation.Token);
     }
 
@@ -1501,7 +1501,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void SetBusy(bool busy, string status)
+    private void SetBusy(bool busy, string status, bool allowHistorySelection = false)
     {
         BusyRing.IsActive = busy;
         BusyRing.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
@@ -1514,7 +1514,7 @@ public sealed partial class MainWindow : Window
         PartialDiffList.IsEnabled = !busy && !mutationInProgress;
         HistoryBranchFilterBox.IsEnabled = !busy && !mutationInProgress;
         HistoryComparisonBranchList.IsEnabled = !busy && !mutationInProgress;
-        HistoryList.IsEnabled = !busy && !mutationInProgress;
+        HistoryList.IsEnabled = !mutationInProgress && (!busy || allowHistorySelection);
         HistoryFilesList.IsEnabled = !busy && !mutationInProgress;
         BranchesList.IsEnabled = !busy && !mutationInProgress;
         WorktreesList.IsEnabled = !busy && !mutationInProgress;

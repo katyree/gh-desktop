@@ -95,9 +95,9 @@ internal sealed record NativeCaptureOptions(
         }
 
         view = string.IsNullOrWhiteSpace(view) ? "changes" : view.ToLowerInvariant();
-        if (view is not ("changes" or "history" or "settings" or "branches" or "worktrees" or "stashes" or "remotes" or "tags" or "repository-open-check" or "repository-picker-check"))
+        if (view is not ("changes" or "history" or "settings" or "branches" or "worktrees" or "stashes" or "remotes" or "tags" or "repository-open-check" or "repository-picker-check" or "history-selection-check"))
         {
-            error = "--view must be changes, history, settings, branches, worktrees, stashes, remotes, tags, repository-open-check, or repository-picker-check.";
+            error = "--view must be changes, history, settings, branches, worktrees, stashes, remotes, tags, repository-open-check, repository-picker-check, or history-selection-check.";
             return false;
         }
 

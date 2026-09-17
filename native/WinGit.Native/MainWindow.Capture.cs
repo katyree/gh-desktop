@@ -13,7 +13,7 @@ public sealed partial class MainWindow
     {
         try
         {
-            if (options.View is "repository-open-check" or "repository-picker-check")
+            if (options.View is "repository-open-check" or "repository-picker-check" or "history-selection-check")
             {
                 if (string.IsNullOrWhiteSpace(options.RepositoryPath))
                 {
@@ -27,9 +27,13 @@ public sealed partial class MainWindow
                 {
                     await RunRepositoryOpenCheckAsync(options);
                 }
-                else
+                else if (options.View == "repository-picker-check")
                 {
                     await RunRepositoryPickerCheckAsync(options);
+                }
+                else
+                {
+                    await RunHistorySelectionCheckAsync(options);
                 }
 
                 return;
