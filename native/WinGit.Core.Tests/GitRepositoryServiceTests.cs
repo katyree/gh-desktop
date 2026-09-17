@@ -84,6 +84,157 @@ public sealed class GitRepositoryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task WorkingDiffTruncatesOversizedRawDiffLine()
+    {
+        WriteFile("tracked.txt", "before\n");
+        Commit("initial");
+        WriteFile("tracked.txt", new string('x', 5_000) + "\n");
+
+        var service = new GitRepositoryService();
+        var change = Assert.Single((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+        var diff = await service.GetWorkingDiffAsync(repositoryRoot, change, CancellationToken.None);
+
+        Assert.Empty(diff.Lines);
+        Assert.False(diff.IsBinary);
+        Assert.True(diff.IsTruncated);
+        Assert.Equal(
+            $"The diff exceeds the native viewer limit of {100_000:N0} lines or {5_000:N0} characters per raw diff line and was not rendered.",
+            diff.Message);
+        Assert.Null(diff.ImageComparison);
+        Assert.Null(diff.SubmoduleComparison);
+    }
+
+    [Fact]
+    public async Task WorkingDiffAcceptsDiffLinesAtTheRenderedLengthBoundary()
+    {
+        WriteFile("tracked.txt", "before\n");
+        Commit("initial");
+        WriteFile("tracked.txt", new string('x', 4_999) + "\n");
+
+        var service = new GitRepositoryService();
+        var change = Assert.Single((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+        var diff = await service.GetWorkingDiffAsync(repositoryRoot, change, CancellationToken.None);
+
+        Assert.False(diff.IsTruncated);
+        Assert.Null(diff.Message);
+        var added = Assert.Single(diff.Lines, line => line.Kind == DiffLineKind.Added);
+        Assert.Equal(4_999, added.Text.Length);
+    }
+
+    [Fact]
+    public async Task WorkingDiffTruncatesOversizedLineCount()
+    {
+        var lines = new StringBuilder();
+        for (var i = 0; i < 100_001; i++)
+        {
+            lines.Append("x\n");
+        }
+
+        WriteFile("tracked.txt", "before\n");
+        Commit("initial");
+        WriteFile("tracked.txt", lines.ToString());
+
+        var service = new GitRepositoryService();
+        var change = Assert.Single((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+        var diff = await service.GetWorkingDiffAsync(repositoryRoot, change, CancellationToken.None);
+
+        Assert.Empty(diff.Lines);
+        Assert.False(diff.IsBinary);
+        Assert.True(diff.IsTruncated);
+        Assert.Equal(
+            $"The diff exceeds the native viewer limit of {100_000:N0} lines or {5_000:N0} characters per raw diff line and was not rendered.",
+            diff.Message);
+    }
+
+    [Fact]
+    public async Task WorkingDiffTruncatesDiffOutputBeyondTheByteLimit()
+    {
+        var oversized = new StringBuilder();
+        for (var i = 0; i < 16 * 1024 + 1; i++)
+        {
+            oversized.Append(new string('x', 1_023) + '\n');
+        }
+
+        WriteFile("tracked.txt", "before\n");
+        Commit("initial");
+        WriteFile("tracked.txt", oversized.ToString());
+
+        var service = new GitRepositoryService();
+        var change = Assert.Single((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+        var diff = await service.GetWorkingDiffAsync(repositoryRoot, change, CancellationToken.None);
+
+        Assert.Empty(diff.Lines);
+        Assert.False(diff.IsBinary);
+        Assert.True(diff.IsTruncated);
+        Assert.Equal(
+            $"The diff exceeds the native viewer's {16} MiB output limit and was not rendered.",
+            diff.Message);
+        Assert.Null(diff.ImageComparison);
+        Assert.Null(diff.SubmoduleComparison);
+    }
+
+    [Fact]
+    public async Task UntrackedDiffTruncatesOversizedLineCount()
+    {
+        var lines = new StringBuilder();
+        for (var i = 0; i < 100_001; i++)
+        {
+            lines.Append("x\n");
+        }
+
+        WriteFile("untracked.txt", lines.ToString());
+
+        var service = new GitRepositoryService();
+        var change = Assert.Single((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+        var diff = await service.GetWorkingDiffAsync(repositoryRoot, change, CancellationToken.None);
+
+        Assert.Empty(diff.Lines);
+        Assert.False(diff.IsBinary);
+        Assert.True(diff.IsTruncated);
+        Assert.Equal(
+            $"The file exceeds the native viewer limit of {100_000:N0} lines or {5_000:N0} characters per line and was not rendered.",
+            diff.Message);
+    }
+
+    [Fact]
+    public async Task UntrackedDiffAcceptsFileContentAtTheRenderedLineBoundary()
+    {
+        WriteFile("untracked.txt", new string('x', 5_000) + "\n");
+
+        var service = new GitRepositoryService();
+        var change = Assert.Single((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+        var diff = await service.GetWorkingDiffAsync(repositoryRoot, change, CancellationToken.None);
+
+        Assert.False(diff.IsTruncated);
+        Assert.Null(diff.Message);
+        var line = Assert.Single(diff.Lines);
+        Assert.Equal(DiffLineKind.Added, line.Kind);
+        Assert.Equal(1, line.NewLineNumber);
+        Assert.Equal(new string('x', 5_000), line.Text);
+    }
+
+    [Fact]
+    public async Task UntrackedDiffTruncatesFilesBeyondTheByteLimit()
+    {
+        var path = Path.Combine(repositoryRoot, "untracked.bin");
+        await File.WriteAllBytesAsync(
+            path,
+            new byte[16 * 1024 * 1024 + 1],
+            CancellationToken.None);
+
+        var service = new GitRepositoryService();
+        var change = Assert.Single((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+        var diff = await service.GetWorkingDiffAsync(repositoryRoot, change, CancellationToken.None);
+
+        Assert.Empty(diff.Lines);
+        Assert.False(diff.IsBinary);
+        Assert.True(diff.IsTruncated);
+        Assert.Equal(
+            $"The file exceeds the native viewer's {16} MiB file limit and was not rendered.",
+            diff.Message);
+    }
+
+    [Fact]
     public void StatusAheadBehindParsingPreservesDivergedCounts()
     {
         GitRepositoryService.ParseAheadBehind("+3 -2", out var ahead, out var behind);
