@@ -118,7 +118,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (captureOptions is { View: "repository-open-check" or "repository-picker-check" }
+        if (captureOptions is { View: "repository-open-check" or "repository-picker-check" or "history-selection-check" }
             && TryGetHandlerCheckSettingsError() is { } settingsError)
         {
             await FailCaptureAsync(settingsError, App.CommandLineArguments);
@@ -555,10 +555,15 @@ public sealed partial class MainWindow : Window
         CaptureCurrentGitConfigDraft();
         InvalidateSelectedChangesReviewState();
         var workspaceBeforeRefresh = currentWorkspace;
+        var comparisonSnapshotBeforeRefresh = workspaceBeforeRefresh == "history"
+            && historyComparisonActive
+            ? historyComparisonSnapshot
+            : null;
         var previousRoot = repositoryRoot;
         var previousHeadId = currentStatus?.HeadId;
         var shouldReloadVisibleHistory = false;
         var shouldReloadSubmodules = workspaceBeforeRefresh == "submodules";
+        BranchComparisonSnapshotStaleException? comparisonStaleException = null;
         currentWorkspace = "repository-refreshing";
         var operation = BeginOperation("Refreshing repository…");
         try
@@ -578,6 +583,27 @@ public sealed partial class MainWindow : Window
                 InvalidateHistoryCache();
                 shouldReloadVisibleHistory = workspaceBeforeRefresh == "history";
             }
+            else if (comparisonSnapshotBeforeRefresh is not null
+                && string.Equals(repositoryRoot, previousRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    await repositoryService.RevalidateBranchComparisonSnapshotAsync(
+                        status.RootPath,
+                        comparisonSnapshotBeforeRefresh,
+                        operation.Token);
+                }
+                catch (BranchComparisonSnapshotStaleException exception)
+                {
+                    comparisonStaleException = exception;
+                }
+            }
+
+            if (!IsCurrent(operation.Generation, operation.Token)
+                || !string.Equals(repositoryRoot, previousRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
 
             if (!string.Equals(previousRoot, status.RootPath, StringComparison.OrdinalIgnoreCase)
                 || !string.Equals(previousHeadId, status.HeadId, StringComparison.OrdinalIgnoreCase))
@@ -591,8 +617,24 @@ public sealed partial class MainWindow : Window
             repositoryRoot = status.RootPath;
             ApplyStatus(status);
             await LoadGitOperationStateAsync(status.RootPath, operation.Generation, operation.Token);
+            if (!IsCurrent(operation.Generation, operation.Token)
+                || !string.Equals(repositoryRoot, status.RootPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
             ShowWorkspace(workspaceBeforeRefresh);
-            StatusText.Text = "Repository refreshed";
+            if (comparisonStaleException is not null
+                && historyComparisonActive
+                && ReferenceEquals(historyComparisonSnapshot, comparisonSnapshotBeforeRefresh))
+            {
+                ShowError("Comparison changed", comparisonStaleException);
+                ClearStaleHistoryComparison(comparisonStaleException.Message);
+            }
+            else
+            {
+                StatusText.Text = "Repository refreshed";
+            }
         }
         catch (OperationCanceledException) when (operation.Token.IsCancellationRequested)
         {
@@ -1470,7 +1512,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private (long Generation, CancellationToken Token) BeginOperation(string status)
+    private (long Generation, CancellationToken Token) BeginOperation(string status, bool allowHistorySelection = false)
     {
         // Mutation entry points mark the shared state before asking for an
         // operation token. Keep review capture eligible: it starts while
@@ -1484,7 +1526,7 @@ public sealed partial class MainWindow : Window
         operationCancellation?.Dispose();
         operationCancellation = new CancellationTokenSource();
         operationGeneration++;
-        SetBusy(true, status);
+        SetBusy(true, status, allowHistorySelection: allowHistorySelection);
         return (operationGeneration, operationCancellation.Token);
     }
 
@@ -1501,7 +1543,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void SetBusy(bool busy, string status)
+    private void SetBusy(bool busy, string status, bool allowHistorySelection = false)
     {
         BusyRing.IsActive = busy;
         BusyRing.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
@@ -1514,7 +1556,7 @@ public sealed partial class MainWindow : Window
         PartialDiffList.IsEnabled = !busy && !mutationInProgress;
         HistoryBranchFilterBox.IsEnabled = !busy && !mutationInProgress;
         HistoryComparisonBranchList.IsEnabled = !busy && !mutationInProgress;
-        HistoryList.IsEnabled = !busy && !mutationInProgress;
+        HistoryList.IsEnabled = !mutationInProgress && (!busy || allowHistorySelection);
         HistoryFilesList.IsEnabled = !busy && !mutationInProgress;
         BranchesList.IsEnabled = !busy && !mutationInProgress;
         WorktreesList.IsEnabled = !busy && !mutationInProgress;

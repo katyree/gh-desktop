@@ -13,7 +13,21 @@ public sealed partial class MainWindow
     {
         try
         {
-            if (options.View is "repository-open-check" or "repository-picker-check")
+            if (options.View == "history-comparison-check")
+            {
+                if (string.IsNullOrWhiteSpace(options.RepositoryPath))
+                {
+                    await FailCaptureAsync(
+                        "--view history-comparison-check requires --repository <fixture run root>.",
+                        App.CommandLineArguments);
+                    return;
+                }
+
+                await RunHistoryComparisonCheckAsync(options);
+                return;
+            }
+
+            if (options.View is "repository-open-check" or "repository-picker-check" or "history-selection-check")
             {
                 if (string.IsNullOrWhiteSpace(options.RepositoryPath))
                 {
@@ -27,9 +41,13 @@ public sealed partial class MainWindow
                 {
                     await RunRepositoryOpenCheckAsync(options);
                 }
-                else
+                else if (options.View == "repository-picker-check")
                 {
                     await RunRepositoryPickerCheckAsync(options);
+                }
+                else
+                {
+                    await RunHistorySelectionCheckAsync(options);
                 }
 
                 return;

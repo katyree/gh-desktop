@@ -88,6 +88,67 @@ These files show the native Changes, History, Settings, Branches, and Worktrees
 surfaces. They are local verification artifacts and are ignored by
 `native/.gitignore`.
 
+## History selection verification (task 13)
+
+From the task worktree, build with the runtime package roots set to the existing
+`app/node_modules/dugite` and `app/node_modules/@openai/codex-win32-x64`
+packages in the main checkout. Keep auditing and runtime integrity enabled.
+
+```powershell
+./native/build.ps1 -Configuration Release -Runtime win-x64 -OutputPath ./native/artifacts/task13-verified-20260917
+dotnet test ./native/WinGit.Core.Tests/WinGit.Core.Tests.csproj --filter FullyQualifiedName~GitRepositoryCommitSelectionTests
+```
+
+Use synthetic repositories `history-a` and `history-b` under one fixture parent.
+Each must have exactly three commits named `<name> first`, `<name> second`, and
+`<name> empty` (empty HEAD). The first commit adds `history.txt` containing
+`<name> first`; the second appends `<name> second`. Create fixtures with the
+same Windows identity used to launch the app. Do not change global Git trust.
+
+Copy the complete published tree to a fresh run directory. Verify `App.xbf`,
+`MainWindow.xbf`, `NativeImageDiffView.xbf`, `NativeSubmoduleDiffView.xbf`,
+`WinGit.Native.pri`, and `Assets/icon-logo.ico` there. After confirming no other
+worker is using the native app, run with absolute paths:
+
+```powershell
+$env:WINGIT_NATIVE_SETTINGS_DIRECTORY = '<absolute-isolated-profile-directory>'
+& '<absolute-run-directory>/WinGit.Native.exe' --capture '<absolute-output.png>' --view history-selection-check --repository '<absolute-fixture-parent>' --theme dark
+```
+
+The app exits automatically and writes `<absolute-output.png>.checks.txt`.
+This is handler-driven real WinUI/Git verification, not mouse-driven testing.
+
+2026-09-17 evidence, relative to this task worktree's `native/artifacts`:
+
+- `task13-boundary-red-20260916.png.checks.txt`: navigation away failed because
+  pending History work populated files/diff and replaced the Changes status.
+- `task13-workspace-guard-20260916.png.checks.txt`: workspace protection passed;
+  repository-open locking failed because HistoryList remained enabled.
+- `task13-verified-20260917.png.checks.txt`: 33 checks passed, exit 0. Covers
+  rapid commits, metadata/diff contents, clearing pending commit/file reads,
+  empty commits, navigation away, repository A-to-B, refresh/open locking,
+  HistoryList enabled during file/diff reads, selected navigation, visible diff
+  ItemsSource, and idle state before capture.
+- `task13-verified-20260917.png`: image review reported selected History
+  navigation and a visible diff. Windows OCR independently read the rendered
+  `history-b second` metadata, `history.txt`, `history-b first` and
+  `history-b second` diff lines, and `Showing 22beeff / history.txt` status.
+- Release restore/build/publish passed with zero warnings/errors; focused Core
+  commit-selection tests passed 2/2; `git diff --check` passed.
+- Both fixtures remained clean with HEADs
+  `f1bf62a797ff26d276d9b4dc94037d10ea06e9ac` (A) and
+  `4a00c6dccc77a3c9da0be6b8f4cdd65f8cd63e40` (B).
+
+Limits: no mouse-driven interaction, fault-injected late-error test, or
+image/submodule race verification. Task 14 owns comparison snapshot revalidation;
+task 12 owns file-list enablement. During integration, retain both named optional
+`allowHistorySelection` and task 12's `allowDiffSelection` arguments. M16–17
+remain Partial in the inventory rather than claiming full interaction coverage.
+Integration was not attempted: its checkout was clean at
+`bf38978e43878203e5ea160a7ca7392c0e7eb894`, but exclusive coordinator ownership
+could not be established from the stale local records. Artifacts and isolated
+profiles are ignored and must not be committed.
+
 ## Current native slice
 
 The captured first slice opens a local repository, shows its branch and changed

@@ -19,11 +19,14 @@ public sealed partial class MainWindow
 
         SetHistoryComparisonSummary(null);
 
-        var operation = BeginOperation("Loading history…");
+        var root = repositoryRoot;
+        var operation = BeginOperation("Loading history…", allowHistorySelection: true);
         try
         {
-            var commits = await repositoryService.GetHistoryAsync(repositoryRoot, 100, operation.Token);
-            if (!IsCurrent(operation.Generation, operation.Token))
+            var commits = await repositoryService.GetHistoryAsync(root, 100, operation.Token);
+            if (!IsCurrent(operation.Generation, operation.Token)
+                || currentWorkspace != "history"
+                || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -44,7 +47,7 @@ public sealed partial class MainWindow
                 commitRows.Add(new CommitRow(commit));
             }
 
-            historyCacheRoot = repositoryRoot;
+            historyCacheRoot = root;
             historyCacheHeadId = currentStatus?.HeadId;
 
             HistoryCommitText.Text = commitRows.Count == 0 ? "No commits yet" : "Select a commit";
@@ -65,7 +68,9 @@ public sealed partial class MainWindow
         }
         catch (Exception exception)
         {
-            if (IsCurrent(operation.Generation, operation.Token))
+            if (IsCurrent(operation.Generation, operation.Token)
+                && currentWorkspace == "history"
+                && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
             {
                 ShowError("Unable to load history", exception);
                 HistoryCommitText.Text = "History unavailable";
@@ -128,11 +133,15 @@ public sealed partial class MainWindow
             return;
         }
 
-        var operation = BeginOperation("Loading commit files…");
+        var root = repositoryRoot;
+        var operation = BeginOperation("Loading commit files…", allowHistorySelection: true);
         try
         {
-            var files = await repositoryService.GetCommitFilesAsync(repositoryRoot, commit.Commit.Id, operation.Token);
-            if (!IsCurrent(operation.Generation, operation.Token) || !ReferenceEquals(selectedCommit, commit))
+            var files = await repositoryService.GetCommitFilesAsync(root, commit.Commit.Id, operation.Token);
+            if (!IsCurrent(operation.Generation, operation.Token)
+                || currentWorkspace != "history"
+                || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
+                || !ReferenceEquals(selectedCommit, commit))
             {
                 return;
             }
@@ -160,6 +169,8 @@ public sealed partial class MainWindow
         catch (Exception exception)
         {
             if (IsCurrent(operation.Generation, operation.Token)
+                && currentWorkspace == "history"
+                && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
                 && ReferenceEquals(selectedCommit, commit))
             {
                 ShowError("Unable to load commit files", exception);
@@ -204,16 +215,19 @@ public sealed partial class MainWindow
         HistoryDiffList.ItemsSource = historyDiffRows;
         InvalidateTextDiffCache(history: true);
         ShowHistoryDiffMessage("Loading diff…", "Reading the selected path from Git.");
-        var operation = BeginOperation($"Loading {file.Path}…");
+        var root = repositoryRoot;
+        var operation = BeginOperation($"Loading {file.Path}…", allowHistorySelection: true);
         try
         {
             var diff = await repositoryService.GetCommitDiffAsync(
-                repositoryRoot,
+                root,
                 commit.Commit.Id,
                 file.File,
                 operation.Token,
                 hideWhitespaceChanges);
             if (!IsCurrent(operation.Generation, operation.Token)
+                || currentWorkspace != "history"
+                || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
                 || !ReferenceEquals(selectedCommit, commit)
                 || !ReferenceEquals(selectedCommitFile, file))
             {
@@ -231,6 +245,8 @@ public sealed partial class MainWindow
                 HistoryDiffMessageText,
                 operation.Token);
             if (!IsCurrent(operation.Generation, operation.Token)
+                || currentWorkspace != "history"
+                || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
                 || !ReferenceEquals(selectedCommit, commit)
                 || !ReferenceEquals(selectedCommitFile, file))
             {
@@ -245,7 +261,11 @@ public sealed partial class MainWindow
         }
         catch (Exception exception)
         {
-            if (IsCurrent(operation.Generation, operation.Token))
+            if (IsCurrent(operation.Generation, operation.Token)
+                && currentWorkspace == "history"
+                && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
+                && ReferenceEquals(selectedCommit, commit)
+                && ReferenceEquals(selectedCommitFile, file))
             {
                 ShowError("Unable to load commit diff", exception);
                 ShowHistoryDiffMessage("Diff unavailable", exception.Message);

@@ -98,6 +98,13 @@ public sealed partial class MainWindow
                 .Where(row => row.SearchText.Contains(query, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
 
+        var selectedBranchIsFilteredOut = selectedHistoryComparisonBranch is not null
+            && !rows.Contains(selectedHistoryComparisonBranch);
+        if (selectedBranchIsFilteredOut)
+        {
+            ClearHistoryComparisonState(clearHistoryRows: true, clearBranchSelection: true);
+        }
+
         suppressHistoryComparisonSelection = true;
         try
         {
@@ -198,8 +205,18 @@ public sealed partial class MainWindow
         selectedCommit = null;
         selectedCommitFile = null;
         ClearHistoryCommitView("Loading branch comparison…", "Reading both branch tips and their commits from Git.");
+        SetHistoryComparisonSummary(null);
+        HistoryCommitText.Text = "Loading comparison…";
+        HistoryCommitSummaryText.Text = "Reading both branch tips and their commits from Git.";
 
         var operation = BeginOperation($"Comparing {comparisonReference}…");
+        bool IsCurrentHistoryOperation() => IsCurrent(operation.Generation, operation.Token)
+            && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
+            && currentWorkspace == "history"
+            && historyComparisonActive
+            && string.Equals(historyComparisonReference, comparisonReference, StringComparison.Ordinal)
+            && historyComparisonMode == comparisonMode;
+
         try
         {
             var snapshot = await repositoryService.CaptureBranchComparisonAsync(
@@ -208,12 +225,7 @@ public sealed partial class MainWindow
                 comparisonMode,
                 100,
                 operation.Token);
-            if (!IsCurrent(operation.Generation, operation.Token)
-                || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
-                || currentWorkspace != "history"
-                || !historyComparisonActive
-                || !string.Equals(historyComparisonReference, comparisonReference, StringComparison.Ordinal)
-                || historyComparisonMode != comparisonMode)
+            if (!IsCurrentHistoryOperation())
             {
                 return;
             }
@@ -235,7 +247,6 @@ public sealed partial class MainWindow
                 commitRows.Add(new CommitRow(commit));
             }
 
-            ApplyHistoryComparisonBranchFilter();
             SetHistoryComparisonSummary(snapshot);
             ClearHistoryCommitSelection();
             HistoryCommitText.Text = commitRows.Count == 0
@@ -259,15 +270,15 @@ public sealed partial class MainWindow
         }
         catch (BranchComparisonSnapshotStaleException exception)
         {
-            if (IsCurrent(operation.Generation, operation.Token))
+            if (IsCurrentHistoryOperation())
             {
                 ShowError("Comparison changed", exception);
-                ShowHistoryDiffMessage("Refresh required", exception.Message);
+                ClearStaleHistoryComparison(exception.Message);
             }
         }
         catch (Exception exception)
         {
-            if (IsCurrent(operation.Generation, operation.Token))
+            if (IsCurrentHistoryOperation())
             {
                 ShowError("Unable to compare branches", exception);
                 ShowHistoryDiffMessage("Comparison unavailable", exception.Message);
@@ -383,6 +394,8 @@ public sealed partial class MainWindow
         historyComparisonSnapshot = null;
         historyCommitSelectionSnapshot = null;
         selectedHistoryComparisonBranch = null;
+        selectedCommit = null;
+        selectedCommitFile = null;
 
         if (clearBranchSelection)
         {
@@ -408,6 +421,7 @@ public sealed partial class MainWindow
         HistorySelectionInfoText.Text = string.Empty;
         ShowHistoryOmittedCommitsButton.Visibility = Visibility.Collapsed;
         UpdateHistoryComparisonControls();
+        UpdateRepositoryCommandStates();
     }
 
     private void ResetHistoryComparisonState()
@@ -517,6 +531,7 @@ public sealed partial class MainWindow
             return false;
         }
 
+        historyCommitSelectionSnapshot = null;
         selectedCommit = null;
         selectedCommitFile = null;
         commitFileRows.Clear();
@@ -540,14 +555,27 @@ public sealed partial class MainWindow
             .OrderByDescending(row => commitRows.IndexOf(row))
             .Select(row => row.Commit.Id)
             .ToArray();
-        var operation = BeginOperation("Loading selected commits…");
+        var comparisonSnapshot = historyComparisonSnapshot;
+        var comparisonActive = historyComparisonActive;
+        var comparisonReference = historyComparisonReference;
+        var comparisonMode = historyComparisonMode;
+        var operation = BeginOperation("Loading selected commits…", allowHistorySelection: true);
+        bool IsCurrentHistoryOperation() => IsCurrent(operation.Generation, operation.Token)
+            && currentWorkspace == "history"
+            && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
+            && IsHistorySelectionCurrent(rows)
+            && ReferenceEquals(historyComparisonSnapshot, comparisonSnapshot)
+            && historyComparisonActive == comparisonActive
+            && string.Equals(historyComparisonReference, comparisonReference, StringComparison.Ordinal)
+            && historyComparisonMode == comparisonMode;
+
         try
         {
-            if (historyComparisonSnapshot is not null)
+            if (comparisonSnapshot is not null)
             {
                 await repositoryService.RevalidateBranchComparisonSnapshotAsync(
                     root,
-                    historyComparisonSnapshot,
+                    comparisonSnapshot,
                     operation.Token);
             }
 
@@ -557,9 +585,7 @@ public sealed partial class MainWindow
                 isContiguous,
                 1000,
                 operation.Token);
-            if (!IsCurrent(operation.Generation, operation.Token)
-                || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
-                || !IsHistorySelectionCurrent(rows))
+            if (!IsCurrentHistoryOperation())
             {
                 return true;
             }
@@ -605,9 +631,17 @@ public sealed partial class MainWindow
         {
             // A newer history selection owns the panel.
         }
+        catch (BranchComparisonSnapshotStaleException exception)
+        {
+            if (IsCurrentHistoryOperation())
+            {
+                ShowError("Comparison changed", exception);
+                ClearStaleHistoryComparison(exception.Message);
+            }
+        }
         catch (CommitSelectionSnapshotStaleException exception)
         {
-            if (IsCurrent(operation.Generation, operation.Token))
+            if (IsCurrentHistoryOperation())
             {
                 ShowError("History selection changed", exception);
                 ShowHistoryDiffMessage("Refresh required", exception.Message);
@@ -615,7 +649,7 @@ public sealed partial class MainWindow
         }
         catch (Exception exception)
         {
-            if (IsCurrent(operation.Generation, operation.Token))
+            if (IsCurrentHistoryOperation())
             {
                 ShowError("Unable to load selected commits", exception);
                 ShowHistoryDiffMessage("Selection unavailable", exception.Message);
@@ -643,14 +677,28 @@ public sealed partial class MainWindow
         HistoryDiffList.ItemsSource = historyDiffRows;
         InvalidateTextDiffCache(history: true);
         ShowHistoryDiffMessage("Loading combined diff…", "Reading the captured history range from Git.");
-        var operation = BeginOperation($"Loading {file.Path}…");
+        var comparisonSnapshot = historyComparisonSnapshot;
+        var comparisonActive = historyComparisonActive;
+        var comparisonReference = historyComparisonReference;
+        var comparisonMode = historyComparisonMode;
+        var operation = BeginOperation($"Loading {file.Path}…", allowHistorySelection: true);
+        bool IsCurrentHistoryOperation() => IsCurrent(operation.Generation, operation.Token)
+            && currentWorkspace == "history"
+            && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
+            && ReferenceEquals(historyCommitSelectionSnapshot, snapshot)
+            && ReferenceEquals(selectedCommitFile, file)
+            && ReferenceEquals(historyComparisonSnapshot, comparisonSnapshot)
+            && historyComparisonActive == comparisonActive
+            && string.Equals(historyComparisonReference, comparisonReference, StringComparison.Ordinal)
+            && historyComparisonMode == comparisonMode;
+
         try
         {
-            if (historyComparisonSnapshot is not null)
+            if (comparisonSnapshot is not null)
             {
                 await repositoryService.RevalidateBranchComparisonSnapshotAsync(
                     root,
-                    historyComparisonSnapshot,
+                    comparisonSnapshot,
                     operation.Token);
             }
 
@@ -661,10 +709,7 @@ public sealed partial class MainWindow
                 file.File,
                 operation.Token,
                 hideWhitespaceChanges);
-            if (!IsCurrent(operation.Generation, operation.Token)
-                || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
-                || !ReferenceEquals(historyCommitSelectionSnapshot, snapshot)
-                || !ReferenceEquals(selectedCommitFile, file))
+            if (!IsCurrentHistoryOperation())
             {
                 return;
             }
@@ -679,10 +724,7 @@ public sealed partial class MainWindow
                 HistoryDiffMessageTitle,
                 HistoryDiffMessageText,
                 operation.Token);
-            if (!IsCurrent(operation.Generation, operation.Token)
-                || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
-                || !ReferenceEquals(historyCommitSelectionSnapshot, snapshot)
-                || !ReferenceEquals(selectedCommitFile, file))
+            if (!IsCurrentHistoryOperation())
             {
                 return;
             }
@@ -693,9 +735,17 @@ public sealed partial class MainWindow
         {
             // A newer history file selection owns the panel.
         }
+        catch (BranchComparisonSnapshotStaleException exception)
+        {
+            if (IsCurrentHistoryOperation())
+            {
+                ShowError("Comparison changed", exception);
+                ClearStaleHistoryComparison(exception.Message);
+            }
+        }
         catch (CommitSelectionSnapshotStaleException exception)
         {
-            if (IsCurrent(operation.Generation, operation.Token))
+            if (IsCurrentHistoryOperation())
             {
                 ShowError("History selection changed", exception);
                 ShowHistoryDiffMessage("Refresh required", exception.Message);
@@ -703,7 +753,7 @@ public sealed partial class MainWindow
         }
         catch (Exception exception)
         {
-            if (IsCurrent(operation.Generation, operation.Token))
+            if (IsCurrentHistoryOperation())
             {
                 ShowError("Unable to load combined diff", exception);
                 ShowHistoryDiffMessage("Combined diff unavailable", exception.Message);
