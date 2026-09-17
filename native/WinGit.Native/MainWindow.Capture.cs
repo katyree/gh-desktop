@@ -13,6 +13,20 @@ public sealed partial class MainWindow
     {
         try
         {
+            if (options.View == "history-comparison-check")
+            {
+                if (string.IsNullOrWhiteSpace(options.RepositoryPath))
+                {
+                    await FailCaptureAsync(
+                        "--view history-comparison-check requires --repository <fixture run root>.",
+                        App.CommandLineArguments);
+                    return;
+                }
+
+                await RunHistoryComparisonCheckAsync(options);
+                return;
+            }
+
             if (options.View is "repository-open-check" or "repository-picker-check" or "history-selection-check")
             {
                 if (string.IsNullOrWhiteSpace(options.RepositoryPath))
