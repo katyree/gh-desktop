@@ -25,9 +25,19 @@ public sealed partial class MainWindow
         await RunFileMutationAsync(stage: true);
     }
 
+    private async void StageAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunFileMutationAsync(stage: true, allVisible: true);
+    }
+
     private async void UnstageButton_Click(object sender, RoutedEventArgs e)
     {
         await RunFileMutationAsync(stage: false);
+    }
+
+    private async void UnstageAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunFileMutationAsync(stage: false, allVisible: true);
     }
 
     private async void CommitButton_Click(object sender, RoutedEventArgs e)
@@ -108,6 +118,17 @@ public sealed partial class MainWindow
         var unstagedSelectionCount = UnstagedChangesList?.SelectedItems.Count ?? 0;
         StageButton.IsEnabled = canInteract && unstagedSelectionCount > 0;
         UnstageButton.IsEnabled = canInteract && stagedSelectionCount > 0;
+        var hasFilter = !string.IsNullOrWhiteSpace(ChangesFilterBox?.Text);
+        StageAllButton.Content = hasFilter ? "Stage filtered" : "Stage all";
+        UnstageAllButton.Content = hasFilter ? "Unstage filtered" : "Unstage all";
+        AutomationProperties.SetName(
+            StageAllButton,
+            hasFilter ? "Stage all filtered files" : "Stage all files");
+        AutomationProperties.SetName(
+            UnstageAllButton,
+            hasFilter ? "Unstage all filtered files" : "Unstage all files");
+        StageAllButton.IsEnabled = canInteract && unstagedChangeRows.Count > 0;
+        UnstageAllButton.IsEnabled = canInteract && stagedChangeRows.Count > 0;
 
         var hasStagedChanges = currentStatus?.Changes.Any(change =>
             HasIndexChanges(change)) == true;
@@ -133,7 +154,12 @@ public sealed partial class MainWindow
         return selectedItems.OfType<ChangeRow>().ToArray();
     }
 
-    private static IReadOnlyList<string> GetMutationPaths(IEnumerable<ChangeRow> rows)
+    private IReadOnlyList<ChangeRow> GetVisibleChangeRows(bool staged) =>
+        (staged ? stagedChangeRows : unstagedChangeRows).ToArray();
+
+    private static IReadOnlyList<string> GetMutationPaths(
+        IEnumerable<ChangeRow> rows,
+        bool stage)
     {
         var paths = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -144,7 +170,9 @@ public sealed partial class MainWindow
                 paths.Add(row.Change.Path);
             }
 
-            if (!string.IsNullOrWhiteSpace(row.Change.OldPath) && seen.Add(row.Change.OldPath))
+            if (!stage
+                && !string.IsNullOrWhiteSpace(row.Change.OldPath)
+                && seen.Add(row.Change.OldPath))
             {
                 paths.Add(row.Change.OldPath);
             }
@@ -153,15 +181,17 @@ public sealed partial class MainWindow
         return paths;
     }
 
-    private async Task RunFileMutationAsync(bool stage)
+    private async Task RunFileMutationAsync(bool stage, bool allVisible = false)
     {
         if (mutationInProgress || repositoryRoot is null)
         {
             return;
         }
 
-        var rows = GetSelectedChangeRows(staged: !stage);
-        var paths = GetMutationPaths(rows);
+        var rows = allVisible
+            ? GetVisibleChangeRows(staged: !stage)
+            : GetSelectedChangeRows(staged: !stage);
+        var paths = GetMutationPaths(rows, stage);
         if (paths.Count == 0)
         {
             return;

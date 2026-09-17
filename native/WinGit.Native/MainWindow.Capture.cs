@@ -27,6 +27,28 @@ public sealed partial class MainWindow
                 return;
             }
 
+            if (options.View is "whole-file-staging-check" or "partial-staging-check")
+            {
+                if (string.IsNullOrWhiteSpace(options.RepositoryPath))
+                {
+                    await FailCaptureAsync(
+                        $"--view {options.View} requires --repository <fixture parent>.",
+                        App.CommandLineArguments);
+                    return;
+                }
+
+                if (options.View == "whole-file-staging-check")
+                {
+                    await RunWholeFileStagingCheckAsync(options);
+                }
+                else
+                {
+                    await RunPartialStagingCheckAsync(options);
+                }
+
+                return;
+            }
+
             if (options.View is "repository-open-check" or "repository-picker-check" or "history-selection-check")
             {
                 if (string.IsNullOrWhiteSpace(options.RepositoryPath))
