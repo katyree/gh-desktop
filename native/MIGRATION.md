@@ -160,6 +160,54 @@ $env:WINGIT_NATIVE_SETTINGS_DIRECTORY = $handlerProfile
 Remove-Item Env:WINGIT_NATIVE_SETTINGS_DIRECTORY
 ```
 
+The `partial-staging-check` capture creates a fresh synthetic child under
+the supplied fixture parent and drives the native partial line/hunk
+selection and mutation handlers. The run at
+`native/artifacts/task16-partial-check/partial-staging.png` recorded 42
+passing assertions in the adjacent `.checks.txt` report. The fixture starts
+with a staged `line 02` change in the target file, two unstaged added lines
+in one hunk, a separate unstaged `line 30` hunk, one unrelated staged file,
+and one untracked file. The assertions cover staging a single selected line
+(the index keeps the preexisting staged change and gains only that line),
+staging a whole hunk, unstaging a staged hunk while retaining the other
+staged changes in the same file, and rejecting a stale selection after the
+worktree changed with a `Refresh required` error while preserving the index
+and worktree bytes. The focused `GitRepositoryPartialStagingTests` run
+passed 5/5, covering line and whole-hunk staging with a preexisting
+same-file staged change, a partial-unstage round trip, stale stage rejection
+after worktree and index-only changes, stale unstage rejection after an
+index change, and exact unrelated index and worktree preservation; the full
+Core suite passed 120/120. The copied app's `WinGit.Native.dll` SHA-256 was
+`47325606BE7701A8AB29EF4AC64AAC7D530BFA97E2EDB3ED63AEA6BB394D9BA0`.
+Independent Git inspection found `MM partial-target.txt`,
+`M unrelated-staged.txt`, and untracked `untracked file.txt`; the index
+holds the preexisting staged line plus the selected addition only, while the
+worktree keeps both additions and the stale edit. The screenshot shows the
+rendered view, and the diagnostic invoked `ApplyPartialSelection` and
+`RunPartialMutationAsync` directly without physical clicks. Interactive
+mouse verification remains unavailable because
+`IGraphicsCaptureItemInterop.CreateForMonitor` returned `0x80070057`,
+`set_value` reported `Requested property was not in CacheRequest
+(0x80070057)`, and click coordinate input geometry was unavailable.
+
+To reproduce the check, run the current copied app with a fresh fixture parent
+and an isolated settings directory:
+
+```powershell
+$repoRoot = (Resolve-Path .).Path
+$handlerParent = Join-Path $repoRoot "native\artifacts\task16-partial-check"
+$handlerProfile = Join-Path $handlerParent "profile"
+$handlerCapture = Join-Path $handlerParent "partial-staging.png"
+New-Item -ItemType Directory -Force -Path $handlerProfile | Out-Null
+$env:WINGIT_NATIVE_SETTINGS_DIRECTORY = $handlerProfile
+& (Join-Path (Resolve-Path ".\native\artifacts\task16-partial-app").Path "WinGit.Native.exe") `
+  --capture $handlerCapture `
+  --view partial-staging-check `
+  --repository $handlerParent `
+  --theme light
+Remove-Item Env:WINGIT_NATIVE_SETTINGS_DIRECTORY
+```
+
 The native appearance scope is one light palette and one dark palette. The
 `System` setting chooses between those two palettes. User-defined theme
 palettes are outside this migration target.

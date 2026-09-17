@@ -115,6 +115,289 @@ public sealed class GitRepositoryPartialStagingTests : IDisposable
             File.ReadAllLines(path)[1]);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SelectedLinesOrHunkPreserveExistingIndexAndWorktree(bool wholeHunk)
+    {
+        var targetPath = Path.Combine(repositoryRoot, "nested", "target file.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+        var baseline = string.Join(
+            "\n",
+            Enumerable.Range(1, 36).Select(index => $"line {index:D2}")) + "\n";
+        WriteFile(targetPath, baseline);
+        var unrelatedStagedPath = Path.Combine(repositoryRoot, "unrelated staged.txt");
+        WriteFile(unrelatedStagedPath, "unrelated staged\n");
+        Commit("initial");
+
+        WriteFile(
+            unrelatedStagedPath,
+            "unrelated staged\nunrelated added\n");
+        RunGit(repositoryRoot, "add", "--", ":(literal)unrelated staged.txt");
+        var stagedModifiedPath = Path.Combine(repositoryRoot, "staged modified.txt");
+        WriteFile(stagedModifiedPath, "modified staged\nmodified worktree\n");
+        RunGit(repositoryRoot, "add", "--", ":(literal)staged modified.txt");
+        WriteFile(stagedModifiedPath, "modified staged\nmodified worktree v2\n");
+        var untrackedPath = Path.Combine(repositoryRoot, "untracked file.txt");
+        WriteFile(untrackedPath, "untracked bytes\n");
+
+        var initialIndex = baseline.Replace("line 02", "line 02 staged", StringComparison.Ordinal);
+        WriteFile(targetPath, initialIndex);
+        RunGit(repositoryRoot, "add", "--", ":(literal)nested/target file.txt");
+        var worktree = initialIndex
+            .Replace(
+                "line 15\nline 16",
+                "line 14b added\nline 14c added\nline 15\nline 16",
+                StringComparison.Ordinal)
+            .Replace("line 30", "line 30 worktree", StringComparison.Ordinal);
+        WriteFile(targetPath, worktree);
+
+        var service = new GitRepositoryService();
+        var status = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        var file = Assert.Single(status.Changes, change => change.Path == "nested/target file.txt");
+        Assert.Equal("M", file.WorkTreeStatus);
+        Assert.Equal("M", file.IndexStatus);
+
+        var unstaged = await service.GetPartialDiffAsync(
+            repositoryRoot,
+            file,
+            staged: false,
+            CancellationToken.None);
+        Assert.True(unstaged.IsSupported, unstaged.Message);
+        Assert.Equal(2, unstaged.Hunks.Count);
+        var additionHunk = unstaged.Hunks[0];
+        var firstAddition = Assert.Single(
+            additionHunk.Lines,
+            line => line.Kind == DiffLineKind.Added && line.Text == "line 14b added");
+
+        var indexBefore = RunGit(repositoryRoot, "ls-files", "-s")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(entry => !entry.EndsWith("nested/target file.txt", StringComparison.Ordinal))
+            .ToArray();
+        var worktreeBytesBefore = Directory
+            .EnumerateFiles(repositoryRoot, "*", SearchOption.AllDirectories)
+            .Where(path => !path.Contains(Path.Combine(repositoryRoot, ".git")))
+            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
+            .ToArray();
+
+        if (wholeHunk)
+        {
+            await service.StageSelectedChangesAsync(
+                repositoryRoot,
+                unstaged,
+                [PartialDiffSelection.ForHunk(additionHunk.Id)],
+                CancellationToken.None);
+        }
+        else
+        {
+            await service.StageSelectedChangesAsync(
+                repositoryRoot,
+                unstaged,
+                [PartialDiffSelection.ForLine(additionHunk.Id, firstAddition.LineIndex)],
+                CancellationToken.None);
+        }
+
+        Assert.Equal(worktree, File.ReadAllText(targetPath));
+        var expectedTargetIndex = initialIndex
+            .Replace(
+                "line 15\nline 16",
+                wholeHunk
+                    ? "line 14b added\nline 14c added\nline 15\nline 16"
+                    : "line 14b added\nline 15\nline 16",
+                StringComparison.Ordinal);
+        Assert.Equal(expectedTargetIndex, RunGit(repositoryRoot, "show", ":nested/target file.txt"));
+        Assert.Equal("unrelated staged\nunrelated added\n", RunGit(repositoryRoot, "show", ":unrelated staged.txt"));
+        Assert.Equal("modified staged\nmodified worktree\n", RunGit(repositoryRoot, "show", ":staged modified.txt"));
+        Assert.Equal("unrelated staged\nunrelated added\n", File.ReadAllText(unrelatedStagedPath));
+        Assert.Equal("modified staged\nmodified worktree v2\n", File.ReadAllText(stagedModifiedPath));
+        Assert.Equal("untracked bytes\n", File.ReadAllText(untrackedPath));
+        var stagedFile = Assert.Single(
+            (await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes,
+            change => change.Path == "nested/target file.txt");
+        var stagedPartial = await service.GetPartialDiffAsync(
+            repositoryRoot,
+            stagedFile,
+            staged: true,
+            CancellationToken.None);
+        Assert.True(stagedPartial.IsSupported, stagedPartial.Message);
+        var stagedAdditionHunk = Assert.Single(
+            stagedPartial.Hunks, hunk => hunk.Lines.Any(line => line.Text == "line 14b added"));
+        await service.UnstageSelectedChangesAsync(
+            repositoryRoot,
+            stagedPartial,
+            [PartialDiffSelection.ForHunk(stagedAdditionHunk.Id)],
+            CancellationToken.None);
+
+        Assert.Equal(worktree, File.ReadAllText(targetPath));
+        Assert.Equal(initialIndex, RunGit(repositoryRoot, "show", ":nested/target file.txt"));
+        var indexAfter = RunGit(repositoryRoot, "ls-files", "-s")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(entry => !entry.EndsWith("nested/target file.txt", StringComparison.Ordinal))
+            .ToArray();
+        Assert.Equal(indexBefore, indexAfter);
+        var worktreeBytesAfter = Directory
+            .EnumerateFiles(repositoryRoot, "*", SearchOption.AllDirectories)
+            .Where(path => !path.Contains(Path.Combine(repositoryRoot, ".git")))
+            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
+            .ToArray();
+        Assert.Equal(
+            worktreeBytesBefore.Select(item => item.Path),
+            worktreeBytesAfter.Select(item => item.Path));
+        Assert.Equal(
+            worktreeBytesBefore.Select(item => Convert.ToHexString(item.Bytes)),
+            worktreeBytesAfter.Select(item => Convert.ToHexString(item.Bytes)));
+    }
+
+    [Fact]
+    public async Task StaleStageAndUnstageAfterWorktreeOrIndexChangesAreRejectedWithoutMutations()
+    {
+        var targetPath = Path.Combine(repositoryRoot, "nested", "target file.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+        var baseline = string.Join(
+            "\n",
+            Enumerable.Range(1, 36).Select(index => $"line {index:D2}")) + "\n";
+        WriteFile(targetPath, baseline);
+        Commit("initial");
+
+        var changed = baseline
+            .Replace("line 02", "line 02 changed", StringComparison.Ordinal)
+            .Replace("line 30", "line 30 changed", StringComparison.Ordinal);
+        WriteFile(targetPath, changed);
+
+        var service = new GitRepositoryService();
+        var status = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        var file = Assert.Single(status.Changes, change => change.Path == "nested/target file.txt");
+        var unstaged = await service.GetPartialDiffAsync(
+            repositoryRoot,
+            file,
+            staged: false,
+            CancellationToken.None);
+        Assert.Equal(2, unstaged.Hunks.Count);
+
+        var worktreeEdited = changed.Replace(
+            "line 30 changed",
+            "line 30 changed again",
+            StringComparison.Ordinal);
+        WriteFile(targetPath, worktreeEdited);
+        var indexSnapshot = RunGit(repositoryRoot, "ls-files", "-s");
+        var worktreeSnapshot = Directory
+            .EnumerateFiles(repositoryRoot, "*", SearchOption.AllDirectories)
+            .Where(path => !path.Contains(Path.Combine(repositoryRoot, ".git")))
+            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
+            .ToArray();
+
+        await Assert.ThrowsAsync<StaleDiffSnapshotException>(
+            () => service.StageSelectedChangesAsync(
+                repositoryRoot,
+                unstaged,
+                [PartialDiffSelection.ForHunk(unstaged.Hunks[0].Id)],
+                CancellationToken.None));
+
+        Assert.Equal(indexSnapshot, RunGit(repositoryRoot, "ls-files", "-s"));
+        var worktreeAfterStaleStage = Directory
+            .EnumerateFiles(repositoryRoot, "*", SearchOption.AllDirectories)
+            .Where(path => !path.Contains(Path.Combine(repositoryRoot, ".git")))
+            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
+            .ToArray();
+        Assert.Equal(
+            worktreeSnapshot.Select(item => item.Path),
+            worktreeAfterStaleStage.Select(item => item.Path));
+        Assert.Equal(
+            worktreeSnapshot.Select(item => Convert.ToHexString(item.Bytes)),
+            worktreeAfterStaleStage.Select(item => Convert.ToHexString(item.Bytes)));
+
+        var restored = changed.Replace(
+            "line 30 changed again",
+            "line 30 changed",
+            StringComparison.Ordinal);
+        WriteFile(targetPath, restored);
+        var stagedFileForIndexOnly = Assert.Single(
+            (await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes,
+            change => change.Path == "nested/target file.txt");
+        var freshUnstaged = await service.GetPartialDiffAsync(
+            repositoryRoot,
+            stagedFileForIndexOnly,
+            staged: false,
+            CancellationToken.None);
+        var indexOnlyIntermediate = restored.Replace(
+            "line 02 changed",
+            "line 02 index-only",
+            StringComparison.Ordinal);
+        WriteFile(targetPath, indexOnlyIntermediate);
+        RunGit(repositoryRoot, "add", "--", ":(literal)nested/target file.txt");
+        WriteFile(targetPath, restored);
+        var indexOnlyTargetIndex = RunGit(repositoryRoot, "ls-files", "-s");
+        var indexOnlyWorktreeSnapshot = Directory
+            .EnumerateFiles(repositoryRoot, "*", SearchOption.AllDirectories)
+            .Where(path => !path.Contains(Path.Combine(repositoryRoot, ".git")))
+            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
+            .ToArray();
+
+        await Assert.ThrowsAsync<StaleDiffSnapshotException>(
+            () => service.StageSelectedChangesAsync(
+                repositoryRoot,
+                freshUnstaged,
+                [PartialDiffSelection.ForHunk(freshUnstaged.Hunks[0].Id)],
+                CancellationToken.None));
+
+        Assert.Equal(indexOnlyTargetIndex, RunGit(repositoryRoot, "ls-files", "-s"));
+        var worktreeAfterStaleIndexStage = Directory
+            .EnumerateFiles(repositoryRoot, "*", SearchOption.AllDirectories)
+            .Where(path => !path.Contains(Path.Combine(repositoryRoot, ".git")))
+            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
+            .ToArray();
+        Assert.Equal(
+            indexOnlyWorktreeSnapshot.Select(item => item.Path),
+            worktreeAfterStaleIndexStage.Select(item => item.Path));
+        Assert.Equal(
+            indexOnlyWorktreeSnapshot.Select(item => Convert.ToHexString(item.Bytes)),
+            worktreeAfterStaleIndexStage.Select(item => Convert.ToHexString(item.Bytes)));
+
+        WriteFile(targetPath, changed);
+        RunGit(repositoryRoot, "add", "--", ":(literal)nested/target file.txt");
+        var stagedNow = Assert.Single(
+            (await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes,
+            change => change.Path == "nested/target file.txt");
+        Assert.Equal("M", stagedNow.IndexStatus);
+        Assert.Equal(string.Empty, stagedNow.WorkTreeStatus);
+        var stagedDiffForUnstageSnapshot = await service.GetPartialDiffAsync(
+            repositoryRoot,
+            stagedNow,
+            staged: true,
+            CancellationToken.None);
+        Assert.True(stagedDiffForUnstageSnapshot.IsSupported, stagedDiffForUnstageSnapshot.Message);
+        Assert.Equal(2, stagedDiffForUnstageSnapshot.Hunks.Count);
+        WriteFile(targetPath, baseline);
+        RunGit(repositoryRoot, "add", "--", ":(literal)nested/target file.txt");
+        WriteFile(targetPath, changed);
+        var beforeStaleUnstageIndex = RunGit(repositoryRoot, "ls-files", "-s");
+        var beforeStaleUnstageWorktree = Directory
+            .EnumerateFiles(repositoryRoot, "*", SearchOption.AllDirectories)
+            .Where(path => !path.Contains(Path.Combine(repositoryRoot, ".git")))
+            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
+            .ToArray();
+
+        await Assert.ThrowsAsync<StaleDiffSnapshotException>(
+            () => service.UnstageSelectedChangesAsync(
+                repositoryRoot,
+                stagedDiffForUnstageSnapshot,
+                [PartialDiffSelection.ForHunk(stagedDiffForUnstageSnapshot.Hunks[0].Id)],
+                CancellationToken.None));
+
+        Assert.Equal(beforeStaleUnstageIndex, RunGit(repositoryRoot, "ls-files", "-s"));
+        var worktreeAfterStaleUnstage = Directory
+            .EnumerateFiles(repositoryRoot, "*", SearchOption.AllDirectories)
+            .Where(path => !path.Contains(Path.Combine(repositoryRoot, ".git")))
+            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
+            .ToArray();
+        Assert.Equal(
+            beforeStaleUnstageWorktree.Select(item => item.Path),
+            worktreeAfterStaleUnstage.Select(item => item.Path));
+        Assert.Equal(
+            beforeStaleUnstageWorktree.Select(item => Convert.ToHexString(item.Bytes)),
+            worktreeAfterStaleUnstage.Select(item => Convert.ToHexString(item.Bytes)));
+    }
+
     [Fact]
     public async Task TextAddDeleteNewFileAndNoNewlineSelectionsPreserveIndexAndWorkTree()
     {
