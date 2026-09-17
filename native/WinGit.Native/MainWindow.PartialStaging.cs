@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WinGit.Core;
@@ -7,7 +6,7 @@ namespace WinGit.Native;
 
 public sealed partial class MainWindow
 {
-    private readonly ObservableCollection<PartialDiffRow> partialDiffRows = [];
+    private readonly DiffRowCollection<PartialDiffRow> partialDiffRows = [];
     private readonly HashSet<PartialDiffSelection> partialSelections = [];
     private PartialFileDiff? selectedPartialDiff;
     private string? partialSelectionMessage;
@@ -54,15 +53,14 @@ public sealed partial class MainWindow
             selectedPartialDiff = partialDiff;
             partialSelectionMessage = null;
             partialSelections.Clear();
-            partialDiffRows.Clear();
             if (partialDiff.IsSupported)
             {
-                foreach (var displayRow in PartialDiffRow.CreateRows(partialDiff))
-                {
-                    partialDiffRows.Add(displayRow);
-                }
-
+                partialDiffRows.ReplaceAll(PartialDiffRow.CreateRows(partialDiff));
                 PartialDiffList.ItemsSource = partialDiffRows;
+            }
+            else
+            {
+                partialDiffRows.Clear();
             }
 
             UpdatePartialSelectionControls();

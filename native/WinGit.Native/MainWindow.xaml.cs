@@ -24,8 +24,8 @@ public sealed partial class MainWindow : Window
     private readonly ObservableCollection<ChangeRow> unstagedChangeRows = [];
     private readonly ObservableCollection<CommitRow> commitRows = [];
     private readonly ObservableCollection<CommitFileRow> commitFileRows = [];
-    private readonly ObservableCollection<DiffRow> diffRows = [];
-    private readonly ObservableCollection<DiffRow> historyDiffRows = [];
+    private readonly DiffRowCollection<DiffRow> diffRows = [];
+    private readonly DiffRowCollection<DiffRow> historyDiffRows = [];
     private readonly ObservableCollection<BranchRow> branchRows = [];
     private readonly ObservableCollection<WorktreeRow> worktreeRows = [];
     private readonly ObservableCollection<StashRow> stashRows = [];
@@ -1074,7 +1074,7 @@ public sealed partial class MainWindow : Window
             DiffSummaryText.Text = FormatDiffSummary(diff);
             DiffFileText.Text = $"{(row.IsStaged ? "Staged" : "Unstaged")} · {row.Path}";
             StatusText.Text = $"Showing {(row.IsStaged ? "staged" : "unstaged")} {row.Path}";
-            if (diff.SubmoduleComparison is null)
+            if (diff.SubmoduleComparison is null && !diff.IsTruncated)
             {
                 await LoadPartialDiffAsync(row, operation.Generation, operation.Token);
             }
@@ -1244,7 +1244,10 @@ public sealed partial class MainWindow : Window
         if (diff.IsTruncated)
         {
             messageTitle.Text = "Diff truncated";
-            messageText.Text = diff.Message ?? "This diff is larger than the native viewer limit.";
+            var recoveryAction = ReferenceEquals(list, DiffList)
+                ? "Use File > Open selected file in editor to inspect the full file. Configure an editor in Settings first if needed."
+                : "Use File > Open repository shell to inspect the full diff with Git.";
+            messageText.Text = $"{diff.Message ?? "This diff is larger than the native viewer limit."} {recoveryAction}";
             messagePanel.Visibility = Visibility.Visible;
         }
     }

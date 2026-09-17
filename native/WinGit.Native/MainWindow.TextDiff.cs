@@ -14,8 +14,26 @@ namespace WinGit.Native;
 
 public sealed partial class MainWindow
 {
-    private readonly ObservableCollection<DiffSideBySideRow> diffSideBySideRows = [];
-    private readonly ObservableCollection<DiffSideBySideRow> historyDiffSideBySideRows = [];
+    private sealed class DiffRowCollection<T> : ObservableCollection<T>
+    {
+        public void ReplaceAll(IEnumerable<T> rows)
+        {
+            CheckReentrancy();
+            Items.Clear();
+            foreach (var row in rows)
+            {
+                Items.Add(row);
+            }
+
+            OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(Count)));
+            OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs("Item[]"));
+            OnCollectionChanged(new System.Collections.Specialized.NotifyCollectionChangedEventArgs(
+                System.Collections.Specialized.NotifyCollectionChangedAction.Reset));
+        }
+    }
+
+    private readonly DiffRowCollection<DiffSideBySideRow> diffSideBySideRows = [];
+    private readonly DiffRowCollection<DiffSideBySideRow> historyDiffSideBySideRows = [];
     private readonly Dictionary<int, int> changesSplitRowByLine = [];
     private readonly Dictionary<int, int> historySplitRowByLine = [];
     private FileDiff? currentChangesDiff;
@@ -508,8 +526,6 @@ public sealed partial class MainWindow
         var target = history ? historyDiffRows : diffRows;
         var splitTarget = history ? historyDiffSideBySideRows : diffSideBySideRows;
         var splitRowByLine = history ? historySplitRowByLine : changesSplitRowByLine;
-        target.Clear();
-        splitTarget.Clear();
         splitRowByLine.Clear();
         var selectedMatch = selectedIndex >= 0 && selectedIndex < matches.Count
             ? matches[selectedIndex]
@@ -517,15 +533,20 @@ public sealed partial class MainWindow
         var unifiedRanges = BuildSearchRanges(matches, DiffSearchColumn.Unified, selectedMatch);
         var oldRanges = BuildSearchRanges(matches, DiffSearchColumn.Old, selectedMatch);
         var newRanges = BuildSearchRanges(matches, DiffSearchColumn.New, selectedMatch);
+        var unifiedRows = new List<DiffRow>(diff.Lines.Count);
         for (var index = 0; index < diff.Lines.Count; index++)
         {
             var line = diff.Lines[index];
-            target.Add(new DiffRow(
+            unifiedRows.Add(new DiffRow(
                 line,
                 unifiedRanges.TryGetValue(index, out var ranges) ? ranges : []));
         }
 
-        RenderSplitRows(diff, splitTarget, splitRowByLine, oldRanges, newRanges);
+        target.ReplaceAll(unifiedRows);
+
+        var splitRows = new List<DiffSideBySideRow>(diff.Lines.Count);
+        RenderSplitRows(diff, splitRows, splitRowByLine, oldRanges, newRanges);
+        splitTarget.ReplaceAll(splitRows);
 
         UpdateSearchStatus(history, matches.Count, selectedIndex);
         UpdateTextDiffListVisibility();
@@ -534,7 +555,7 @@ public sealed partial class MainWindow
 
     private static void RenderSplitRows(
         FileDiff diff,
-        ObservableCollection<DiffSideBySideRow> target,
+        List<DiffSideBySideRow> target,
         Dictionary<int, int> rowByLine,
         IReadOnlyDictionary<int, IReadOnlyList<DiffSearchRange>> oldSearchRanges,
         IReadOnlyDictionary<int, IReadOnlyList<DiffSearchRange>> newSearchRanges)
@@ -591,7 +612,7 @@ public sealed partial class MainWindow
     private static void AddPairedSplitRows(
         IReadOnlyList<(DiffLine Line, int Index)> removed,
         IReadOnlyList<(DiffLine Line, int Index)> added,
-        ObservableCollection<DiffSideBySideRow> target,
+        List<DiffSideBySideRow> target,
         Dictionary<int, int> rowByLine,
         IReadOnlyDictionary<int, IReadOnlyList<DiffSearchRange>> oldSearchRanges,
         IReadOnlyDictionary<int, IReadOnlyList<DiffSearchRange>> newSearchRanges)

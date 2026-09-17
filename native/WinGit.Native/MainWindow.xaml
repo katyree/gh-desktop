@@ -1369,9 +1369,9 @@
                                     <local:NativeSubmoduleDiffView x:Name="HistorySubmoduleView"
                                                                    Visibility="Collapsed"
                                                                    AutomationProperties.Name="Commit submodule diff" />
-                                    <StackPanel x:Name="HistoryDiffMessagePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                                    <StackPanel x:Name="HistoryDiffMessagePanel" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="560" Spacing="10">
                                         <TextBlock x:Name="HistoryDiffMessageTitle" Text="Select a file" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                                        <TextBlock x:Name="HistoryDiffMessageText" Text="Choose a commit and file to inspect its diff." Style="{StaticResource SecondaryTextStyle}" TextAlignment="Center" />
+                                        <TextBlock x:Name="HistoryDiffMessageText" Text="Choose a commit and file to inspect its diff." Style="{StaticResource SecondaryTextStyle}" TextAlignment="Center" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Grid>
                             </Grid>

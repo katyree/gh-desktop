@@ -800,7 +800,7 @@ public sealed partial class GitRepositoryService
                 [],
                 isBinary: false,
                 isTruncated: true,
-                "The diff exceeds the native viewer limit and was not rendered.");
+                $"The diff exceeds the native viewer's {GitProcessRunner.MaxOutputBytes / (1024 * 1024)} MiB output limit and was not rendered.");
         }
 
         if (output.Length == 0)
@@ -839,7 +839,7 @@ public sealed partial class GitRepositoryService
                     [],
                     isBinary: false,
                     isTruncated: true,
-                    "The diff contains too many or too-long lines and was not rendered.");
+                    $"The diff exceeds the native viewer limit of {MaximumRenderedLines:N0} lines or {MaximumRenderedLineLength:N0} characters per raw diff line and was not rendered.");
             }
 
             if (line.StartsWith("diff --git ", StringComparison.Ordinal))
@@ -956,7 +956,7 @@ public sealed partial class GitRepositoryService
                 [],
                 isBinary: false,
                 isTruncated: true,
-                "The file exceeds the native viewer limit and was not rendered.");
+                $"The file exceeds the native viewer's {GitProcessRunner.MaxOutputBytes / (1024 * 1024)} MiB file limit and was not rendered.");
         }
 
         if (bounded.Bytes.AsSpan().IndexOf((byte)0) >= 0)
@@ -986,7 +986,7 @@ public sealed partial class GitRepositoryService
                     [],
                     isBinary: false,
                     isTruncated: true,
-                    "The file contains too many or too-long lines and was not rendered.");
+                    $"The file exceeds the native viewer limit of {MaximumRenderedLines:N0} lines or {MaximumRenderedLineLength:N0} characters per line and was not rendered.");
             }
 
             lines.Add(new DiffLine(null, lineNumber, DiffLineKind.Added, line));
