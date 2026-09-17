@@ -13,6 +13,20 @@ public sealed partial class MainWindow
     {
         try
         {
+            if (options.View == "whole-file-staging-check")
+            {
+                if (string.IsNullOrWhiteSpace(options.RepositoryPath))
+                {
+                    await FailCaptureAsync(
+                        "--view whole-file-staging-check requires --repository <fixture parent>.",
+                        App.CommandLineArguments);
+                    return;
+                }
+
+                await RunWholeFileStagingCheckAsync(options);
+                return;
+            }
+
             if (options.View is "repository-open-check" or "repository-picker-check")
             {
                 if (string.IsNullOrWhiteSpace(options.RepositoryPath))

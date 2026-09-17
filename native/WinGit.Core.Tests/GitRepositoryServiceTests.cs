@@ -229,6 +229,97 @@ public sealed class GitRepositoryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task WholeFileStageAndUnstageOnlyTouchSuppliedPaths()
+    {
+        WriteFile("first.txt", "first before\n");
+        WriteFile("second.txt", "second before\n");
+        WriteFile("untouched.txt", "untouched before\n");
+        Commit("initial");
+        WriteFile("first.txt", "first after\n");
+        WriteFile("second.txt", "second after\n");
+        WriteFile("untouched.txt", "untouched after\n");
+
+        var service = new GitRepositoryService();
+        await service.StageFilesAsync(
+            repositoryRoot,
+            ["first.txt", "second.txt"],
+            CancellationToken.None);
+
+        var stagedStatus = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        var stagedFirst = Assert.Single(stagedStatus.Changes, change => change.Path == "first.txt");
+        var stagedSecond = Assert.Single(stagedStatus.Changes, change => change.Path == "second.txt");
+        var untouched = Assert.Single(stagedStatus.Changes, change => change.Path == "untouched.txt");
+        Assert.Equal("M", stagedFirst.IndexStatus);
+        Assert.Equal(string.Empty, stagedFirst.WorkTreeStatus);
+        Assert.Equal("M", stagedSecond.IndexStatus);
+        Assert.Equal(string.Empty, stagedSecond.WorkTreeStatus);
+        Assert.Equal(string.Empty, untouched.IndexStatus);
+        Assert.Equal("M", untouched.WorkTreeStatus);
+        Assert.Equal("first after\n", RunGit(repositoryRoot, "show", ":first.txt"));
+        Assert.Equal("second after\n", RunGit(repositoryRoot, "show", ":second.txt"));
+        Assert.Equal("untouched after\n", File.ReadAllText(Path.Combine(repositoryRoot, "untouched.txt")));
+
+        await service.UnstageFilesAsync(
+            repositoryRoot,
+            ["first.txt"],
+            CancellationToken.None);
+
+        var unstageStatus = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        var unstagedFirst = Assert.Single(unstageStatus.Changes, change => change.Path == "first.txt");
+        var stillStagedSecond = Assert.Single(unstageStatus.Changes, change => change.Path == "second.txt");
+        var stillUntouched = Assert.Single(unstageStatus.Changes, change => change.Path == "untouched.txt");
+        Assert.Equal(string.Empty, unstagedFirst.IndexStatus);
+        Assert.Equal("M", unstagedFirst.WorkTreeStatus);
+        Assert.Equal("M", stillStagedSecond.IndexStatus);
+        Assert.Equal(string.Empty, stillStagedSecond.WorkTreeStatus);
+        Assert.Equal(string.Empty, stillUntouched.IndexStatus);
+        Assert.Equal("M", stillUntouched.WorkTreeStatus);
+        Assert.Equal("first before\n", RunGit(repositoryRoot, "show", ":first.txt"));
+        Assert.Equal("first after\n", File.ReadAllText(Path.Combine(repositoryRoot, "first.txt")));
+        Assert.Equal("second after\n", File.ReadAllText(Path.Combine(repositoryRoot, "second.txt")));
+        Assert.Equal("untouched after\n", File.ReadAllText(Path.Combine(repositoryRoot, "untouched.txt")));
+    }
+
+    [Fact]
+    public async Task WholeFileRenameStagesDestinationAndUnstagesBothRenamePaths()
+    {
+        WriteFile("old.txt", "before\n");
+        Commit("initial");
+        RunGit(repositoryRoot, "mv", "old.txt", "new.txt");
+        WriteFile("new.txt", "after\n");
+
+        var service = new GitRepositoryService();
+        var beforeStage = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        var rename = Assert.Single(beforeStage.Changes, change => change.Path == "new.txt");
+        Assert.Equal("old.txt", rename.OldPath);
+        Assert.Equal("R", rename.IndexStatus);
+        Assert.Equal("M", rename.WorkTreeStatus);
+
+        await service.StageFilesAsync(repositoryRoot, ["new.txt"], CancellationToken.None);
+
+        var stagedStatus = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        var stagedRename = Assert.Single(stagedStatus.Changes, change => change.Path == "new.txt");
+        Assert.NotEqual(string.Empty, stagedRename.IndexStatus);
+        Assert.Equal(string.Empty, stagedRename.WorkTreeStatus);
+
+        await service.UnstageFilesAsync(
+            repositoryRoot,
+            ["new.txt", "old.txt"],
+            CancellationToken.None);
+
+        var unstageStatus = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        var oldPath = Assert.Single(unstageStatus.Changes, change => change.Path == "old.txt");
+        var newPath = Assert.Single(unstageStatus.Changes, change => change.Path == "new.txt");
+        Assert.Equal(string.Empty, oldPath.IndexStatus);
+        Assert.Equal("D", oldPath.WorkTreeStatus);
+        Assert.Equal("?", newPath.IndexStatus);
+        Assert.Equal("?", newPath.WorkTreeStatus);
+        Assert.False(File.Exists(Path.Combine(repositoryRoot, "old.txt")));
+        Assert.Equal("after\n", File.ReadAllText(Path.Combine(repositoryRoot, "new.txt")));
+        Assert.Equal("before\n", RunGit(repositoryRoot, "show", ":old.txt"));
+    }
+
+    [Fact]
     public async Task ImageDiffsCaptureHeadIndexAndWorkingPngVersionsWithoutTextDecoding()
     {
         var headPng = CreatePngFixture(0x10);

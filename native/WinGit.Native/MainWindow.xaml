@@ -816,12 +816,30 @@
                             <TextBox x:Name="ChangesFilterBox" Grid.Row="1" Margin="8,0,8,8" PlaceholderText="Filter paths" TextChanged="ChangesFilterBox_TextChanged" AutomationProperties.Name="Filter changed files" />
                             <Grid Grid.Row="2" Padding="8,0">
                                 <TextBlock Text="Staged" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                <TextBlock x:Name="StagedCountText" Text="0" Style="{StaticResource SecondaryTextStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
+                                    <Button x:Name="UnstageAllButton"
+                                            Content="Unstage all"
+                                            Click="UnstageAllButton_Click"
+                                            AutomationProperties.Name="Unstage all visible files" />
+                                    <TextBlock x:Name="StagedCountText"
+                                               Text="0"
+                                               Style="{StaticResource SecondaryTextStyle}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
                             </Grid>
                             <ListView x:Name="StagedChangesList" Grid.Row="3" ItemTemplate="{StaticResource ChangeRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="StagedChangesList_SelectionChanged" SelectionMode="Multiple" AutomationProperties.Name="Staged changed files" />
                             <Grid Grid.Row="4" Padding="8,0">
                                 <TextBlock Text="Unstaged" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                <TextBlock x:Name="UnstagedCountText" Text="0" Style="{StaticResource SecondaryTextStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
+                                    <Button x:Name="StageAllButton"
+                                            Content="Stage all"
+                                            Click="StageAllButton_Click"
+                                            AutomationProperties.Name="Stage all visible files" />
+                                    <TextBlock x:Name="UnstagedCountText"
+                                               Text="0"
+                                               Style="{StaticResource SecondaryTextStyle}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
                             </Grid>
                             <ListView x:Name="UnstagedChangesList" Grid.Row="5" ItemTemplate="{StaticResource ChangeRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="UnstagedChangesList_SelectionChanged" SelectionMode="Multiple" AutomationProperties.Name="Unstaged changed files" />
                         </Grid>

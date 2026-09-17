@@ -125,6 +125,41 @@ and closed the native process. The picker host remains difficult to target with
 mouse automation, and chooser selection plus the newer workflow slices remain
 unverified. The native app still uses WinUI controls directly.
 
+The `whole-file-staging-check` capture creates a fresh synthetic child under
+the supplied fixture parent and drives the native selected-file and visible-row
+staging handlers. The run at
+`native/artifacts/task15-handler-check/whole-file-staging.png` recorded 57
+passing assertions in the adjacent `.checks.txt` report. The assertions cover
+the index contents, worktree bytes, filtered rows, and hidden unselected file.
+The copied app's `WinGit.Native.dll` SHA-256 was
+`6CED01C1126DF7D428C8802F22AE46ABAB12AF7CF48A451DD4792524C1E86022`.
+Independent Git inspection found a clean index, three modified worktree files,
+and the hidden file's initial index content alongside its changed worktree
+content. The screenshot shows the accessible controls, and the diagnostic
+invoked `RunFileMutationAsync` directly without physical clicks. Interactive
+mouse verification remains unavailable because
+`IGraphicsCaptureItemInterop.CreateForMonitor` returned `0x80070057`,
+`set_value` reported `Requested property was not in CacheRequest
+(0x80070057)`, and click coordinate input geometry was unavailable.
+
+To reproduce the check, run the current copied app with a fresh fixture parent
+and an isolated settings directory:
+
+```powershell
+$repoRoot = (Resolve-Path .).Path
+$handlerParent = Join-Path $repoRoot ("native\artifacts\task15-handler-check-" + [guid]::NewGuid().ToString("N"))
+$handlerProfile = Join-Path $handlerParent "profile"
+$handlerCapture = Join-Path $handlerParent "whole-file-staging.png"
+New-Item -ItemType Directory -Force -Path $handlerProfile | Out-Null
+$env:WINGIT_NATIVE_SETTINGS_DIRECTORY = $handlerProfile
+& (Join-Path (Resolve-Path ".\native\artifacts\task15-handler-app").Path "WinGit.Native.exe") `
+  --capture $handlerCapture `
+  --view whole-file-staging-check `
+  --repository $handlerParent `
+  --theme light
+Remove-Item Env:WINGIT_NATIVE_SETTINGS_DIRECTORY
+```
+
 The native appearance scope is one light palette and one dark palette. The
 `System` setting chooses between those two palettes. User-defined theme
 palettes are outside this migration target.
