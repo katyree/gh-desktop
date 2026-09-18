@@ -244,19 +244,20 @@ public sealed partial class GitRepositoryService
                     arguments.Add("--signoff");
                 }
 
-                await processRunner.RunAsync(
+                // Capture HEAD before the attempt so a hook rejection can report
+                // the actual post-failure state instead of assuming HEAD is
+                // unchanged. Hooks run normally here; there is no --no-verify
+                // bypass on this path.
+                var headBeforeCommit = await ReadHeadIdBestEffortAsync(
+                    path,
+                    cancellationToken).ConfigureAwait(false);
+                return await RunCommitWithHookHandlingAsync(
                     path,
                     arguments,
-                    cancellationToken,
-                    standardInput: message).ConfigureAwait(false);
-                var head = await processRunner.RunAsync(
-                    path,
-                    ["rev-parse", "HEAD"],
+                    message,
+                    expectedHeadId ?? headBeforeCommit,
+                    amend,
                     cancellationToken).ConfigureAwait(false);
-                EnsureComplete(head, "commit identity");
-                var commitId = DecodeUtf8(head.StandardOutput, "commit identity").Trim();
-                ValidateCommitId(commitId);
-                return commitId;
             }).ConfigureAwait(false);
     }
 

@@ -381,6 +381,24 @@ public sealed partial class MainWindow
                 ShowError("Repository changed", exception);
             }
         }
+        catch (CommitHookFailureException exception)
+        {
+            // A hook rejection is a clear failure state, never a success: the
+            // draft, selection, and amend choice are preserved (only a success
+            // clears them), the refresh in finally picks up any files the hook
+            // itself changed without overwriting them, and the next attempt
+            // reruns hooks through the same guarded path. Duplicate
+            // submissions stay blocked by mutationInProgress until that
+            // refresh completes.
+            if (IsCurrent(operation.Generation, operation.Token)
+                && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
+            {
+                ShowError(amend ? "Amend hook failed" : "Commit hook failed", exception);
+                StatusText.Text = amend
+                    ? "The amend hook failed; fix the problem, then try again. The draft was kept."
+                    : "The commit hook failed; fix the problem, then try again. The draft was kept.";
+            }
+        }
         catch (Exception exception)
         {
             if (IsCurrent(operation.Generation, operation.Token)
