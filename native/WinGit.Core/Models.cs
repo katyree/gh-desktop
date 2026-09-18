@@ -172,6 +172,15 @@ public sealed record BranchCheckoutContext(
     string TargetBranch,
     string TargetTipId);
 
+/// <summary>
+/// The repository state captured before a branch rename or delete dialog was shown.
+/// Core revalidates every field inside the serialized mutation before changing Git.
+/// </summary>
+public sealed record BranchMutationContext(
+    string RootPath,
+    string BranchName,
+    string ExpectedTipId);
+
 /// <summary>A registered Git worktree and its lock/prunable state.</summary>
 public sealed record WorktreeSummary(
     string Path,
