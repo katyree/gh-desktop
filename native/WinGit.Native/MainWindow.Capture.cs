@@ -27,7 +27,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (options.View is "whole-file-staging-check" or "partial-staging-check")
+            if (options.View is "whole-file-staging-check" or "partial-staging-check" or "commit-composer-check")
             {
                 if (string.IsNullOrWhiteSpace(options.RepositoryPath))
                 {
@@ -41,9 +41,13 @@ public sealed partial class MainWindow
                 {
                     await RunWholeFileStagingCheckAsync(options);
                 }
-                else
+                else if (options.View == "partial-staging-check")
                 {
                     await RunPartialStagingCheckAsync(options);
+                }
+                else
+                {
+                    await RunCommitComposerCheckAsync(options);
                 }
 
                 return;

@@ -1143,6 +1143,7 @@
                                         <RowDefinition Height="58" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <Grid ColumnSpacing="8">
                                         <Grid.ColumnDefinitions>
@@ -1153,14 +1154,18 @@
                                         <Button x:Name="GenerateCommitMessageButton" Grid.Column="1" Content="Generate with Codex" Click="GenerateCommitMessageButton_Click" AutomationProperties.Name="Generate commit message with Codex" />
                                     </Grid>
                                     <TextBox x:Name="CommitDescriptionBox" Grid.Row="1" Margin="0,8,0,0" PlaceholderText="Description (optional)" AcceptsReturn="True" TextWrapping="Wrap" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Commit description" />
-                                    <StackPanel Grid.Row="2" Margin="0,8,0,0" Spacing="4">
+                                    <StackPanel Grid.Row="2" Margin="0,8,0,0" Spacing="6">
+                                        <TextBox x:Name="CoAuthorsBox" PlaceholderText="Co-authors (one per line: Name &lt;email&gt;)" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="2000" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Co-authors" />
+                                        <CheckBox x:Name="SignOffCheckBox" IsChecked="False" Content="Add Signed-off-by trailer" ToolTipService.ToolTip="Append a Signed-off-by trailer with the configured Git identity." AutomationProperties.Name="Add Signed-off-by trailer" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="3" Margin="0,8,0,0" Spacing="4">
                                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                             <ProgressRing x:Name="CommitMessageGenerationRing" Width="18" Height="18" IsActive="False" Visibility="Collapsed" />
                                             <TextBlock x:Name="CommitMessageGenerationStatusText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
                                         </StackPanel>
                                         <TextBlock x:Name="CommitMessageGenerationAvailabilityText" Text="Stage changes first, or sign in to Codex in Settings." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.Name="Commit message generation status" />
                                     </StackPanel>
-                                    <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="14" Margin="0,8,0,0" VerticalAlignment="Center">
+                                    <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="14" Margin="0,8,0,0" VerticalAlignment="Center">
                                         <CheckBox x:Name="AmendCheckBox" IsChecked="False" Content="Amend previous commit" Click="AmendCheckBox_Click" ToolTipService.ToolTip="Replace the current HEAD commit, including a message-only amend." AutomationProperties.Name="Amend previous commit" />
                                         <Button x:Name="CommitButton" Content="Commit staged changes" Click="CommitButton_Click" AutomationProperties.Name="Commit staged changes" />
                                         <TextBlock x:Name="CommitIdentityText" Text="" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
