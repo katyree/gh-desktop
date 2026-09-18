@@ -208,6 +208,65 @@ $env:WINGIT_NATIVE_SETTINGS_DIRECTORY = $handlerProfile
 Remove-Item Env:WINGIT_NATIVE_SETTINGS_DIRECTORY
 ```
 
+The `partial-discard-check` capture creates a fresh synthetic child under
+the supplied fixture parent and drives the native partial line/hunk
+selection and discard handlers. The run at
+`native/artifacts/task20-partial-discard-check/partial-discard.png`
+recorded 50 passing assertions in the adjacent `.checks.txt` report. The
+fixture starts with a staged `line 02` change in the target file, two
+unstaged added lines plus a deleted line in one hunk, a separate unstaged
+`line 30` hunk, one unrelated staged file, one untracked file, one CRLF
+file, one file without a trailing newline, and one NUL-byte binary file.
+The assertions cover discarding a single selected line (the index keeps
+the preexisting staged change and only that line leaves the worktree),
+discarding a whole hunk (the deleted line is restored), an explicit
+cancel path that changes nothing, confirmation content that names the
+file with its line and hunk scope, rejecting a stale selection after the
+worktree changed with a `Partial discard stopped; refresh required`
+error while preserving the index and worktree bytes, exact CRLF and
+final-newline byte round-trips, and a binary selection that reports
+`Line selection unavailable` with the worktree bytes preserved and no
+whole-file fallback. The focused `GitRepositoryPartialDiscardTests` run
+passed 4/4, covering line and whole-hunk discard with a preexisting
+same-file staged change, stale discard rejection, deletion-hunk discard
+with unrelated index and worktree preservation, and binary-unsupported
+rejection; the full Core suite passed 133/133. The copied app's
+`WinGit.Native.dll` SHA-256 was
+`284152AC14E2A6DD4AA4201674100028E0AE5AE648A461EF571428314EDFD6DA`.
+Independent Git inspection found `M binary-target.bin`,
+`MM partial-discard-target.txt`, `M  unrelated-staged.txt`, and untracked
+`untracked file.txt`; the index holds only the preexisting staged line
+while the worktree keeps the unselected `line 30 keep` edit with the
+discarded lines gone. The screenshot shows the rendered Changes view
+with the binary unavailable message, and the diagnostic invoked
+`ApplyPartialSelection`, the confirmation-content builder, and
+`DiscardSelectedChangesAsync` directly without physical clicks. The
+`ContentDialog` confirmation itself was not clicked, and interactive
+mouse verification was not attempted. Whole-file discard verification
+stays with task 19; this row is not fully verified until both slices
+have evidence.
+
+To reproduce the check, copy the current published tree, then run the
+copied app with a fresh fixture parent and an isolated settings
+directory:
+
+```powershell
+$repoRoot = (Resolve-Path .).Path
+$handlerParent = Join-Path $repoRoot ("native\artifacts\task20-partial-discard-check-" + [guid]::NewGuid().ToString("N"))
+$handlerProfile = Join-Path $handlerParent "profile"
+$handlerCapture = Join-Path $handlerParent "partial-discard.png"
+$handlerApp = Join-Path $repoRoot "native\artifacts\task20-partial-discard-app"
+New-Item -ItemType Directory -Force -Path $handlerProfile | Out-Null
+Copy-Item -Recurse -Path (Join-Path $repoRoot "native\artifacts\win-x64") -Destination $handlerApp
+$env:WINGIT_NATIVE_SETTINGS_DIRECTORY = $handlerProfile
+& (Join-Path $handlerApp "WinGit.Native.exe") `
+  --capture $handlerCapture `
+  --view partial-discard-check `
+  --repository $handlerParent `
+  --theme light
+Remove-Item Env:WINGIT_NATIVE_SETTINGS_DIRECTORY
+```
+
 The native appearance scope is one light palette and one dark palette. The
 `System` setting chooses between those two palettes. User-defined theme
 palettes are outside this migration target.
@@ -285,7 +344,7 @@ covered under work unit 50.
 | 19 | Commit selected files with message, author, and attribution controls; use `app/src/ui/changes/commit-message.tsx`, `app/src/ui/commit-message`, `app/src/lib/git/commit.ts`, and `app/src/ui/unknown-authors`. | 18 | Partial | A commit contains only the selected changes, preserves the chosen author, and displays Git errors without losing the message. The native composer now has co-author (`Name <email>`, one per line) and Signed-off-by controls backed by Core trailer validation and `git commit --signoff`; the commit path captures the draft and file selection up front, guards async results by operation generation and repository root, and restores the selection after a failed commit. The `commit-composer-check` handler run recorded 31 passing assertions covering the staged-only commit with co-author and sign-off trailers, author metadata, unstaged/untracked preservation, composer clearing on success, amend with attribution, stale-amend failure with draft and selection retention, and repository-switch draft isolation; the focused `GitRepositoryCommitComposerTests` run passed 3/3 and the full Core suite passed 130/130. Broader Electron parity (unknown-author lookup, per-repository author override, hook-specific failure UI) remains unverified. |
 | 20 | Amend the previous commit; use `app/src/ui/changes/commit-message.tsx` and `app/src/lib/git/commit.ts`. | 19 | Partial | Native amend replaced fixture B HEAD `d17a49728a89a9fff8c06da727a72c38bbef3a3d` with `f60d80e8d3013faa69cd7070cb36f94052039810`, preserved the typed two-paragraph message, left the tree and status clean, and refreshed History; see `native/artifacts/screenshots/native-dc114-amend-success-light-20260905.jpg`. The current-source 51D3 artifact loaded the existing `f60d80e` subject/body into an empty Amend composer, restored a blank composer when Amend was toggled off, preserved an existing `Keep my existing draft` draft when toggled on, and rejected an amend after synthetic HEAD `b614078ddf6d721fa952ff643cf3dad1be1c6736` advanced while keeping the draft and clean Git state; see `native/artifacts/screenshots/native-51d3-amend-loaded-dark-20260905.jpg` and `native/artifacts/screenshots/native-51d3-amend-stale-head-preserves-draft-20260905.jpg`. The row remains `Partial` for broader unverified migration parity and edge paths. |
 | 21 | Undo a commit; use `app/src/ui/changes/undo-commit.tsx`, `app/src/ui/undo`, and `app/src/lib/git/reset.ts`. | 19 | Partial | Native History exposes the current HEAD summary and ID, confirms branch and worktree effects, calls the Core expected-HEAD guard, restores the commit message after success, and refreshes Changes. On the `9B98` artifact, Undo showed the full `70029faf273f9ba7361c5c21dc2c41ef3ebd003e` target, returned HEAD to `a3c4e7f4bccc614642c0770e9b1b667bc63a38bc`, restored the composer, and preserved the untracked synthetic file; see `native/artifacts/screenshots/resume-undo-preserved-file-light-20260905.jpg`. Initial-commit, alternate worktree, and newer-source-build verification remain. |
-| 22 | Discard full files and selected changes; use `app/src/ui/discard-changes` and `app/src/lib/git/rm.ts` and `reset.ts`. | 12, 46 | Remaining | The confirmation names the affected paths, and the selected files or hunks disappear from the worktree only after confirmation. |
+| 22 | Discard full files and selected changes; use `app/src/ui/discard-changes` and `app/src/lib/git/rm.ts` and `reset.ts`. | 12, 46 | Partial | The confirmation names the affected paths, and the selected files or hunks disappear from the worktree only after confirmation. The selected-line/hunk slice is verified (partial-discard-check plus focused Core tests); whole-file discard verification stays with task 19. |
 | 23 | Revert a commit; use `app/src/ui/toolbar/revert-progress.tsx`, `app/src/lib/git/revert.ts`, and `app/src/ui/history`. | 16, 46 | Partial | Native History captures the selected full commit ID, current branch, and expected HEAD before confirmation, calls the guarded Core revert, refreshes the repository, and exposes conflict paths with Continue, Skip, and Abort recovery. Desktop confirmation and successful Git-write verification remain. |
 | 24 | Surface hooks, progress, retries, and local-change warnings; use `app/src/ui/commit-progress`, `app/src/ui/hook-failed`, `app/src/ui/local-changes-overwritten`, `app/src/ui/dispatcher/error-handlers.ts`, and `app/src/lib/hooks`. | 18, 19 | Remaining | A slow or failed Git action shows progress, preserves actionable stderr, and gives the user a safe retry or recovery action. |
 
