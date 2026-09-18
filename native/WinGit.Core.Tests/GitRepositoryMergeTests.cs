@@ -319,6 +319,157 @@ public sealed class GitRepositoryMergeTests : IDisposable
         Assert.False(aborted.State.IsInProgress);
     }
 
+    [Fact]
+    public async Task SquashMergeStagesCombinedChangeAndContinueCommitsIt()
+    {
+        WriteFile("shared.txt", "base\n");
+        Commit("root");
+
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "feature", null, CancellationToken.None);
+        await service.CheckoutBranchAsync(repositoryRoot, "feature", CancellationToken.None);
+        WriteFile("first.txt", "first\n");
+        await service.StageFilesAsync(repositoryRoot, ["first.txt"], CancellationToken.None);
+        await service.CommitAsync(repositoryRoot, "first change", null, amend: false, CancellationToken.None);
+        WriteFile("second.txt", "second\n");
+        await service.StageFilesAsync(repositoryRoot, ["second.txt"], CancellationToken.None);
+        await service.CommitAsync(repositoryRoot, "second change", null, amend: false, CancellationToken.None);
+
+        await service.CheckoutBranchAsync(repositoryRoot, "main", CancellationToken.None);
+        var mainHead = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+        var result = await service.SquashMergeBranchAsync(
+            repositoryRoot,
+            "feature",
+            mainHead,
+            CancellationToken.None);
+
+        Assert.Equal(MergeOutcome.SquashStaged, result.Outcome);
+        Assert.Equal(mainHead, RunGit(repositoryRoot, "rev-parse", "HEAD").Trim());
+        Assert.True(result.State.IsSquash);
+        Assert.True(result.State.IsSquashMergePending);
+        Assert.False(result.State.IsInProgress);
+        Assert.Empty(result.State.UnmergedPaths);
+        Assert.Equal("first\n", File.ReadAllText(Path.Combine(repositoryRoot, "first.txt")));
+        Assert.Equal("second\n", File.ReadAllText(Path.Combine(repositoryRoot, "second.txt")));
+
+        var continued = await service.ContinueSquashMergeAsync(repositoryRoot, CancellationToken.None);
+        Assert.Equal(MergeOutcome.Completed, continued.Outcome);
+        var squashHead = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+        Assert.NotEqual(mainHead, squashHead);
+        Assert.Equal(mainHead, RunGit(repositoryRoot, "rev-parse", $"{squashHead}^").Trim());
+        Assert.Equal("first\n", File.ReadAllText(Path.Combine(repositoryRoot, "first.txt")));
+        Assert.Equal("second\n", File.ReadAllText(Path.Combine(repositoryRoot, "second.txt")));
+        Assert.Empty((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+    }
+
+    [Fact]
+    public async Task SquashMergeReportsAlreadyUpToDate()
+    {
+        WriteFile("shared.txt", "base\n");
+        Commit("root");
+
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "feature", null, CancellationToken.None);
+        var mainHead = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+        var result = await service.SquashMergeBranchAsync(
+            repositoryRoot,
+            "feature",
+            mainHead,
+            CancellationToken.None);
+
+        Assert.Equal(MergeOutcome.AlreadyUpToDate, result.Outcome);
+        Assert.Equal(mainHead, RunGit(repositoryRoot, "rev-parse", "HEAD").Trim());
+        Assert.False(result.State.IsSquash);
+        Assert.Empty((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+    }
+
+    [Fact]
+    public async Task ConflictedSquashMergeAbortsToPreMergeTip()
+    {
+        WriteFile("shared.txt", "base\n");
+        Commit("root");
+
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "feature", null, CancellationToken.None);
+        await service.CheckoutBranchAsync(repositoryRoot, "feature", CancellationToken.None);
+        WriteFile("shared.txt", "feature\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        await service.CommitAsync(repositoryRoot, "feature edit", null, amend: false, CancellationToken.None);
+
+        await service.CheckoutBranchAsync(repositoryRoot, "main", CancellationToken.None);
+        WriteFile("shared.txt", "main\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        await service.CommitAsync(repositoryRoot, "main edit", null, amend: false, CancellationToken.None);
+        var mainHead = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+
+        var result = await service.SquashMergeBranchAsync(
+            repositoryRoot,
+            "feature",
+            mainHead,
+            CancellationToken.None);
+
+        Assert.Equal(MergeOutcome.Conflicts, result.Outcome);
+        Assert.Equal(mainHead, RunGit(repositoryRoot, "rev-parse", "HEAD").Trim());
+        Assert.True(result.State.IsSquashMergePending);
+        Assert.Single(result.State.UnmergedPaths);
+
+        var blocked = await Assert.ThrowsAsync<MergeOperationBlockedException>(
+            () => service.ContinueSquashMergeAsync(repositoryRoot, CancellationToken.None));
+        Assert.Equal(MergeOperationFailureReason.UnresolvedConflicts, blocked.Reason);
+
+        var aborted = await service.AbortSquashMergeAsync(repositoryRoot, mainHead, CancellationToken.None);
+        Assert.Equal(MergeOutcome.Aborted, aborted.Outcome);
+        Assert.Equal(mainHead, RunGit(repositoryRoot, "rev-parse", "HEAD").Trim());
+        Assert.False(aborted.State.IsSquash);
+        Assert.Equal("main\n", File.ReadAllText(Path.Combine(repositoryRoot, "shared.txt")));
+        Assert.Empty((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+
+        var gone = await Assert.ThrowsAsync<MergeOperationBlockedException>(
+            () => service.AbortSquashMergeAsync(repositoryRoot, mainHead, CancellationToken.None));
+        Assert.Equal(MergeOperationFailureReason.NotInProgress, gone.Reason);
+    }
+
+    [Fact]
+    public async Task SquashMergeRefusesStagedSquashAndStaleTips()
+    {
+        WriteFile("shared.txt", "base\n");
+        Commit("root");
+
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "feature", null, CancellationToken.None);
+        await service.CheckoutBranchAsync(repositoryRoot, "feature", CancellationToken.None);
+        WriteFile("feature.txt", "feature\n");
+        await service.StageFilesAsync(repositoryRoot, ["feature.txt"], CancellationToken.None);
+        await service.CommitAsync(repositoryRoot, "feature change", null, amend: false, CancellationToken.None);
+
+        await service.CheckoutBranchAsync(repositoryRoot, "main", CancellationToken.None);
+        var mainHead = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+        var staged = await service.SquashMergeBranchAsync(
+            repositoryRoot,
+            "feature",
+            mainHead,
+            CancellationToken.None);
+        Assert.Equal(MergeOutcome.SquashStaged, staged.Outcome);
+
+        var duplicate = await Assert.ThrowsAsync<MergeOperationBlockedException>(
+            () => service.SquashMergeBranchAsync(repositoryRoot, "feature", mainHead, CancellationToken.None));
+        Assert.Equal(MergeOperationFailureReason.SquashAlreadyStaged, duplicate.Reason);
+
+        var staleStart = await Assert.ThrowsAsync<MergeOperationBlockedException>(
+            () => service.SquashMergeBranchAsync(repositoryRoot, "feature", new string('0', 40), CancellationToken.None));
+        Assert.Equal(MergeOperationFailureReason.StaleHead, staleStart.Reason);
+
+        var staleAbort = await Assert.ThrowsAsync<MergeOperationBlockedException>(
+            () => service.AbortSquashMergeAsync(repositoryRoot, new string('1', 40), CancellationToken.None));
+        Assert.Equal(MergeOperationFailureReason.StaleHead, staleAbort.Reason);
+
+        var aborted = await service.AbortSquashMergeAsync(repositoryRoot, mainHead, CancellationToken.None);
+        Assert.Equal(MergeOutcome.Aborted, aborted.Outcome);
+        Assert.Equal(mainHead, RunGit(repositoryRoot, "rev-parse", "HEAD").Trim());
+        Assert.False(File.Exists(Path.Combine(repositoryRoot, "feature.txt")));
+        Assert.Empty((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+    }
+
     public void Dispose()
     {
         DeleteDirectory(repositoryRoot);

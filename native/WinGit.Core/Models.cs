@@ -204,6 +204,7 @@ public enum GitOperationKind
 {
     None,
     Merge,
+    SquashMerge,
     CherryPick,
     Revert,
     Rebase,
@@ -219,6 +220,7 @@ public enum MergeOutcome
     Conflicts,
     InProgress,
     Aborted,
+    SquashStaged,
 }
 
 /// <summary>Why a merge lifecycle operation was refused for the observed state.</summary>
@@ -229,6 +231,7 @@ public enum MergeOperationFailureReason
     StaleHead,
     UnbornRepository,
     UnresolvedConflicts,
+    SquashAlreadyStaged,
 }
 
 /// <summary>A bounded, read-only view of Git's current operation markers and conflicts.</summary>
@@ -267,6 +270,14 @@ public sealed record MergeOperationState
     public bool IsInProgress => OperationKind != GitOperationKind.None;
 
     public bool IsMergeInProgress => OperationKind == GitOperationKind.Merge;
+
+    /// <summary>
+    /// A squash merge left staged changes (with or without unresolved
+    /// conflicts) without moving HEAD. A squash merge never sets MERGE_HEAD,
+    /// so the operation kind stays <see cref="GitOperationKind.None"/> here;
+    /// the UI synthesizes its own squash-merge presentation from this flag.
+    /// </summary>
+    public bool IsSquashMergePending => IsSquash && OperationKind == GitOperationKind.None;
 
     public bool HasUnresolvedConflicts => UnmergedPaths.Count > 0;
 }
