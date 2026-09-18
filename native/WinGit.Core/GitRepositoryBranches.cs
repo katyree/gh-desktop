@@ -31,7 +31,13 @@ public sealed partial class GitRepositoryService
         return ParseBranches(repositoryRoot, result.StandardOutput);
     }
 
-    /// <summary>Creates a local branch at the current HEAD or an explicit start point.</summary>
+    /// <summary>
+    /// Creates a local branch from a validated start point without changing
+    /// the checkout. The start point is resolved to its commit before the
+    /// mutation and revalidated inside it; callers that need the validated
+    /// commit or stale-start reporting should capture a
+    /// <see cref="BranchCreationPlan"/> first.
+    /// </summary>
     public async Task CreateBranchAsync(
         string root,
         string name,
@@ -39,21 +45,12 @@ public sealed partial class GitRepositoryService
         CancellationToken cancellationToken)
     {
         var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
-        var branchName = await ValidateBranchNameAsync(repositoryRoot, name, cancellationToken).ConfigureAwait(false);
-        var normalizedStartPoint = ValidateStartPoint(startPoint);
-        await ExecuteMutationAsync(
+        var plan = await CaptureBranchCreationPlanAsync(
             repositoryRoot,
-            cancellationToken,
-            async path =>
-            {
-                var arguments = new List<string> { "branch", branchName };
-                if (normalizedStartPoint is not null)
-                {
-                    arguments.Add(normalizedStartPoint);
-                }
-
-                await processRunner.RunAsync(path, arguments, cancellationToken).ConfigureAwait(false);
-            }).ConfigureAwait(false);
+            name,
+            startPoint,
+            cancellationToken).ConfigureAwait(false);
+        await CreateBranchAsync(repositoryRoot, plan, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Renames a local branch without changing its worktree.</summary>
@@ -414,24 +411,6 @@ public sealed partial class GitRepositoryService
         }
 
         return name;
-    }
-
-    private static string? ValidateStartPoint(string? startPoint)
-    {
-        if (string.IsNullOrWhiteSpace(startPoint))
-        {
-            return null;
-        }
-
-        if ((startPoint.Length > 0 && startPoint[0] == '-')
-            || startPoint.IndexOf('\0') >= 0
-            || startPoint.Contains('\r')
-            || startPoint.Contains('\n'))
-        {
-            throw new ArgumentException("The branch start point contains an invalid character.", nameof(startPoint));
-        }
-
-        return startPoint;
     }
 
     private static IReadOnlyList<BranchSummary> ParseBranches(string repositoryRoot, byte[] output)
