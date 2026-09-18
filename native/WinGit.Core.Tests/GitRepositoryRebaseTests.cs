@@ -172,6 +172,57 @@ public sealed class GitRepositoryRebaseTests : IDisposable
         Assert.Equal("feature", RunGit(repositoryRoot, "branch", "--show-current").Trim());
     }
 
+    [Fact]
+    public async Task ContinueSkipsPickEmptiedByResolution()
+    {
+        WriteFile("shared.txt", "base\n");
+        Commit("root");
+
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "feature", null, CancellationToken.None);
+        await service.CheckoutBranchAsync(repositoryRoot, "feature", CancellationToken.None);
+        WriteFile("shared.txt", "feature\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        var originalFeatureHead = await service.CommitAsync(
+            repositoryRoot,
+            "feature edit",
+            null,
+            amend: false,
+            CancellationToken.None);
+
+        await service.CheckoutBranchAsync(repositoryRoot, "main", CancellationToken.None);
+        WriteFile("shared.txt", "main\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        var mainHead = await service.CommitAsync(
+            repositoryRoot,
+            "main edit",
+            null,
+            amend: false,
+            CancellationToken.None);
+        await service.CheckoutBranchAsync(repositoryRoot, "feature", CancellationToken.None);
+
+        var conflict = await service.RebaseBranchAsync(
+            repositoryRoot,
+            "main",
+            originalFeatureHead,
+            CancellationToken.None);
+        Assert.Equal(RebaseOutcome.Conflicts, conflict.Outcome);
+
+        // Resolve by accepting the base version, leaving nothing to commit
+        // for the replayed pick. Continuing must skip it instead of failing
+        // on an empty commit.
+        WriteFile("shared.txt", "main\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        var continued = await service.ContinueRebaseAsync(repositoryRoot, CancellationToken.None);
+
+        Assert.Equal(RebaseOutcome.Skipped, continued.Outcome);
+        Assert.False(continued.State.IsInProgress);
+        Assert.Equal(mainHead, RunGit(repositoryRoot, "rev-parse", "HEAD").Trim());
+        Assert.Equal("feature", RunGit(repositoryRoot, "branch", "--show-current").Trim());
+        Assert.Equal("main\n", File.ReadAllText(Path.Combine(repositoryRoot, "shared.txt")));
+        Assert.Empty((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+    }
+
     public void Dispose()
     {
         DeleteDirectory(repositoryRoot);
