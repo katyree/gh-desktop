@@ -27,7 +27,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (options.View is "whole-file-staging-check" or "partial-staging-check" or "commit-composer-check" or "whole-file-discard-check")
+            if (options.View is "whole-file-staging-check" or "partial-staging-check" or "partial-discard-check" or "commit-composer-check" or "whole-file-discard-check")
             {
                 if (string.IsNullOrWhiteSpace(options.RepositoryPath))
                 {
@@ -48,6 +48,10 @@ public sealed partial class MainWindow
                 else if (options.View == "partial-staging-check")
                 {
                     await RunPartialStagingCheckAsync(options);
+                }
+                else if (options.View == "partial-discard-check")
+                {
+                    await RunPartialDiscardCheckAsync(options);
                 }
                 else
                 {

@@ -134,6 +134,116 @@ public sealed class GitRepositoryPartialDiscardTests : IDisposable
         Assert.Equal(changedAfterSnapshot, File.ReadAllText(path));
     }
 
+    [Fact]
+    public async Task DiscardSelectedDeletionHunkPreservesUnselectedAdditionIndexAndUnrelatedFiles()
+    {
+        var targetPath = Path.Combine(repositoryRoot, "discard-hunk.txt");
+        var baseline = string.Join(
+            "\n",
+            Enumerable.Range(1, 30).Select(index => $"line {index:D2}")) + "\n";
+        WriteFile(targetPath, baseline);
+        WriteFile(Path.Combine(repositoryRoot, "unrelated-staged.txt"), "unrelated staged\n");
+        Commit("initial");
+
+        var service = new GitRepositoryService();
+
+        // A preexisting staged change that discard must never touch.
+        WriteFile(targetPath, baseline.Replace("line 02", "line 02 staged", StringComparison.Ordinal));
+        await service.StageFilesAsync(
+            repositoryRoot,
+            ["discard-hunk.txt", "unrelated-staged.txt"],
+            CancellationToken.None);
+
+        // Two unstaged hunks: an added pair plus a deletion, and a kept edit.
+        var worktree = baseline
+            .Replace("line 02", "line 02 staged", StringComparison.Ordinal)
+            .Replace(
+                "line 10\nline 11",
+                "line 10\nline 10b added\nline 10c added\nline 11",
+                StringComparison.Ordinal)
+            .Replace("line 12\n", string.Empty, StringComparison.Ordinal)
+            .Replace("line 25", "line 25 keep", StringComparison.Ordinal);
+        WriteFile(targetPath, worktree);
+        WriteFile(Path.Combine(repositoryRoot, "unrelated-staged.txt"), "unrelated staged\nunrelated added\n");
+        await service.StageFilesAsync(repositoryRoot, ["unrelated-staged.txt"], CancellationToken.None);
+        var untrackedPath = Path.Combine(repositoryRoot, "untracked file.txt");
+        WriteFile(untrackedPath, "untracked bytes\n");
+
+        var status = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        var file = Assert.Single(status.Changes, change => change.Path == "discard-hunk.txt");
+        var unstaged = await service.GetPartialDiffAsync(
+            repositoryRoot,
+            file,
+            staged: false,
+            CancellationToken.None);
+        Assert.True(unstaged.IsSupported, unstaged.Message);
+
+        var deletionHunk = Assert.Single(
+            unstaged.Hunks,
+            hunk => hunk.Lines.Any(line => line.Kind == DiffLineKind.Removed && line.Text == "line 12"));
+        Assert.Contains(
+            deletionHunk.Lines,
+            line => line.Kind == DiffLineKind.Added && line.Text == "line 10b added");
+
+        await service.DiscardSelectedChangesAsync(
+            repositoryRoot,
+            unstaged,
+            [PartialDiffSelection.ForHunk(deletionHunk.Id)],
+            CancellationToken.None);
+
+        var expectedAfterHunk = baseline
+            .Replace("line 02", "line 02 staged", StringComparison.Ordinal)
+            .Replace("line 25", "line 25 keep", StringComparison.Ordinal);
+        Assert.Equal(expectedAfterHunk, File.ReadAllText(targetPath));
+
+        // The staged snapshot keeps the preexisting staged line and gains nothing else.
+        var after = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        var changed = Assert.Single(after.Changes, change => change.Path == "discard-hunk.txt");
+        Assert.Equal("M", changed.IndexStatus);
+        Assert.Equal("M", changed.WorkTreeStatus);
+        var stagedContent = RunGit(repositoryRoot, "show", ":discard-hunk.txt");
+        Assert.Contains("line 02 staged", stagedContent, StringComparison.Ordinal);
+        Assert.DoesNotContain("line 10b added", stagedContent, StringComparison.Ordinal);
+        Assert.DoesNotContain("line 25 keep", stagedContent, StringComparison.Ordinal);
+
+        // Unrelated staged worktree/index content and the untracked file are preserved.
+        Assert.Equal(
+            "unrelated staged\nunrelated added\n",
+            File.ReadAllText(Path.Combine(repositoryRoot, "unrelated-staged.txt")));
+        Assert.Equal(
+            "unrelated staged\nunrelated added\n",
+            RunGit(repositoryRoot, "show", ":unrelated-staged.txt"));
+        Assert.Equal("untracked bytes\n", File.ReadAllText(untrackedPath));
+    }
+
+    [Fact]
+    public async Task DiscardSelectedChangesRejectsUnsupportedBinaryWithoutModification()
+    {
+        var binaryPath = Path.Combine(repositoryRoot, "binary.bin");
+        File.WriteAllBytes(binaryPath, [0x00, 0x01, 0x02, 0x03]);
+        Commit("initial binary");
+
+        File.WriteAllBytes(binaryPath, [0x00, 0x01, 0x02, 0x04]);
+        var service = new GitRepositoryService();
+        var status = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        var file = Assert.Single(status.Changes, change => change.Path == "binary.bin");
+        var diff = await service.GetPartialDiffAsync(
+            repositoryRoot,
+            file,
+            staged: false,
+            CancellationToken.None);
+
+        Assert.False(diff.IsSupported, "Binary selections must be unavailable, never whole-file discard.");
+        await Assert.ThrowsAsync<PartialStagingUnsupportedException>(
+            () => service.DiscardSelectedChangesAsync(
+                repositoryRoot,
+                diff,
+                [PartialDiffSelection.ForHunk(0)],
+                CancellationToken.None));
+
+        Assert.Equal([0x00, 0x01, 0x02, 0x04], File.ReadAllBytes(binaryPath));
+    }
+
     public void Dispose()
     {
         DeleteDirectory(repositoryRoot);
