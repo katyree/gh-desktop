@@ -93,7 +93,12 @@ public sealed partial class GitRepositoryService
             }).ConfigureAwait(false);
     }
 
-    /// <summary>Continues a cherry-pick after every tracked resolution is staged.</summary>
+    /// <summary>
+    /// Continues a cherry-pick after every tracked resolution is staged. When
+    /// the staged resolutions leave nothing to commit for the current pick,
+    /// an empty commit is recorded so the picked commit still shows up in
+    /// history, matching the Electron continue behavior, before advancing.
+    /// </summary>
     public async Task<CherryPickOperationResult> ContinueCherryPickAsync(
         string root,
         CancellationToken cancellationToken)
@@ -106,6 +111,11 @@ public sealed partial class GitRepositoryService
             {
                 var stateBefore = await ReadCommitOperationSnapshotAsync(path, cancellationToken).ConfigureAwait(false);
                 EnsureCherryPickCanContinue(stateBefore);
+
+                if (!await HasStagedCommitResolutionAsync(path, cancellationToken).ConfigureAwait(false))
+                {
+                    return await ContinueEmptiedCherryPickAsync(path, cancellationToken).ConfigureAwait(false);
+                }
 
                 try
                 {
@@ -144,6 +154,106 @@ public sealed partial class GitRepositoryService
                     : CherryPickOutcome.Completed;
                 return new CherryPickOperationResult(outcome, stateAfter.CurrentHeadId, stateAfter);
             }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Records an emptied cherry-picked commit with <c>commit
+    /// --allow-empty</c> and advances the sequencer when picks remain, so the
+    /// picked commit remains visible in history. Reports the resulting
+    /// sequence outcome.
+    /// </summary>
+    private async Task<CherryPickOperationResult> ContinueEmptiedCherryPickAsync(
+        string repositoryRoot,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await processRunner.RunAsync(
+                repositoryRoot,
+                ["commit", "--allow-empty", "--no-edit"],
+                cancellationToken,
+                environmentOverrides: NoOpEditorEnvironment).ConfigureAwait(false);
+        }
+        catch (GitCommandException commandException)
+        {
+            var commitFailed = await ReadCommitOperationSnapshotPreservingFailureAsync(
+                repositoryRoot,
+                commandException,
+                cancellationToken).ConfigureAwait(false);
+            if (commitFailed.OperationKind == GitOperationKind.CherryPick
+                && commitFailed.HasUnresolvedConflicts)
+            {
+                var commitConflicted = CreateCherryPickState(commitFailed);
+                return new CherryPickOperationResult(
+                    CherryPickOutcome.Conflicts,
+                    commitConflicted.CurrentHeadId,
+                    commitConflicted);
+            }
+
+            ExceptionDispatchInfo.Capture(commandException).Throw();
+            throw;
+        }
+
+        // Recording the empty commit finishes a final pick on its own; only
+        // advance the sequencer explicitly when picks remain.
+        var committed = await ReadCommitOperationSnapshotAsync(repositoryRoot, cancellationToken).ConfigureAwait(false);
+        if (committed.OperationKind != GitOperationKind.CherryPick)
+        {
+            var finished = CreateCherryPickState(committed);
+            return new CherryPickOperationResult(CherryPickOutcome.Completed, finished.CurrentHeadId, finished);
+        }
+
+        try
+        {
+            await processRunner.RunAsync(
+                repositoryRoot,
+                ["cherry-pick", "--continue"],
+                cancellationToken,
+                environmentOverrides: NoOpEditorEnvironment).ConfigureAwait(false);
+        }
+        catch (GitCommandException commandException)
+        {
+            var continueFailed = await ReadCommitOperationSnapshotPreservingFailureAsync(
+                repositoryRoot,
+                commandException,
+                cancellationToken).ConfigureAwait(false);
+            if (continueFailed.OperationKind == GitOperationKind.CherryPick
+                && continueFailed.HasUnresolvedConflicts)
+            {
+                var continueConflicted = CreateCherryPickState(continueFailed);
+                return new CherryPickOperationResult(
+                    CherryPickOutcome.Conflicts,
+                    continueConflicted.CurrentHeadId,
+                    continueConflicted);
+            }
+
+            ExceptionDispatchInfo.Capture(commandException).Throw();
+            throw;
+        }
+
+        var after = await ReadCommitOperationSnapshotAsync(repositoryRoot, cancellationToken).ConfigureAwait(false);
+        var stateAfter = CreateCherryPickState(after);
+        var outcome = stateAfter.IsInProgress
+            ? stateAfter.HasUnresolvedConflicts
+                ? CherryPickOutcome.Conflicts
+                : CherryPickOutcome.InProgress
+            : CherryPickOutcome.Completed;
+        return new CherryPickOperationResult(outcome, stateAfter.CurrentHeadId, stateAfter);
+    }
+
+    /// <summary>
+    /// Reports whether the index holds staged changes. Called after the
+    /// continue guards have refused missing sequences, other operations, and
+    /// unresolved or unstaged resolutions, so an empty answer means the
+    /// current pick has nothing to commit.
+    /// </summary>
+    private async Task<bool> HasStagedCommitResolutionAsync(
+        string repositoryRoot,
+        CancellationToken cancellationToken)
+    {
+        var status = await GetStatusAsync(repositoryRoot, cancellationToken).ConfigureAwait(false);
+        return status.Changes.Any(change =>
+            !IsUntracked(change) && change.IndexStatus.Length > 0);
     }
 
     /// <summary>Explicitly skips the current cherry-picked commit.</summary>

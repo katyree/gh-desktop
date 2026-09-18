@@ -177,6 +177,117 @@ public sealed class GitRepositoryCherryPickRevertTests : IDisposable
     }
 
     [Fact]
+    public async Task ContinueCherryPickCommitsPickEmptiedByResolution()
+    {
+        WriteFile("shared.txt", "base\n");
+        Commit("root");
+
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "source", null, CancellationToken.None);
+        await service.CheckoutBranchAsync(repositoryRoot, "source", CancellationToken.None);
+        WriteFile("shared.txt", "source\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        var sourceCommit = await service.CommitAsync(
+            repositoryRoot,
+            "source conflict",
+            null,
+            amend: false,
+            CancellationToken.None);
+
+        await service.CheckoutBranchAsync(repositoryRoot, "main", CancellationToken.None);
+        WriteFile("shared.txt", "main\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        var mainCommit = await service.CommitAsync(
+            repositoryRoot,
+            "main conflict",
+            null,
+            amend: false,
+            CancellationToken.None);
+
+        var conflict = await service.CherryPickAsync(
+            repositoryRoot,
+            [sourceCommit],
+            mainCommit,
+            CancellationToken.None);
+        Assert.Equal(CherryPickOutcome.Conflicts, conflict.Outcome);
+
+        // Resolve by accepting the base version, leaving nothing to commit.
+        // Continuing must record the empty commit so the picked commit stays
+        // visible in history instead of failing on `cherry-pick --continue`.
+        WriteFile("shared.txt", "main\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        var continued = await service.ContinueCherryPickAsync(repositoryRoot, CancellationToken.None);
+
+        Assert.Equal(CherryPickOutcome.Completed, continued.Outcome);
+        Assert.False(continued.State.IsInProgress);
+        var newHead = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+        Assert.NotEqual(mainCommit, newHead);
+        Assert.Equal(mainCommit, RunGit(repositoryRoot, "rev-parse", $"{newHead}^").Trim());
+        Assert.Equal("source conflict", RunGit(repositoryRoot, "log", "-1", "--format=%s").Trim());
+        Assert.Empty(RunGit(repositoryRoot, "diff", mainCommit, newHead).Trim());
+        Assert.Equal("main\n", File.ReadAllText(Path.Combine(repositoryRoot, "shared.txt")));
+        Assert.Empty((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+    }
+
+    [Fact]
+    public async Task ContinueCherryPickAdvancesSequenceAfterEmptyCommit()
+    {
+        WriteFile("shared.txt", "base\n");
+        Commit("root");
+
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "source", null, CancellationToken.None);
+        await service.CheckoutBranchAsync(repositoryRoot, "source", CancellationToken.None);
+        WriteFile("shared.txt", "source\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        var firstSourceCommit = await service.CommitAsync(
+            repositoryRoot,
+            "first source",
+            null,
+            amend: false,
+            CancellationToken.None);
+        WriteFile("second.txt", "second\n");
+        await service.StageFilesAsync(repositoryRoot, ["second.txt"], CancellationToken.None);
+        var secondSourceCommit = await service.CommitAsync(
+            repositoryRoot,
+            "second source",
+            null,
+            amend: false,
+            CancellationToken.None);
+
+        await service.CheckoutBranchAsync(repositoryRoot, "main", CancellationToken.None);
+        WriteFile("shared.txt", "main\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        var mainCommit = await service.CommitAsync(
+            repositoryRoot,
+            "main conflict",
+            null,
+            amend: false,
+            CancellationToken.None);
+
+        var conflict = await service.CherryPickAsync(
+            repositoryRoot,
+            [firstSourceCommit, secondSourceCommit],
+            mainCommit,
+            CancellationToken.None);
+        Assert.Equal(CherryPickOutcome.Conflicts, conflict.Outcome);
+
+        WriteFile("shared.txt", "main\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        var continued = await service.ContinueCherryPickAsync(repositoryRoot, CancellationToken.None);
+
+        Assert.Equal(CherryPickOutcome.Completed, continued.Outcome);
+        Assert.False(continued.State.IsInProgress);
+        Assert.Equal("main", RunGit(repositoryRoot, "branch", "--show-current").Trim());
+        Assert.Equal(
+            "second source\nfirst source\nmain conflict\n",
+            RunGit(repositoryRoot, "log", "--format=%s", "-3").Replace("\r\n", "\n"));
+        Assert.Empty(RunGit(repositoryRoot, "diff", mainCommit, "HEAD~1").Trim());
+        Assert.Equal("second\n", File.ReadAllText(Path.Combine(repositoryRoot, "second.txt")));
+        Assert.Empty((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+    }
+
+    [Fact]
     public async Task MultiCommitCherryPickReportsCommitTwoAndTypedConflictAfterSkip()
     {
         WriteFile("shared.txt", "base\n");
