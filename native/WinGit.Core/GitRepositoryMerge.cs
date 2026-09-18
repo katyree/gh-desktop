@@ -82,6 +82,126 @@ public sealed partial class GitRepositoryService
     }
 
     /// <summary>
+    /// Squash-merges a validated local branch or commit into the index without
+    /// moving HEAD. A successful squash stages one combined change plus
+    /// SQUASH_MSG; the caller commits it to finish. Git's normal
+    /// dirty-worktree and hook/signing policy remains in effect.
+    /// </summary>
+    public async Task<MergeOperationResult> SquashMergeBranchAsync(
+        string root,
+        string branchOrCommit,
+        string expectedHeadId,
+        CancellationToken cancellationToken)
+    {
+        ValidateMergeTargetInput(branchOrCommit);
+        ValidateExpectedHeadId(expectedHeadId);
+        var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
+
+        return await ExecuteMutationAsync(
+            repositoryRoot,
+            cancellationToken,
+            async path =>
+            {
+                var before = await ReadMergeStateAsync(path, cancellationToken).ConfigureAwait(false);
+                EnsureMergeCanStart(before, expectedHeadId);
+                EnsureNoStagedSquash(before);
+                var target = await ResolveMergeTargetAsync(path, branchOrCommit, cancellationToken).ConfigureAwait(false);
+
+                try
+                {
+                    // --no-edit is harmless for squash (no commit is created).
+                    // Omitting --no-verify keeps normal hooks and signing policy.
+                    // --no-autostash makes dirty-worktree behavior explicit.
+                    await processRunner.RunAsync(
+                        path,
+                        ["merge", "--squash", "--no-autostash", target],
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (GitCommandException)
+                {
+                    var failed = await ReadMergeStateAsync(path, cancellationToken).ConfigureAwait(false);
+                    if (failed.IsSquashMergePending && failed.HasUnresolvedConflicts)
+                    {
+                        return new MergeOperationResult(
+                            MergeOutcome.Conflicts,
+                            failed.CurrentHeadId,
+                            failed);
+                    }
+
+                    throw;
+                }
+
+                var after = await ReadMergeStateAsync(path, cancellationToken).ConfigureAwait(false);
+                // A squash merge never advances HEAD: either the combined change
+                // is staged (SQUASH_MSG set) or the target was already merged.
+                var outcome = after.IsSquashMergePending
+                    ? MergeOutcome.SquashStaged
+                    : MergeOutcome.AlreadyUpToDate;
+                return new MergeOperationResult(outcome, after.CurrentHeadId, after);
+            }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Commits a conflict-free staged squash merge with the existing
+    /// SQUASH_MSG. The explicit no-edit commit keeps the native UI from ever
+    /// waiting on an external editor.
+    /// </summary>
+    public async Task<MergeOperationResult> ContinueSquashMergeAsync(
+        string root,
+        CancellationToken cancellationToken)
+    {
+        var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
+        return await ExecuteMutationAsync(
+            repositoryRoot,
+            cancellationToken,
+            async path =>
+            {
+                var state = await ReadMergeStateAsync(path, cancellationToken).ConfigureAwait(false);
+                EnsureSquashMergeCanContinue(state);
+                await processRunner.RunAsync(
+                    path,
+                    ["commit", "--no-edit"],
+                    cancellationToken).ConfigureAwait(false);
+                var after = await ReadMergeStateAsync(path, cancellationToken).ConfigureAwait(false);
+                return new MergeOperationResult(MergeOutcome.Completed, after.CurrentHeadId, after);
+            }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Aborts a staged squash merge by restoring the captured pre-merge tip.
+    /// A squash merge never moves HEAD, so the tip also guards against
+    /// external changes. Verified to clear SQUASH_MSG and staged changes.
+    /// </summary>
+    public async Task<MergeOperationResult> AbortSquashMergeAsync(
+        string root,
+        string expectedPreMergeTip,
+        CancellationToken cancellationToken)
+    {
+        ValidateExpectedHeadId(expectedPreMergeTip);
+        var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
+        return await ExecuteMutationAsync(
+            repositoryRoot,
+            cancellationToken,
+            async path =>
+            {
+                var state = await ReadMergeStateAsync(path, cancellationToken).ConfigureAwait(false);
+                EnsureSquashMergeCanAbort(state, expectedPreMergeTip);
+                await processRunner.RunAsync(
+                    path,
+                    ["reset", "--hard", expectedPreMergeTip],
+                    cancellationToken).ConfigureAwait(false);
+                var after = await ReadMergeStateAsync(path, cancellationToken).ConfigureAwait(false);
+                if (after.IsSquash
+                    || !string.Equals(after.CurrentHeadId, expectedPreMergeTip, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("Aborting the squash merge left unexpected repository state; refresh and review the repository before retrying.");
+                }
+
+                return new MergeOperationResult(MergeOutcome.Aborted, after.CurrentHeadId, after);
+            }).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Completes a conflict-free merge with the existing MERGE_MSG.  The explicit
     /// no-edit commit keeps the native UI from ever waiting on an external editor.
     /// </summary>
@@ -366,6 +486,63 @@ public sealed partial class GitRepositoryService
                 MergeOperationFailureReason.UnresolvedConflicts,
                 state,
                 "Resolve and stage every unmerged path before continuing the merge.");
+        }
+    }
+
+    private static void EnsureNoStagedSquash(MergeOperationState state)
+    {
+        if (state.IsSquash)
+        {
+            throw new MergeOperationBlockedException(
+                MergeOperationFailureReason.SquashAlreadyStaged,
+                state,
+                "A squashed result is already staged; commit or abort it before starting another merge.");
+        }
+    }
+
+    private static void EnsureSquashMergeCanContinue(MergeOperationState state)
+    {
+        if (!state.IsSquashMergePending)
+        {
+            throw new MergeOperationBlockedException(
+                state.IsMergeInProgress
+                    ? MergeOperationFailureReason.DifferentOperationInProgress
+                    : MergeOperationFailureReason.NotInProgress,
+                state,
+                state.IsMergeInProgress
+                    ? "Only a staged squash merge can be continued by this operation."
+                    : "There is no staged squash merge to continue.");
+        }
+
+        if (state.HasUnresolvedConflicts)
+        {
+            throw new MergeOperationBlockedException(
+                MergeOperationFailureReason.UnresolvedConflicts,
+                state,
+                "Resolve and stage every unmerged path before continuing the squash merge.");
+        }
+    }
+
+    private static void EnsureSquashMergeCanAbort(MergeOperationState state, string expectedPreMergeTip)
+    {
+        if (!state.IsSquashMergePending)
+        {
+            throw new MergeOperationBlockedException(
+                state.IsMergeInProgress
+                    ? MergeOperationFailureReason.DifferentOperationInProgress
+                    : MergeOperationFailureReason.NotInProgress,
+                state,
+                state.IsMergeInProgress
+                    ? "Only a staged squash merge can be aborted by this operation."
+                    : "There is no staged squash merge to abort.");
+        }
+
+        if (!string.Equals(state.CurrentHeadId, expectedPreMergeTip, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new MergeOperationBlockedException(
+                MergeOperationFailureReason.StaleHead,
+                state,
+                "The current commit changed since the squash merge started; refresh the repository before aborting it.");
         }
     }
 

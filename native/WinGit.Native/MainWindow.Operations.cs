@@ -87,6 +87,14 @@ public sealed partial class MainWindow
                     ? GitOperationKind.Revert
                     : mergeState.OperationKind);
 
+        // A squash merge never sets MERGE_HEAD, so the Core state reports no
+        // operation kind. Synthesize the panel kind from the staged squash
+        // flag so conflicted (and staged) squash merges stay recoverable.
+        if (effectiveOperationKind == GitOperationKind.None && mergeState.IsSquashMergePending)
+        {
+            effectiveOperationKind = GitOperationKind.SquashMerge;
+        }
+
         SquashRecoveryReadResult? squashRecovery = null;
         if (effectiveOperationKind == GitOperationKind.Rebase)
         {
@@ -190,11 +198,13 @@ public sealed partial class MainWindow
         RefreshGitOperationButton.IsEnabled = canOperate;
 
         var isMerge = hasRepositoryOperation && activeGitOperationKind == GitOperationKind.Merge;
+        var isSquashMerge = hasRepositoryOperation && activeGitOperationKind == GitOperationKind.SquashMerge;
         var isRebase = hasRepositoryOperation && activeGitOperationKind == GitOperationKind.Rebase;
         var isCherryPick = hasRepositoryOperation && activeGitOperationKind == GitOperationKind.CherryPick;
         var isRevert = hasRepositoryOperation && activeGitOperationKind == GitOperationKind.Revert;
         ContinueGitOperationButton.IsEnabled = canOperate
             && ((isMerge && activeMergeOperationState is { IsMergeInProgress: true, HasUnresolvedConflicts: false })
+                || (isSquashMerge && activeMergeOperationState is { IsSquashMergePending: true, HasUnresolvedConflicts: false })
                 || (isRebase && activeRebaseOperationState is { IsInProgress: true, HasUnresolvedConflicts: false, HasUnstagedChanges: false })
                 || (isCherryPick && activeCherryPickOperationState is { IsInProgress: true, HasUnresolvedConflicts: false, HasUnstagedChanges: false })
                 || (isRevert && activeRevertOperationState is { IsInProgress: true, HasUnresolvedConflicts: false, HasUnstagedChanges: false }));
@@ -202,7 +212,7 @@ public sealed partial class MainWindow
             && ((isRebase && activeRebaseOperationState?.IsInProgress == true)
                 || (isCherryPick && activeCherryPickOperationState?.IsInProgress == true)
                 || (isRevert && activeRevertOperationState?.IsInProgress == true));
-        AbortGitOperationButton.IsEnabled = canOperate && (isMerge || isRebase || isCherryPick || isRevert);
+        AbortGitOperationButton.IsEnabled = canOperate && (isMerge || isSquashMerge || isRebase || isCherryPick || isRevert);
     }
 
     private void UpdateGitOperationPresentation()
@@ -234,12 +244,14 @@ public sealed partial class MainWindow
         }
 
         var isMerge = activeGitOperationKind == GitOperationKind.Merge;
+        var isSquashMerge = activeGitOperationKind == GitOperationKind.SquashMerge;
         var isRebase = activeGitOperationKind == GitOperationKind.Rebase;
         var isCherryPick = activeGitOperationKind == GitOperationKind.CherryPick;
         var isRevert = activeGitOperationKind == GitOperationKind.Revert;
         GitOperationTitle.Text = activeGitOperationKind switch
         {
             GitOperationKind.Merge => "Merge in progress",
+            GitOperationKind.SquashMerge => "Squash merge in progress",
             GitOperationKind.Rebase => "Rebase in progress",
             GitOperationKind.CherryPick => "Cherry-pick in progress",
             GitOperationKind.Revert => "Revert in progress",
@@ -275,6 +287,13 @@ public sealed partial class MainWindow
                 : rebase.HasUnstagedChanges
                     ? "Stage tracked changes before continuing the rebase."
                     : "The rebase is ready to continue. Review the current changes first.";
+        }
+        else if (isSquashMerge && activeMergeOperationState is { } squashMerge)
+        {
+            GitOperationProgressText.Text = $"{squashMerge.Branch}  ·  HEAD {ShortObjectId(squashMerge.CurrentHeadId)}  ·  squashed changes staged";
+            GitOperationMessageText.Text = squashMerge.HasUnresolvedConflicts
+                ? "Resolve and stage every conflicted path before continuing the squash merge."
+                : "The squash merge is ready to continue. Review the staged changes first, or abort to discard them.";
         }
         else if (isMerge && activeMergeOperationState is { } merge)
         {
@@ -324,7 +343,7 @@ public sealed partial class MainWindow
                 : "Git reports an active operation. Refresh to read its current state.";
         }
 
-        ContinueGitOperationButton.Visibility = isMerge || isRebase || isCherryPick || isRevert
+        ContinueGitOperationButton.Visibility = isMerge || isSquashMerge || isRebase || isCherryPick || isRevert
             ? Visibility.Visible
             : Visibility.Collapsed;
         SkipGitOperationButton.Content = isRebase
@@ -335,7 +354,7 @@ public sealed partial class MainWindow
         SkipGitOperationButton.Visibility = isRebase || isCherryPick || isRevert
             ? Visibility.Visible
             : Visibility.Collapsed;
-        AbortGitOperationButton.Visibility = isMerge || isRebase || isCherryPick || isRevert
+        AbortGitOperationButton.Visibility = isMerge || isSquashMerge || isRebase || isCherryPick || isRevert
             ? Visibility.Visible
             : Visibility.Collapsed;
         UpdateGitOperationControls();
@@ -402,18 +421,30 @@ public sealed partial class MainWindow
             return;
         }
 
+        var squashBox = new CheckBox
+        {
+            Content = "Squash the source commits into a single staged change (HEAD stays until you commit)",
+        };
         var dialog = CreateDialog(
             "Merge branch?",
             "Merge",
-            new TextBlock
+            new StackPanel
             {
-                Text = $"Merge \"{request.SourceBranch}\" ({ShortObjectId(request.SourceHeadId)}) into \"{request.CurrentBranch}\" ({ShortObjectId(request.ExpectedHeadId)})?\n\nGit will use this captured source commit and may stop with conflicts that you resolve and stage manually.",
-                TextWrapping = TextWrapping.Wrap,
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = $"Merge \"{request.SourceBranch}\" ({ShortObjectId(request.SourceHeadId)}) into \"{request.CurrentBranch}\" ({ShortObjectId(request.ExpectedHeadId)})?\n\nGit will use this captured source commit and may stop with conflicts that you resolve and stage manually.",
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                    squashBox,
+                },
             });
         dialog.DefaultButton = ContentDialogButton.Primary;
         if (await dialog.ShowAsync() == ContentDialogResult.Primary)
         {
-            await RunBranchOperationAsync(request, rebase: false);
+            await RunBranchOperationAsync(request, rebase: false, squash: squashBox.IsChecked == true);
         }
     }
 
@@ -442,7 +473,8 @@ public sealed partial class MainWindow
 
     private async Task RunBranchOperationAsync(
         BranchOperationRequest request,
-        bool rebase)
+        bool rebase,
+        bool squash = false)
     {
         if (!CanStartRepositoryWrite()
             || !string.Equals(repositoryRoot, request.Root, StringComparison.OrdinalIgnoreCase)
@@ -460,7 +492,9 @@ public sealed partial class MainWindow
         // newer generation; root/HEAD guards prevent wrong-repository writes.
         var operation = BeginOperation(rebase
             ? $"Rebasing {request.CurrentBranch} onto {request.SourceBranch}…"
-            : $"Merging {request.SourceBranch} into {request.CurrentBranch}…",
+            : squash
+                ? $"Squash-merging {request.SourceBranch} into {request.CurrentBranch}…"
+                : $"Merging {request.SourceBranch} into {request.CurrentBranch}…",
             supportsCancellation: false);
         var resultText = string.Empty;
         var wasCancelled = false;
@@ -498,6 +532,17 @@ public sealed partial class MainWindow
                     operation.Token);
                 ErrorBar.IsOpen = false;
                 resultText = FormatRebaseResult(result);
+                StatusText.Text = resultText;
+            }
+            else if (squash)
+            {
+                var result = await repositoryService.SquashMergeBranchAsync(
+                    request.Root,
+                    request.SourceHeadId,
+                    request.ExpectedHeadId,
+                    operation.Token);
+                ErrorBar.IsOpen = false;
+                resultText = FormatMergeResult(result);
                 StatusText.Text = resultText;
             }
             else
@@ -566,6 +611,7 @@ public sealed partial class MainWindow
         if (repositoryRoot is null
             || !string.Equals(repositoryRoot, gitOperationRepositoryRoot, StringComparison.OrdinalIgnoreCase)
             || activeGitOperationKind is not (GitOperationKind.Merge
+                or GitOperationKind.SquashMerge
                 or GitOperationKind.Rebase
                 or GitOperationKind.CherryPick
                 or GitOperationKind.Revert))
@@ -591,12 +637,13 @@ public sealed partial class MainWindow
             return true;
         }
 
-        if (activeGitOperationKind == GitOperationKind.Merge
+        if ((activeGitOperationKind == GitOperationKind.Merge
+                || activeGitOperationKind == GitOperationKind.SquashMerge)
             && activeMergeOperationState is { } merge)
         {
             snapshot = new GitOperationSnapshot(
                 repositoryRoot,
-                GitOperationKind.Merge,
+                activeGitOperationKind,
                 merge.Branch,
                 merge.CurrentHeadId,
                 merge.MergeHeadIds.FirstOrDefault(),
@@ -652,6 +699,7 @@ public sealed partial class MainWindow
     {
         if (!TryCaptureActiveOperation(out var snapshot)
             || snapshot.Kind is not (GitOperationKind.Merge
+                or GitOperationKind.SquashMerge
                 or GitOperationKind.Rebase
                 or GitOperationKind.CherryPick
                 or GitOperationKind.Revert))
@@ -668,7 +716,16 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (snapshot.Kind == GitOperationKind.Merge)
+        if (snapshot.Kind == GitOperationKind.SquashMerge)
+        {
+            await RunGitOperationMutationAsync(
+                snapshot,
+                "Continuing squash merge…",
+                "Squash merge continued",
+                async (root, token) =>
+                    FormatMergeResult(await repositoryService.ContinueSquashMergeAsync(root, token)));
+        }
+        else if (snapshot.Kind == GitOperationKind.Merge)
         {
             await RunGitOperationMutationAsync(
                 snapshot,
@@ -847,6 +904,7 @@ public sealed partial class MainWindow
         var operationName = snapshot.Kind switch
         {
             GitOperationKind.Rebase => "rebase",
+            GitOperationKind.SquashMerge => "squash merge",
             GitOperationKind.CherryPick => "cherry-pick",
             GitOperationKind.Revert => "revert",
             _ => "merge",
@@ -854,6 +912,7 @@ public sealed partial class MainWindow
         var effect = snapshot.Kind switch
         {
             GitOperationKind.Rebase => "Git will restore the branch tip saved before the rebase and discard the in-progress replay.",
+            GitOperationKind.SquashMerge => "Git will restore the pre-merge commit and discard the staged squash merge.",
             GitOperationKind.CherryPick => "Git will restore the branch tip saved before the cherry-pick and discard its in-progress replay.",
             GitOperationKind.Revert => "Git will restore the branch tip saved before the revert and discard its in-progress replay.",
             _ => "Git will restore the pre-merge index and working-tree state where possible.",
@@ -880,6 +939,17 @@ public sealed partial class MainWindow
                 "Merge aborted",
                 async (root, token) =>
                     FormatMergeResult(await repositoryService.AbortMergeAsync(root, token)));
+        }
+        else if (snapshot.Kind == GitOperationKind.SquashMerge)
+        {
+            // A squash merge never moves HEAD, so the snapshot HEAD is the
+            // pre-merge tip the Core abort guard revalidates.
+            await RunGitOperationMutationAsync(
+                snapshot,
+                "Aborting squash merge…",
+                "Squash merge aborted",
+                async (root, token) =>
+                    FormatMergeResult(await repositoryService.AbortSquashMergeAsync(root, snapshot.CurrentHeadId, token)));
         }
         else if (snapshot.Kind == GitOperationKind.Rebase)
         {
@@ -1022,6 +1092,13 @@ public sealed partial class MainWindow
                     StringComparer.OrdinalIgnoreCase);
             }
 
+            if (snapshot.Kind == GitOperationKind.SquashMerge)
+            {
+                return mergeState.IsSquashMergePending
+                    && string.Equals(mergeState.CurrentHeadId, snapshot.CurrentHeadId, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(mergeState.Branch, snapshot.Branch, StringComparison.Ordinal);
+            }
+
             if (snapshot.Kind == GitOperationKind.Rebase)
             {
                 var rebaseState = await repositoryService.GetRebaseStateAsync(
@@ -1152,6 +1229,7 @@ public sealed partial class MainWindow
         MergeOutcome.Conflicts => "Merge stopped with conflicts",
         MergeOutcome.InProgress => "Merge is still in progress",
         MergeOutcome.Aborted => "Merge aborted",
+        MergeOutcome.SquashStaged => "Squashed changes staged; review and commit to finish the squash merge",
         _ => "Merge finished",
     };
 
