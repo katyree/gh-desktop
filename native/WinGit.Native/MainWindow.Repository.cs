@@ -790,22 +790,35 @@ public sealed partial class MainWindow
 
         var root = expectedRoot ?? repositoryRoot;
         mutationInProgress = true;
-        var operation = BeginOperation(progress);
+        // Task 22: branch/stash/tag writes run to completion. Cancellation
+        // is not offered mid-mutation because killing Git would leave an
+        // uncertain outcome; a repository switch still supersedes via a newer
+        // generation, and the guards below prevent wrong-repository updates.
+        var operation = BeginOperation(progress, supportsCancellation: false);
         var mutationSucceeded = false;
+        var wasCancelled = false;
+        var resultText = string.Empty;
         try
         {
             await mutation(root, operation.Token);
             ErrorBar.IsOpen = false;
+            resultText = success;
             StatusText.Text = success;
             mutationSucceeded = true;
         }
         catch (OperationCanceledException) when (operation.Token.IsCancellationRequested)
         {
-            StatusText.Text = cancelled;
+            // Request observed. Confirmation follows the state inspection in
+            // finally: refresh first, then report the confirmed outcome so a
+            // possibly-completed mutation is never silently retried.
+            wasCancelled = true;
+            resultText = cancelled;
+            StatusText.Text = "Cancel requested… refreshing repository state to confirm.";
         }
         catch (Exception exception)
         {
             ShowError(failureTitle, exception);
+            resultText = StatusText.Text;
         }
         finally
         {
@@ -816,10 +829,25 @@ public sealed partial class MainWindow
             catch (Exception refreshException)
             {
                 ShowError("Unable to refresh repository after operation", refreshException);
+                resultText = StatusText.Text;
             }
 
-            mutationInProgress = false;
-            SetBusy(false, StatusText.Text);
+            // Restore the operation result after refresh: RefreshRepositoryAsync
+            // reports "Repository refreshed", which would otherwise hide the
+            // actual Git outcome. Only the current generation may clear busy
+            // so a repository switch cannot lose its progress state.
+            if (string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase)
+                && operation.Generation == operationGeneration
+                && !string.IsNullOrWhiteSpace(resultText))
+            {
+                StatusText.Text = wasCancelled
+                    ? "Cancel confirmed after refresh. Inspect the repository state before retrying; nothing was repeated automatically."
+                    : mutationSucceeded
+                        ? resultText
+                        : $"{resultText} Refresh completed. Verify the repository state before retrying; nothing was repeated automatically.";
+            }
+
+            EndMutationOperation(operation.Generation, StatusText.Text);
         }
 
         return mutationSucceeded;

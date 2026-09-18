@@ -59,6 +59,7 @@ public sealed partial class MainWindow : Window
     private CancellationTokenSource? operationCancellation;
     private Task? latestOperationTask;
     private long operationGeneration;
+    private bool currentOperationSupportsCancellation;
     private bool loadingSettings;
     private bool showingSettings;
     private bool mutationInProgress;
@@ -1517,7 +1518,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private (long Generation, CancellationToken Token) BeginOperation(string status, bool allowHistorySelection = false)
+    private (long Generation, CancellationToken Token) BeginOperation(
+        string status,
+        bool allowHistorySelection = false,
+        bool supportsCancellation = true)
     {
         // Mutation entry points mark the shared state before asking for an
         // operation token. Keep review capture eligible: it starts while
@@ -1531,6 +1535,12 @@ public sealed partial class MainWindow : Window
         operationCancellation?.Dispose();
         operationCancellation = new CancellationTokenSource();
         operationGeneration++;
+        // Task 22 (generic operation lifecycle): Git mutations run to
+        // completion once started; killing the process mid-write leaves an
+        // uncertain outcome. Cancellation is offered only for cancellable
+        // reads. Mutations pass supportsCancellation: false so the Cancel
+        // control stays hidden while mutationInProgress is set.
+        currentOperationSupportsCancellation = supportsCancellation && !mutationInProgress;
         SetBusy(true, status, allowHistorySelection: allowHistorySelection);
         return (operationGeneration, operationCancellation.Token);
     }
@@ -1545,6 +1555,27 @@ public sealed partial class MainWindow : Window
         if (generation == operationGeneration)
         {
             SetBusy(false, StatusText.Text);
+        }
+    }
+
+    /// <summary>
+    /// Task 22: generation-guarded mutation completion. Late mutation
+    /// callbacks (for example after a repository switch started a newer
+    /// operation) must not clear the newer operation's busy state or mutate
+    /// the wrong repository. Only the current generation clears busy; older
+    /// generations refresh button states without touching busy.
+    /// </summary>
+    private void EndMutationOperation(long generation, string status)
+    {
+        mutationInProgress = false;
+        if (generation == operationGeneration)
+        {
+            SetBusy(false, status);
+        }
+        else
+        {
+            UpdateMutationButtons();
+            UpdateRepositoryCommandStates();
         }
     }
 
@@ -1576,8 +1607,14 @@ public sealed partial class MainWindow : Window
         AmendCheckBox.IsEnabled = !busy && !mutationInProgress;
         CreateRepositoryButton.IsEnabled = !busy && !mutationInProgress;
         CloneRepositoryButton.IsEnabled = !busy && !mutationInProgress;
-        CancelOperationButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-        CancelOperationButton.IsEnabled = busy;
+        // Task 22: cancellation is offered only where supported. Reads set
+        // supportsCancellation: true; mutations run to completion and keep
+        // Cancel hidden while mutationInProgress is set. Killing a Git
+        // mutation mid-write would leave an uncertain outcome, so the UI
+        // reports that honestly instead of offering an unsafe cancel.
+        var canCancel = busy && currentOperationSupportsCancellation && !mutationInProgress;
+        CancelOperationButton.Visibility = canCancel ? Visibility.Visible : Visibility.Collapsed;
+        CancelOperationButton.IsEnabled = canCancel;
         MainNavigation.IsEnabled = !mutationInProgress;
         UpdateMutationButtons();
         UpdateRepositoryCommandStates();

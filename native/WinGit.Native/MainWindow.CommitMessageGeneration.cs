@@ -427,10 +427,14 @@ public sealed partial class MainWindow
         }
         else
         {
-            CancelOperationButton.Visibility = BusyRing.IsActive
+            // Task 22: keep the shared Cancel control consistent with SetBusy.
+            // Codex generation has its own cancel path; Git reads use the
+            // shared cancellable operation, while mutations hide Cancel.
+            var canCancel = BusyRing.IsActive && currentOperationSupportsCancellation && !mutationInProgress;
+            CancelOperationButton.Visibility = canCancel
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-            CancelOperationButton.IsEnabled = BusyRing.IsActive;
+            CancelOperationButton.IsEnabled = canCancel;
         }
 
         if (generating)
