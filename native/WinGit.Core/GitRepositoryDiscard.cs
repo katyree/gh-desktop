@@ -341,8 +341,18 @@ public sealed partial class GitRepositoryService
             .Where(file => IsIndexAdded(file))
             .Select(file => file.Path)
             .ToHashSet(StringComparer.Ordinal);
+        var untrackedPaths = files
+            .Where(IsUntracked)
+            .Select(file => file.Path)
+            .ToHashSet(StringComparer.Ordinal);
+        // checkout-index can only restore paths that still have an index
+        // entry when it runs. Untracked paths never do, and staged additions
+        // leave the index during the reset above; sending either fatals with
+        // exit 1 and drops the pending index stat refresh, which leaves
+        // phantom work-tree modifications behind on converting checkouts.
+        // Submodule paths were already removed from pathsToRestore above.
         var workTreeRestorePaths = pathsToRestore
-            .Where(path => !submodulePaths.Contains(path) || !addedIndexPaths.Contains(path))
+            .Where(path => !untrackedPaths.Contains(path) && !addedIndexPaths.Contains(path))
             .ToArray();
 
         return new DiscardPlan(
