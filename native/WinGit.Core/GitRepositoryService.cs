@@ -205,10 +205,13 @@ public sealed partial class GitRepositoryService
         string? description,
         bool amend,
         CancellationToken cancellationToken,
-        string? expectedHeadId = null)
+        string? expectedHeadId = null,
+        IReadOnlyList<CommitTrailer>? trailers = null,
+        bool signOff = false)
     {
         var repositoryRoot = ValidateDirectory(root, nameof(root));
-        var message = BuildCommitMessage(summary, description);
+        var normalizedTrailers = ValidateCommitTrailers(trailers);
+        var message = BuildCommitMessage(summary, description, normalizedTrailers);
         if (expectedHeadId is not null)
         {
             ValidateCommitId(expectedHeadId);
@@ -234,6 +237,11 @@ public sealed partial class GitRepositoryService
                 if (amend)
                 {
                     arguments.Add("--amend");
+                }
+
+                if (signOff)
+                {
+                    arguments.Add("--signoff");
                 }
 
                 await processRunner.RunAsync(
@@ -435,7 +443,10 @@ public sealed partial class GitRepositoryService
         return normalizedPaths.ToArray();
     }
 
-    private static string BuildCommitMessage(string summary, string? description)
+    private static string BuildCommitMessage(
+        string summary,
+        string? description,
+        IReadOnlyList<CommitTrailer>? trailers = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(summary);
         if (summary.IndexOf('\0') >= 0 || summary.Contains('\r') || summary.Contains('\n'))
@@ -458,9 +469,86 @@ public sealed partial class GitRepositoryService
             .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace('\r', '\n')
             .Trim() ?? string.Empty;
-        return normalizedDescription.Length == 0
+        var body = normalizedDescription.Length == 0
             ? normalizedSummary + "\n"
             : normalizedSummary + "\n\n" + normalizedDescription + "\n";
+        if (trailers is null || trailers.Count == 0)
+        {
+            return body;
+        }
+
+        var builder = new StringBuilder(body.TrimEnd('\n'));
+        builder.Append("\n\n");
+        foreach (var trailer in trailers)
+        {
+            builder.Append(trailer.Token);
+            builder.Append(": ");
+            builder.Append(trailer.Value);
+            builder.Append('\n');
+        }
+
+        return builder.ToString();
+    }
+
+    private static IReadOnlyList<CommitTrailer> ValidateCommitTrailers(IReadOnlyList<CommitTrailer>? trailers)
+    {
+        if (trailers is null || trailers.Count == 0)
+        {
+            return [];
+        }
+
+        var normalized = new List<CommitTrailer>(trailers.Count);
+        foreach (var trailer in trailers)
+        {
+            ArgumentNullException.ThrowIfNull(trailer);
+            var token = trailer.Token?.Trim() ?? string.Empty;
+            var value = trailer.Value?.Trim() ?? string.Empty;
+            if (token.Length == 0 || value.Length == 0)
+            {
+                throw new ArgumentException("Commit trailers need a token and a value.", nameof(trailers));
+            }
+
+            if (token.IndexOf('\0') >= 0 || token.Contains('\r') || token.Contains('\n') || value.IndexOf('\0') >= 0)
+            {
+                throw new ArgumentException("Commit trailers cannot contain NUL or line breaks.", nameof(trailers));
+            }
+
+            if (token.Contains(':'))
+            {
+                throw new ArgumentException("Commit trailer tokens cannot contain a colon.", nameof(trailers));
+            }
+
+            normalized.Add(new CommitTrailer(token, value));
+        }
+
+        return normalized.AsReadOnly();
+    }
+
+    /// <summary>Parses one co-author line of the form <c>Name &lt;email&gt;</c>.</summary>
+    public static CommitTrailer ParseCoAuthorTrailer(string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        var trimmed = value.Trim();
+        if (trimmed.IndexOf('\0') >= 0 || trimmed.Contains('\r') || trimmed.Contains('\n'))
+        {
+            throw new ArgumentException("Co-authors must be one line without NUL characters.", nameof(value));
+        }
+
+        var open = trimmed.LastIndexOf('<');
+        var close = trimmed.LastIndexOf('>');
+        if (open <= 0 || close != trimmed.Length - 1 || close <= open + 1)
+        {
+            throw new ArgumentException("Enter each co-author as \"Name <email>\".", nameof(value));
+        }
+
+        var name = trimmed[..open].Trim();
+        var email = trimmed[(open + 1)..close].Trim();
+        if (name.Length == 0 || email.Length == 0 || email.Contains(' ') || !email.Contains('@'))
+        {
+            throw new ArgumentException("Enter each co-author as \"Name <email>\".", nameof(value));
+        }
+
+        return new CommitTrailer("Co-Authored-By", $"{name} <{email}>");
     }
 
     /// <summary>Reads a bounded first page of history, including the root commit.</summary>

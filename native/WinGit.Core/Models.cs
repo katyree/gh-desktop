@@ -116,6 +116,9 @@ public sealed record CommitMessage(string Summary, string Description);
 /// <summary>The Git identity that a local commit would use.</summary>
 public sealed record CommitIdentity(string Name, string Email);
 
+/// <summary>A validated commit-message trailer such as a co-author attribution.</summary>
+public sealed record CommitTrailer(string Token, string Value);
+
 /// <summary>The Git configuration file targeted by a settings operation.</summary>
 public enum GitConfigScope
 {

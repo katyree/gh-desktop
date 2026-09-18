@@ -46,9 +46,16 @@ public sealed partial class MainWindow
         var description = string.IsNullOrWhiteSpace(CommitDescriptionBox.Text)
             ? null
             : CommitDescriptionBox.Text.Trim();
+        var coAuthors = (CoAuthorsBox.Text ?? string.Empty)
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0)
+            .ToArray();
         await RunCommitMutationAsync(
             summary,
             description,
+            coAuthors,
+            SignOffCheckBox.IsChecked == true,
             AmendCheckBox.IsChecked == true,
             AmendCheckBox.IsChecked == true ? currentStatus?.HeadId : null);
     }
@@ -245,6 +252,8 @@ public sealed partial class MainWindow
     private async Task RunCommitMutationAsync(
         string summary,
         string? description,
+        IReadOnlyList<string> coAuthors,
+        bool signOff,
         bool amend,
         string? expectedHeadId)
     {
@@ -281,12 +290,42 @@ public sealed partial class MainWindow
             return;
         }
 
+        List<CommitTrailer> trailers;
+        try
+        {
+            trailers = new List<CommitTrailer>(coAuthors.Count);
+            foreach (var coAuthor in coAuthors)
+            {
+                trailers.Add(GitRepositoryService.ParseCoAuthorTrailer(coAuthor));
+            }
+        }
+        catch (ArgumentException exception)
+        {
+            ShowError("Co-author format is invalid", exception);
+            return;
+        }
+
         var root = repositoryRoot;
+        var selectedStagedPaths = StagedChangesList.SelectedItems
+            .OfType<ChangeRow>()
+            .Select(row => row.Path)
+            .ToArray();
+        var selectedUnstagedPaths = UnstagedChangesList.SelectedItems
+            .OfType<ChangeRow>()
+            .Select(row => row.Path)
+            .ToArray();
         mutationInProgress = true;
         var operation = BeginOperation(amend ? "Checking Git identity for amend…" : "Checking Git identity…");
+        var commitSucceeded = false;
         try
         {
             var identity = await repositoryService.GetCommitIdentityAsync(root, operation.Token);
+            if (!IsCurrent(operation.Generation, operation.Token)
+                || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(identity.Name) || string.IsNullOrWhiteSpace(identity.Email))
             {
                 var identityError = new InvalidOperationException(
@@ -305,27 +344,50 @@ public sealed partial class MainWindow
                 description,
                 amend,
                 operation.Token,
-                expectedHeadId);
+                expectedHeadId,
+                trailers,
+                signOff);
+            if (!IsCurrent(operation.Generation, operation.Token)
+                || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
             var shortId = commitId.Length > 7 ? commitId[..7] : commitId;
             ErrorBar.IsOpen = false;
             StatusText.Text = $"Created commit {shortId}";
             ResetAmendMessageState();
             CommitSummaryBox.Text = string.Empty;
             CommitDescriptionBox.Text = string.Empty;
+            CoAuthorsBox.Text = string.Empty;
+            SignOffCheckBox.IsChecked = false;
             AmendCheckBox.IsChecked = false;
             CommitIdentityText.Text = $"Committed {shortId}";
+            commitSucceeded = true;
         }
         catch (OperationCanceledException) when (operation.Token.IsCancellationRequested)
         {
-            StatusText.Text = "Commit operation cancelled; refreshing repository…";
+            if (IsCurrent(operation.Generation, operation.Token)
+                && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
+            {
+                StatusText.Text = "Commit operation cancelled; refreshing repository…";
+            }
         }
         catch (CommitMessageSnapshotStaleException exception)
         {
-            ShowError("Repository changed", exception);
+            if (IsCurrent(operation.Generation, operation.Token)
+                && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
+            {
+                ShowError("Repository changed", exception);
+            }
         }
         catch (Exception exception)
         {
-            ShowError("Unable to create commit", exception);
+            if (IsCurrent(operation.Generation, operation.Token)
+                && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
+            {
+                ShowError("Unable to create commit", exception);
+            }
         }
         finally
         {
@@ -335,7 +397,16 @@ public sealed partial class MainWindow
             }
             catch (Exception refreshException)
             {
-                ShowError("Unable to refresh repository after commit", refreshException);
+                if (string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
+                {
+                    ShowError("Unable to refresh repository after commit", refreshException);
+                }
+            }
+
+            if (!commitSucceeded
+                && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
+            {
+                RestoreCommitSelection(selectedStagedPaths, selectedUnstagedPaths);
             }
 
             mutationInProgress = false;
@@ -355,6 +426,36 @@ public sealed partial class MainWindow
         // uses a fresh token after the mutation's success, failure, or cancel.
         await RefreshRepositoryAsync();
         await WaitForLatestOperationAsync();
+    }
+
+    private void RestoreCommitSelection(
+        IReadOnlyList<string> stagedPaths,
+        IReadOnlyList<string> unstagedPaths)
+    {
+        if ((stagedPaths.Count == 0 && unstagedPaths.Count == 0)
+            || StagedChangesList is null
+            || UnstagedChangesList is null)
+        {
+            return;
+        }
+
+        var staged = new HashSet<string>(stagedPaths, StringComparer.OrdinalIgnoreCase);
+        var unstaged = new HashSet<string>(unstagedPaths, StringComparer.OrdinalIgnoreCase);
+        foreach (var row in stagedChangeRows)
+        {
+            if (staged.Contains(row.Path))
+            {
+                StagedChangesList.SelectedItems.Add(row);
+            }
+        }
+
+        foreach (var row in unstagedChangeRows)
+        {
+            if (unstaged.Contains(row.Path))
+            {
+                UnstagedChangesList.SelectedItems.Add(row);
+            }
+        }
     }
 
     private static bool HasIndexChanges(FileChange change) =>

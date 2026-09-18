@@ -118,7 +118,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (captureOptions is { View: "repository-open-check" or "repository-picker-check" or "history-selection-check" or "whole-file-staging-check" or "partial-staging-check" }
+        if (captureOptions is { View: "repository-open-check" or "repository-picker-check" or "history-selection-check" or "whole-file-staging-check" or "partial-staging-check" or "commit-composer-check" }
             && TryGetHandlerCheckSettingsError() is { } settingsError)
         {
             await FailCaptureAsync(settingsError, App.CommandLineArguments);
@@ -1385,6 +1385,8 @@ public sealed partial class MainWindow : Window
         UnstagedCountText.Text = "0";
         CommitSummaryBox.Text = string.Empty;
         CommitDescriptionBox.Text = string.Empty;
+        CoAuthorsBox.Text = string.Empty;
+        SignOffCheckBox.IsChecked = false;
         AmendCheckBox.IsChecked = false;
         CommitIdentityText.Text = string.Empty;
         CommitMessageGenerationStatusText.Text = string.Empty;
@@ -1569,6 +1571,8 @@ public sealed partial class MainWindow : Window
         TagsList.IsEnabled = !busy && !mutationInProgress;
         CommitSummaryBox.IsEnabled = !busy && !mutationInProgress;
         CommitDescriptionBox.IsEnabled = !busy && !mutationInProgress;
+        CoAuthorsBox.IsEnabled = !busy && !mutationInProgress;
+        SignOffCheckBox.IsEnabled = !busy && !mutationInProgress;
         AmendCheckBox.IsEnabled = !busy && !mutationInProgress;
         CreateRepositoryButton.IsEnabled = !busy && !mutationInProgress;
         CloneRepositoryButton.IsEnabled = !busy && !mutationInProgress;
