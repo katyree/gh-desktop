@@ -641,7 +641,7 @@ public sealed partial class MainWindow
         var content = new StackPanel { Spacing = 10 };
         content.Children.Add(new TextBlock
         {
-            Text = "WinGit will move the selected working files to the Windows Recycle Bin, then restore their Git index and worktree state. Any staged changes on these paths will be reset too. You can restore the files from the Recycle Bin if needed.",
+            Text = "WinGit will move the selected working files to the Windows Recycle Bin, then restore their tracked Git index and worktree state. Staged changes on these paths are reset as part of the discard. Untracked files have no Git content to restore; they are moved to the Recycle Bin only. You can restore the moved files from the Recycle Bin if needed.",
             TextWrapping = TextWrapping.Wrap,
         });
 
@@ -659,7 +659,7 @@ public sealed partial class MainWindow
         {
             pathPanel.Children.Add(new TextBlock
             {
-                Text = $"{file.Path}  ·  {FormatDiscardFileKind(file)}",
+                Text = $"{file.Path}  ·  {FormatDiscardFileKind(file)}  ·  {FormatDiscardContentScope(file)}",
                 TextWrapping = TextWrapping.Wrap,
             });
             if (file.Kind is ChangeKind.Renamed or ChangeKind.Copied
@@ -722,4 +722,41 @@ public sealed partial class MainWindow
         ChangeKind.TypeChanged => "type changed",
         _ => "modified",
     };
+
+    /// <summary>
+    /// Describes which content a whole-file discard affects so the
+    /// confirmation names staged, unstaged, or untracked scope per path,
+    /// matching the Electron discard product semantics.
+    /// </summary>
+    private static string FormatDiscardContentScope(FileChange file)
+    {
+        if (file.Kind == ChangeKind.Untracked
+            || string.Equals(file.IndexStatus, "?", StringComparison.Ordinal)
+            || string.Equals(file.WorkTreeStatus, "?", StringComparison.Ordinal))
+        {
+            return "untracked content will be moved to the Recycle Bin";
+        }
+
+        if (file.Kind == ChangeKind.Deleted)
+        {
+            return HasIndexChanges(file)
+                ? "staged deletion will be reset and the file restored from Git"
+                : "deleted file will be restored from Git";
+        }
+
+        var staged = HasIndexChanges(file);
+        var unstaged = HasWorkTreeChanges(file);
+        return (staged, unstaged) switch
+        {
+            (true, true) => "staged and unstaged changes will be discarded",
+            (true, false) => "staged changes will be discarded",
+            (false, true) => "unstaged changes will be discarded",
+            _ => "recorded change will be discarded",
+        };
+    }
+
+    private static bool HasWorkTreeChanges(FileChange file) =>
+        !string.IsNullOrWhiteSpace(file.WorkTreeStatus)
+        && !string.Equals(file.WorkTreeStatus, "?", StringComparison.Ordinal)
+        && !string.Equals(file.WorkTreeStatus, "!", StringComparison.Ordinal);
 }

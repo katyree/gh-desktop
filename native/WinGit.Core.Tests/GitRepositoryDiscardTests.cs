@@ -139,6 +139,94 @@ public sealed class GitRepositoryDiscardTests : IDisposable
         Assert.Equal("base\n", RunGit(repositoryRoot, "show", ":tracked.txt"));
     }
 
+    [Fact]
+    public async Task DiscardBinaryAndStagedOnlyFilesRestoresGitStateAndPreservesUnrelatedIndex()
+    {
+        var binaryBase = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x00, 0xFF, 0x0A };
+        WriteBytes("binary-tracked.bin", binaryBase);
+        WriteFile("staged-only.txt", "staged base\n");
+        WriteFile("unrelated.txt", "unrelated base\n");
+        Commit("initial");
+        var binaryBaseBlob = RunGit(repositoryRoot, "rev-parse", "HEAD:binary-tracked.bin").Trim();
+
+        WriteBytes("binary-tracked.bin", new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x01, 0xFE, 0x0A });
+        WriteFile("staged-only.txt", "staged edit\n");
+        RunGit(repositoryRoot, "add", "--", "staged-only.txt");
+        WriteFile("unrelated.txt", "unrelated staged\n");
+        RunGit(repositoryRoot, "add", "--", "unrelated.txt");
+        WriteFile("unrelated.txt", "unrelated working\n");
+
+        var service = new GitRepositoryService();
+        var status = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        var selected = status.Changes
+            .Where(change => change.Path is "binary-tracked.bin" or "staged-only.txt")
+            .ToArray();
+        Assert.Equal(2, selected.Length);
+
+        var snapshot = await service.CaptureDiscardSnapshotAsync(
+            repositoryRoot,
+            selected,
+            CancellationToken.None);
+        var recycler = new FixtureRecycler(trashRoot);
+        await service.DiscardChangesAsync(
+            repositoryRoot,
+            snapshot,
+            recycler,
+            CancellationToken.None);
+
+        Assert.Equal(
+            binaryBase,
+            await File.ReadAllBytesAsync(Path.Combine(repositoryRoot, "binary-tracked.bin")));
+        Assert.Equal(
+            binaryBaseBlob,
+            RunGit(repositoryRoot, "rev-parse", ":binary-tracked.bin").Trim());
+        Assert.Equal("staged base\n", File.ReadAllText(Path.Combine(repositoryRoot, "staged-only.txt")));
+        Assert.Equal(2, recycler.Paths.Count);
+
+        Assert.Equal("unrelated working\n", File.ReadAllText(Path.Combine(repositoryRoot, "unrelated.txt")));
+        Assert.Equal("unrelated staged\n", RunGit(repositoryRoot, "show", ":unrelated.txt"));
+        var remaining = Assert.Single(
+            (await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+        Assert.Equal("unrelated.txt", remaining.Path);
+        Assert.Equal("M", remaining.IndexStatus);
+        Assert.Equal("M", remaining.WorkTreeStatus);
+    }
+
+    [Fact]
+    public async Task DiscardWithUntrackedSelectionLeavesCleanStatusUnderAutocrlf()
+    {
+        RunGit(repositoryRoot, "config", "core.autocrlf", "true");
+        WriteFile("tracked.txt", "tracked base\n");
+        Commit("initial");
+
+        WriteFile("tracked.txt", "tracked edit\n");
+        WriteFile("added-untracked.txt", "untracked\n");
+
+        var service = new GitRepositoryService();
+        var status = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        Assert.Equal(2, status.Changes.Count);
+
+        var snapshot = await service.CaptureDiscardSnapshotAsync(
+            repositoryRoot,
+            status.Changes,
+            CancellationToken.None);
+        var recycler = new FixtureRecycler(trashRoot);
+        await service.DiscardChangesAsync(
+            repositoryRoot,
+            snapshot,
+            recycler,
+            CancellationToken.None);
+
+        Assert.Equal(
+            "tracked base\n",
+            File.ReadAllText(Path.Combine(repositoryRoot, "tracked.txt")).Replace("\r\n", "\n", StringComparison.Ordinal));
+        Assert.False(File.Exists(Path.Combine(repositoryRoot, "added-untracked.txt")));
+        Assert.Equal(2, recycler.Paths.Count);
+
+        var remaining = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        Assert.Empty(remaining.Changes);
+    }
+
     public void Dispose()
     {
         DeleteDirectory(repositoryRoot);
@@ -150,6 +238,13 @@ public sealed class GitRepositoryDiscardTests : IDisposable
         var fullPath = Path.Combine(repositoryRoot, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         File.WriteAllText(fullPath, contents, Utf8NoBom);
+    }
+
+    private void WriteBytes(string relativePath, byte[] contents)
+    {
+        var fullPath = Path.Combine(repositoryRoot, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllBytes(fullPath, contents);
     }
 
     private void Commit(string message)
