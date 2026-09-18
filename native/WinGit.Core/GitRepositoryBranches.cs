@@ -330,6 +330,27 @@ public sealed partial class GitRepositoryService
         throw new InvalidOperationException($"The branch '{branchName}' is checked out in the worktree at '{worktreePath}'; switch or remove that worktree before attempting to {operation} it.");
     }
 
+    /// <summary>
+    /// Refuses to check out a branch that is already checked out in another
+    /// worktree. Runs before any state change (including stash creation) in
+    /// every checkout strategy. Checking out the branch that is already
+    /// checked out in the current worktree stays allowed: Git treats it as a
+    /// successful no-op.
+    /// </summary>
+    private async Task EnsureCheckoutTargetNotCheckedOutElsewhereAsync(
+        string repositoryRoot,
+        string branchName,
+        CancellationToken cancellationToken)
+    {
+        var worktreePath = await ReadBranchWorktreePathAsync(repositoryRoot, branchName, cancellationToken).ConfigureAwait(false);
+        if (worktreePath.Length == 0 || IsSamePath(worktreePath, repositoryRoot))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"The branch '{branchName}' is already checked out in the worktree at '{worktreePath}'; switch to that worktree or check out a different branch.");
+    }
+
     private static void ValidateBranchMutationContext(
         string repositoryRoot,
         string branchName,
@@ -388,6 +409,10 @@ public sealed partial class GitRepositoryService
                     branchName,
                     expectedContext,
                     cancellationToken).ConfigureAwait(false);
+                await EnsureCheckoutTargetNotCheckedOutElsewhereAsync(
+                    path,
+                    branchName,
+                    cancellationToken).ConfigureAwait(false);
                 await SwitchBranchInMutationAsync(path, branchName, cancellationToken).ConfigureAwait(false);
             }).ConfigureAwait(false);
     }
@@ -419,6 +444,10 @@ public sealed partial class GitRepositoryService
                     path,
                     branchName,
                     expectedContext,
+                    cancellationToken).ConfigureAwait(false);
+                await EnsureCheckoutTargetNotCheckedOutElsewhereAsync(
+                    path,
+                    branchName,
                     cancellationToken).ConfigureAwait(false);
                 var stash = await CreateStashInMutationAsync(
                     path,
@@ -465,6 +494,10 @@ public sealed partial class GitRepositoryService
                     path,
                     branchName,
                     expectedContext,
+                    cancellationToken).ConfigureAwait(false);
+                await EnsureCheckoutTargetNotCheckedOutElsewhereAsync(
+                    path,
+                    branchName,
                     cancellationToken).ConfigureAwait(false);
                 try
                 {

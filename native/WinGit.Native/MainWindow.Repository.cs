@@ -570,6 +570,16 @@ public sealed partial class MainWindow
             return;
         }
 
+        if (!string.IsNullOrWhiteSpace(branch.Branch.WorktreePath)
+            && !IsSamePath(branch.Branch.WorktreePath, sourceRoot))
+        {
+            ShowError(
+                "Unable to switch branch",
+                new InvalidOperationException($"The branch '{targetBranchName}' is already checked out in the worktree at '{branch.Branch.WorktreePath}'; switch to that worktree or check out a different branch."));
+            await LoadBranchesAsync();
+            return;
+        }
+
         var checkoutContext = new BranchCheckoutContext(
             sourceRoot,
             sourceStatus.Branch,
