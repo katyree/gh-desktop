@@ -347,22 +347,43 @@ public sealed partial class MainWindow
 
         mutationInProgress = true;
         var operation = BeginOperation("Undoing current commit…");
+        // Capture the composer draft before the mutation so an unrelated draft
+        // typed while undo runs is not silently replaced by the restored message.
+        var composerSummaryBeforeUndo = CommitSummaryBox.Text;
+        var composerDescriptionBeforeUndo = CommitDescriptionBox.Text;
         UndoCommitResult? result = null;
         var cancelled = false;
         try
         {
             result = await repositoryService.UndoCommitAsync(root, expectedHeadId, operation.Token);
+            if (!IsCurrent(operation.Generation, operation.Token)
+                || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
             ErrorBar.IsOpen = false;
             StatusText.Text = $"Undid {ShortObjectId(result.CommitId)} · {result.Summary}";
         }
         catch (OperationCanceledException) when (operation.Token.IsCancellationRequested)
         {
             cancelled = true;
-            StatusText.Text = "Undo cancelled; refreshing because the repository may have changed…";
+            if (IsCurrent(operation.Generation, operation.Token)
+                && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
+            {
+                StatusText.Text = "Undo cancelled; refreshing because the repository may have changed…";
+            }
         }
         catch (Exception exception)
         {
-            ShowError("Unable to undo current commit", exception);
+            // Validation and Git failures leave the repository and the composer
+            // untouched; only report them when this repository is still open so
+            // a delayed failure cannot surface on the wrong repository.
+            if (IsCurrent(operation.Generation, operation.Token)
+                && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
+            {
+                ShowError("Unable to undo current commit", exception);
+            }
         }
         finally
         {
@@ -372,25 +393,48 @@ public sealed partial class MainWindow
             }
             catch (Exception refreshException)
             {
-                ShowError("Unable to refresh repository after undo", refreshException);
+                if (string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
+                {
+                    ShowError("Unable to refresh repository after undo", refreshException);
+                }
             }
 
-            if (result is not null)
+            if (result is not null
+                && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
             {
-                CommitSummaryBox.Text = result.Summary;
-                CommitDescriptionBox.Text = result.Description;
-                AmendCheckBox.IsChecked = false;
-                CommitIdentityText.Text = $"Undid {ShortObjectId(result.CommitId)}";
+                var composerUnchanged = string.Equals(CommitSummaryBox.Text, composerSummaryBeforeUndo, StringComparison.Ordinal)
+                    && string.Equals(CommitDescriptionBox.Text, composerDescriptionBeforeUndo, StringComparison.Ordinal);
+                var composerEmpty = string.IsNullOrEmpty(CommitSummaryBox.Text)
+                    && string.IsNullOrEmpty(CommitDescriptionBox.Text);
+                if (composerUnchanged || composerEmpty)
+                {
+                    CommitSummaryBox.Text = result.Summary;
+                    CommitDescriptionBox.Text = result.Description;
+                    AmendCheckBox.IsChecked = false;
+                    CommitIdentityText.Text = $"Undid {ShortObjectId(result.CommitId)}";
+                }
+                else
+                {
+                    // Keep the unrelated draft and record the restored message
+                    // in the status so no user input is silently lost.
+                    AmendCheckBox.IsChecked = false;
+                    CommitIdentityText.Text = $"Undid {ShortObjectId(result.CommitId)}";
+                }
+
                 InvalidateHistoryView();
                 branchesLoaded = false;
                 MainNavigation.SelectedItem = MainNavigation.MenuItems[0];
                 ShowWorkspace("changes");
                 if (!ErrorBar.IsOpen)
                 {
-                    StatusText.Text = $"Undid {ShortObjectId(result.CommitId)} · {result.Summary}; working changes are ready to review";
+                    StatusText.Text = (composerUnchanged || composerEmpty)
+                        ? $"Undid {ShortObjectId(result.CommitId)} · {result.Summary}; working changes are ready to review"
+                        : $"Undid {ShortObjectId(result.CommitId)} · {result.Summary}; kept the existing composer draft";
                 }
             }
-            else if (cancelled && !ErrorBar.IsOpen)
+            else if (cancelled
+                && !ErrorBar.IsOpen
+                && string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
             {
                 StatusText.Text = "Undo cancelled; the repository was refreshed because it may have changed.";
             }

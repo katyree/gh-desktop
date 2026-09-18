@@ -11,6 +11,7 @@ public sealed class GitRepositoryUndoTagsTests : IDisposable
         Path.Combine(Path.GetTempPath(), "WinGit.Core.Tests"));
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
     private readonly string repositoryRoot;
+    private readonly List<string> linkedWorktrees = new();
 
     public GitRepositoryUndoTagsTests()
     {
@@ -125,6 +126,73 @@ public sealed class GitRepositoryUndoTagsTests : IDisposable
     }
 
     [Fact]
+    public async Task UndoCommitInLinkedWorktreeTargetsOnlyThatWorktree()
+    {
+        var service = new GitRepositoryService();
+        WriteFile(Path.Combine(repositoryRoot, "base.txt"), "base\n");
+        await service.StageFilesAsync(repositoryRoot, ["base.txt"], CancellationToken.None);
+        var baseCommitId = await service.CommitAsync(
+            repositoryRoot,
+            "Base commit",
+            null,
+            amend: false,
+            CancellationToken.None);
+
+        var linkedRoot = Path.Combine(FixtureParent, Guid.NewGuid().ToString("N"));
+        linkedWorktrees.Add(linkedRoot);
+        RunGit(repositoryRoot, "worktree", "add", "--detach", linkedRoot, baseCommitId);
+        RunGit(linkedRoot, "checkout", "-b", "feature");
+
+        WriteFile(Path.Combine(linkedRoot, "feature.txt"), "feature\n");
+        await service.StageFilesAsync(linkedRoot, ["feature.txt"], CancellationToken.None);
+        var featureCommitId = await service.CommitAsync(
+            linkedRoot,
+            "Feature commit",
+            "Feature details",
+            amend: false,
+            CancellationToken.None);
+
+        // A stale expected HEAD must fail without touching either worktree.
+        var staleUndo = await Assert.ThrowsAsync<UndoCommitBlockedException>(
+            () => service.UndoCommitAsync(
+                linkedRoot,
+                baseCommitId,
+                CancellationToken.None));
+        Assert.Equal(UndoCommitFailureReason.StaleHead, staleUndo.Reason);
+        Assert.Equal(
+            featureCommitId,
+            (await service.GetStatusAsync(linkedRoot, CancellationToken.None)).HeadId);
+        Assert.Equal(
+            baseCommitId,
+            (await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).HeadId);
+
+        var result = await service.UndoCommitAsync(
+            linkedRoot,
+            featureCommitId,
+            CancellationToken.None);
+
+        Assert.Equal(featureCommitId, result.CommitId);
+        Assert.Equal(baseCommitId, result.ParentCommitId);
+        Assert.Equal("Feature commit", result.Summary);
+        Assert.False(result.WasInitialCommit);
+
+        var linkedAfter = await service.GetStatusAsync(linkedRoot, CancellationToken.None);
+        Assert.Equal(baseCommitId, linkedAfter.HeadId);
+        Assert.Equal("feature", linkedAfter.Branch);
+        Assert.Contains(
+            linkedAfter.Changes,
+            change => change.Path == "feature.txt" && change.WorkTreeStatus == "?");
+        Assert.Equal("feature\n", File.ReadAllText(Path.Combine(linkedRoot, "feature.txt")));
+
+        // The main worktree is undisturbed: same branch tip, no new changes.
+        var mainAfter = await service.GetStatusAsync(repositoryRoot, CancellationToken.None);
+        Assert.Equal(baseCommitId, mainAfter.HeadId);
+        Assert.Equal("main", mainAfter.Branch);
+        Assert.Empty(mainAfter.Changes);
+        Assert.False(File.Exists(Path.Combine(repositoryRoot, "feature.txt")));
+    }
+
+    [Fact]
     public async Task AnnotatedTagListsPeeledTargetAndRejectsStaleDelete()
     {
         WriteFile(Path.Combine(repositoryRoot, "tracked.txt"), "tag target\n");
@@ -170,6 +238,20 @@ public sealed class GitRepositoryUndoTagsTests : IDisposable
 
     public void Dispose()
     {
+        foreach (var linkedRoot in linkedWorktrees)
+        {
+            try
+            {
+                RunGit(repositoryRoot, "worktree", "remove", "--force", linkedRoot);
+            }
+            catch (Exception)
+            {
+                // Best effort: the fixture directory cleanup below still applies.
+            }
+
+            DeleteDirectory(linkedRoot);
+        }
+
         DeleteDirectory(repositoryRoot);
     }
 
