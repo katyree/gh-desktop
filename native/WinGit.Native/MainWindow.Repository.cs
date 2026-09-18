@@ -7,7 +7,7 @@ namespace WinGit.Native;
 
 public sealed partial class MainWindow
 {
-    private async Task LoadBranchesAsync()
+    private async Task LoadBranchesAsync(string? selectBranchName = null)
     {
         if (repositoryRoot is null)
         {
@@ -34,6 +34,16 @@ public sealed partial class MainWindow
             branchesLoaded = true;
             selectedBranch = null;
             BranchesList.SelectedIndex = -1;
+            if (!string.IsNullOrEmpty(selectBranchName))
+            {
+                SelectBranchRow(selectBranchName);
+                if (selectedBranch is not null)
+                {
+                    StatusText.Text = $"Loaded {branchRows.Count} local branches";
+                    return;
+                }
+            }
+
             var currentIndex = branchRows.ToList().FindIndex(row => row.Branch.IsCurrent);
             if (currentIndex < 0 && branchRows.Count > 0)
             {
@@ -141,6 +151,16 @@ public sealed partial class MainWindow
         finally
         {
             EndOperation(operation.Generation);
+        }
+    }
+
+    private void SelectBranchRow(string branchName)
+    {
+        var index = branchRows.ToList().FindIndex(row =>
+            string.Equals(row.Name, branchName, StringComparison.Ordinal));
+        if (index >= 0)
+        {
+            BranchesList.SelectedIndex = index;
         }
     }
 
@@ -266,6 +286,25 @@ public sealed partial class MainWindow
             return;
         }
 
+        var sourceRoot = repositoryRoot;
+        var sourceStatus = currentStatus;
+        if (sourceRoot is null || sourceStatus is null)
+        {
+            ShowError(
+                "Unable to prepare branch creation",
+                new InvalidOperationException("Refresh the repository before creating a branch."));
+            return;
+        }
+
+        if (sourceStatus.IsUnborn || string.IsNullOrWhiteSpace(sourceStatus.HeadId))
+        {
+            ShowError(
+                "Unable to prepare branch creation",
+                new InvalidOperationException("The repository has no commits yet, so a new branch cannot be created."));
+            return;
+        }
+
+        var defaultStart = string.IsNullOrWhiteSpace(sourceStatus.Branch) ? "HEAD" : sourceStatus.Branch;
         var nameBox = new TextBox
         {
             Header = "Branch name",
@@ -274,24 +313,41 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(nameBox, "New branch name");
         var startPointBox = new TextBox
         {
-            Header = "Start point (optional)",
-            Text = currentStatus?.Branch ?? string.Empty,
-            PlaceholderText = "Current HEAD or another ref",
+            Header = "Start point",
+            Text = defaultStart,
+            PlaceholderText = "Current branch, another branch, or a commit SHA",
         };
         AutomationProperties.SetName(startPointBox, "Branch start point");
+        // Desktop checks out the new branch after creating it. The native
+        // dialog keeps that behavior explicit instead of switching silently.
+        var switchAfterCreateBox = new CheckBox
+        {
+            Content = "Switch to the new branch after creation",
+            IsChecked = true,
+        };
+        AutomationProperties.SetName(switchAfterCreateBox, "Switch to the new branch after creation");
         var dialog = CreateDialog("Create branch", "Create", new StackPanel
         {
             Spacing = 12,
             Children =
             {
-                new TextBlock { Text = "Create a local branch without changing the current checkout.", TextWrapping = TextWrapping.Wrap },
+                new TextBlock { Text = $"Repository: {sourceRoot}", TextWrapping = TextWrapping.Wrap },
+                new TextBlock
+                {
+                    Text = $"Your new branch will be based on {defaultStart} at {ShortObjectId(sourceStatus.HeadId)}. "
+                        + "Edit the start point to use another branch or commit; the exact commit is validated before creation.",
+                    TextWrapping = TextWrapping.Wrap,
+                },
                 nameBox,
                 startPointBox,
+                switchAfterCreateBox,
             },
         });
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary)
         {
+            // Cancelling the dialog performs no Git reads beyond the capture
+            // below and never mutates refs, HEAD, the index, or files.
             return;
         }
 
@@ -305,14 +361,180 @@ public sealed partial class MainWindow
         var startPoint = string.IsNullOrWhiteSpace(startPointBox.Text)
             ? null
             : startPointBox.Text.Trim();
-        await RunRepositoryWriteAsync(
+        var switchAfterCreate = switchAfterCreateBox.IsChecked == true;
+
+        BranchCreationPlan plan;
+        try
+        {
+            // Plan capture performs only validated Git reads: the existing
+            // name boundary, the existing-branch check, and start-point
+            // resolution. Validation failure leaves the repository untouched.
+            plan = await repositoryService.CaptureBranchCreationPlanAsync(
+                sourceRoot,
+                name,
+                startPoint,
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            ShowError("Unable to prepare branch creation", exception);
+            return;
+        }
+
+        if (!IsSamePath(repositoryRoot ?? string.Empty, sourceRoot)
+            || currentStatus is null
+            || !string.Equals(currentStatus.Branch, plan.SourceBranch, StringComparison.Ordinal)
+            || !string.Equals(currentStatus.HeadId, plan.SourceHeadId, StringComparison.OrdinalIgnoreCase))
+        {
+            ShowError(
+                "Branch creation context changed",
+                new InvalidOperationException("The repository, current branch, or HEAD changed while the dialog was open; refresh and try again."));
+            return;
+        }
+
+        var created = await RunRepositoryWriteAsync(
             "Creating branch…",
-            "Branch created",
+            $"Created branch '{plan.BranchName}' at {ShortObjectId(plan.StartCommitId)} from {plan.StartPointLabel}",
             "Branch creation cancelled; refreshing repository…",
             "Unable to create branch",
-            (root, token) => repositoryService.CreateBranchAsync(root, name, startPoint, token),
+            (root, token) => repositoryService.CreateBranchAsync(root, plan, token),
             refreshBranches: true,
-            refreshWorktrees: true);
+            refreshWorktrees: true,
+            expectedRoot: sourceRoot);
+        if (!created)
+        {
+            return;
+        }
+
+        SelectBranchRow(plan.BranchName);
+        if (!switchAfterCreate)
+        {
+            return;
+        }
+
+        await SwitchToCreatedBranchAsync(sourceRoot, plan);
+    }
+
+    /// <summary>
+    /// Switches to a just-created branch using the existing checkout guards.
+    /// Creation is never rolled back: when the switch fails, the partial
+    /// outcome is reported and the created branch stays visible.
+    /// </summary>
+    private async Task SwitchToCreatedBranchAsync(string sourceRoot, BranchCreationPlan plan)
+    {
+        var freshRoot = repositoryRoot;
+        var freshStatus = currentStatus;
+        if (freshRoot is null || freshStatus is null)
+        {
+            ShowError(
+                "Branch created but switch failed",
+                new InvalidOperationException(
+                    $"Branch '{plan.BranchName}' was created at {ShortObjectId(plan.StartCommitId)}, "
+                    + "but the repository state is no longer available; select the new branch and switch manually."));
+            SelectBranchRow(plan.BranchName);
+            return;
+        }
+
+        string targetTip;
+        try
+        {
+            targetTip = await repositoryService.GetLocalBranchTipAsync(
+                freshRoot,
+                plan.BranchName,
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            ShowError(
+                "Branch created but switch failed",
+                new InvalidOperationException(
+                    $"Branch '{plan.BranchName}' was created, but its tip could not be verified: {exception.Message} "
+                    + "The new branch remains in the branch list; switch manually after refreshing."));
+            SelectBranchRow(plan.BranchName);
+            return;
+        }
+
+        if (!string.Equals(targetTip, plan.StartCommitId, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(freshStatus.Branch, plan.SourceBranch, StringComparison.Ordinal)
+            || !string.Equals(freshStatus.HeadId, plan.SourceHeadId, StringComparison.OrdinalIgnoreCase))
+        {
+            ShowError(
+                "Branch created but switch failed",
+                new InvalidOperationException(
+                    $"Branch '{plan.BranchName}' was created at {ShortObjectId(plan.StartCommitId)}, "
+                    + "but the repository or starting point changed before the switch; the new branch remains in the branch list."));
+            SelectBranchRow(plan.BranchName);
+            return;
+        }
+
+        // Reuse the established dirty-worktree guards instead of duplicating
+        // them: Git's own protection refuses an unsafe plain switch, while the
+        // bring/stash paths go through the existing checkout implementations.
+        var checkoutContext = new BranchCheckoutContext(
+            freshRoot,
+            freshStatus.Branch,
+            freshStatus.HeadId,
+            plan.BranchName,
+            targetTip);
+        if (freshStatus.Changes.Count == 0)
+        {
+            var switched = await RunRepositoryWriteAsync(
+                $"Switching to {plan.BranchName}…",
+                $"Switched to {plan.BranchName}",
+                "Branch switch cancelled; refreshing repository…",
+                "Unable to switch branch",
+                (root, token) => repositoryService.CheckoutBranchAsync(root, plan.BranchName, checkoutContext, token),
+                refreshBranches: true,
+                refreshWorktrees: true,
+                expectedRoot: sourceRoot);
+            if (!switched)
+            {
+                ShowError(
+                    "Branch created but switch failed",
+                    new InvalidOperationException(
+                        $"Branch '{plan.BranchName}' was created at {ShortObjectId(plan.StartCommitId)}, "
+                        + $"but switching to it failed ({ErrorBar.Message}). The new branch remains in the branch list."));
+                SelectBranchRow(plan.BranchName);
+            }
+
+            return;
+        }
+
+        var strategy = await ChooseDirtyBranchCheckoutStrategyAsync(
+            plan.BranchName,
+            freshStatus.Changes.Count);
+        if (strategy is null)
+        {
+            StatusText.Text = $"Created branch '{plan.BranchName}'; switch cancelled.";
+            SelectBranchRow(plan.BranchName);
+            return;
+        }
+
+        var bringChanges = strategy == BranchCheckoutStrategy.BringChanges;
+        var switchedWithChanges = await RunRepositoryWriteAsync(
+            bringChanges
+                ? $"Switching to {plan.BranchName} with local changes…"
+                : $"Saving changes and switching to {plan.BranchName}…",
+            bringChanges
+                ? $"Switched to {plan.BranchName} with local changes"
+                : $"Switched to {plan.BranchName}; local changes saved in a stash",
+            "Branch switch cancelled; refreshing repository…",
+            "Unable to switch branch",
+            bringChanges
+                ? (root, token) => repositoryService.CheckoutBranchBringingChangesAsync(root, plan.BranchName, checkoutContext, token)
+                : (root, token) => repositoryService.CheckoutBranchWithStashAsync(root, plan.BranchName, checkoutContext, token),
+            refreshBranches: true,
+            refreshWorktrees: true,
+            expectedRoot: sourceRoot);
+        if (!switchedWithChanges)
+        {
+            ShowError(
+                "Branch created but switch failed",
+                new InvalidOperationException(
+                    $"Branch '{plan.BranchName}' was created at {ShortObjectId(plan.StartCommitId)}, "
+                    + $"but switching to it failed ({ErrorBar.Message}). The new branch remains in the branch list."));
+            SelectBranchRow(plan.BranchName);
+        }
     }
 
     private async void SwitchBranchButton_Click(object sender, RoutedEventArgs e)
