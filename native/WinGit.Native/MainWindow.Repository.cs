@@ -679,26 +679,87 @@ public sealed partial class MainWindow
     private async void RenameBranchButton_Click(object sender, RoutedEventArgs e)
     {
         var branch = selectedBranch;
-        if (!CanStartRepositoryWrite() || branch is null)
+        if (!CanStartRepositoryWrite() || branch is null || repositoryRoot is null)
         {
             return;
         }
 
+        var sourceRoot = repositoryRoot;
+        var sourceName = branch.Name;
+        var wasCurrent = branch.Branch.IsCurrent;
+        var upstream = branch.Branch.Upstream;
+        string expectedTip;
+        try
+        {
+            expectedTip = await repositoryService.GetLocalBranchTipAsync(
+                sourceRoot,
+                sourceName,
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            ShowError("Unable to prepare branch rename", exception);
+            await LoadBranchesAsync();
+            return;
+        }
+
+        string? defaultBranchName = null;
+        try
+        {
+            defaultBranchName = await repositoryService.TryGetDefaultBranchNameAsync(
+                sourceRoot,
+                CancellationToken.None);
+        }
+        catch
+        {
+            // Protection information is unavailable; never assume a default branch.
+            defaultBranchName = null;
+        }
+
+        if (!wasCurrent && !string.IsNullOrWhiteSpace(branch.Branch.WorktreePath))
+        {
+            ShowError(
+                "Unable to rename branch",
+                new InvalidOperationException($"The branch '{sourceName}' is checked out in the worktree at '{branch.Branch.WorktreePath}'; switch or remove that worktree before renaming it."));
+            await LoadBranchesAsync();
+            return;
+        }
+
+        var notes = new List<string>(3);
+        if (wasCurrent)
+        {
+            notes.Add("This is the current branch. It stays checked out under the new name.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(upstream))
+        {
+            notes.Add($"This branch is tracking {upstream} and renaming it will not change the branch name on the remote.");
+        }
+
+        if (string.Equals(defaultBranchName, sourceName, StringComparison.Ordinal))
+        {
+            notes.Add($"'{sourceName}' appears to be the default branch; renaming it locally does not change the remote.");
+        }
+
+        notes.Add("Only the local branch is renamed; no remote branches are touched.");
         var nameBox = new TextBox
         {
             Header = "New branch name",
-            Text = branch.Name,
+            Text = sourceName,
         };
         AutomationProperties.SetName(nameBox, "Renamed branch name");
-        var dialog = CreateDialog("Rename branch", "Rename", new StackPanel
+        var dialogContent = new StackPanel
         {
             Spacing = 12,
-            Children =
-            {
-                new TextBlock { Text = $"Rename the local branch \"{branch.Name}\".", TextWrapping = TextWrapping.Wrap },
-                nameBox,
-            },
-        });
+        };
+        dialogContent.Children.Add(new TextBlock { Text = $"Rename the local branch \"{sourceName}\".", TextWrapping = TextWrapping.Wrap });
+        foreach (var note in notes)
+        {
+            dialogContent.Children.Add(new TextBlock { Text = note, TextWrapping = TextWrapping.Wrap });
+        }
+
+        dialogContent.Children.Add(nameBox);
+        var dialog = CreateDialog("Rename branch", "Rename", dialogContent);
         if (await dialog.ShowAsync() != ContentDialogResult.Primary)
         {
             return;
@@ -711,45 +772,201 @@ public sealed partial class MainWindow
             return;
         }
 
+        if (string.Equals(newName, sourceName, StringComparison.Ordinal))
+        {
+            ShowError("Branch name is unchanged", new ArgumentException("The new branch name must be different from the current branch name."));
+            return;
+        }
+
+        if (branchRows.Any(row => string.Equals(row.Branch.Name, newName, StringComparison.Ordinal)))
+        {
+            ShowError("Unable to rename branch", new InvalidOperationException($"A branch named '{newName}' already exists; choose a different name."));
+            await LoadBranchesAsync();
+            return;
+        }
+
+        if (!IsCurrentBranchMutationContext(sourceRoot, sourceName))
+        {
+            ShowError(
+                "Branch changed",
+                new InvalidOperationException("The repository or selected branch changed while the rename dialog was open; refresh and try again."));
+            await LoadBranchesAsync();
+            return;
+        }
+
+        string freshTip;
+        try
+        {
+            freshTip = await repositoryService.GetLocalBranchTipAsync(
+                sourceRoot,
+                sourceName,
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            ShowError("Unable to rename branch", exception);
+            await LoadBranchesAsync();
+            return;
+        }
+
+        if (!string.Equals(freshTip, expectedTip, StringComparison.OrdinalIgnoreCase))
+        {
+            ShowError(
+                "Branch changed",
+                new InvalidOperationException("The branch changed while the rename dialog was open; refresh and try again."));
+            await LoadBranchesAsync();
+            return;
+        }
+
+        var mutationContext = new BranchMutationContext(sourceRoot, sourceName, expectedTip);
         await RunRepositoryWriteAsync(
             "Renaming branch…",
             "Branch renamed",
             "Branch rename cancelled; refreshing repository…",
             "Unable to rename branch",
-            (root, token) => repositoryService.RenameBranchAsync(root, branch.Name, newName, token),
+            (root, token) => repositoryService.RenameBranchAsync(root, sourceName, newName, mutationContext, token),
             refreshBranches: true,
-            refreshWorktrees: true);
+            refreshWorktrees: true,
+            expectedRoot: sourceRoot,
+            selectBranchName: newName);
     }
 
     private async void DeleteBranchButton_Click(object sender, RoutedEventArgs e)
     {
         var branch = selectedBranch;
-        if (!CanStartRepositoryWrite() || branch is null || branch.Branch.IsCurrent)
+        if (!CanStartRepositoryWrite() || branch is null || branch.Branch.IsCurrent || repositoryRoot is null)
         {
             return;
         }
 
-        var dialog = CreateDialog(
-            "Delete branch?",
-            "Delete",
-            new TextBlock
-            {
-                Text = $"Delete the local branch \"{branch.Name}\"? Git will use a safe delete and refuse if it has unmerged commits.",
-                TextWrapping = TextWrapping.Wrap,
-            });
+        var sourceRoot = repositoryRoot;
+        var sourceName = branch.Name;
+        var upstream = branch.Branch.Upstream;
+        string expectedTip;
+        try
+        {
+            expectedTip = await repositoryService.GetLocalBranchTipAsync(
+                sourceRoot,
+                sourceName,
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            ShowError("Unable to prepare branch deletion", exception);
+            await LoadBranchesAsync();
+            return;
+        }
+
+        string? defaultBranchName = null;
+        try
+        {
+            defaultBranchName = await repositoryService.TryGetDefaultBranchNameAsync(
+                sourceRoot,
+                CancellationToken.None);
+        }
+        catch
+        {
+            // Protection information is unavailable; never assume a default branch.
+            defaultBranchName = null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(branch.Branch.WorktreePath))
+        {
+            ShowError(
+                "Unable to delete branch",
+                new InvalidOperationException($"The branch '{sourceName}' is checked out in the worktree at '{branch.Branch.WorktreePath}'; remove or switch that worktree before deleting it."));
+            await LoadBranchesAsync();
+            return;
+        }
+
+        if (string.Equals(defaultBranchName, sourceName, StringComparison.Ordinal))
+        {
+            ShowError(
+                "Unable to delete branch",
+                new InvalidOperationException($"The branch '{sourceName}' appears to be the default branch; deleting it locally is not allowed from this view."));
+            await LoadBranchesAsync();
+            return;
+        }
+
+        var confirmation = new StackPanel
+        {
+            Spacing = 12,
+        };
+        confirmation.Children.Add(new TextBlock { Text = $"Delete the local branch \"{sourceName}\"?", TextWrapping = TextWrapping.Wrap });
+        confirmation.Children.Add(new TextBlock { Text = "This action cannot be undone.", TextWrapping = TextWrapping.Wrap });
+        confirmation.Children.Add(new TextBlock { Text = $"Safe delete is used: Git refuses when \"{sourceName}\" contains commits that are not merged, and the branch is kept. There is no force-delete choice here.", TextWrapping = TextWrapping.Wrap });
+        if (!string.IsNullOrWhiteSpace(upstream))
+        {
+            confirmation.Children.Add(new TextBlock { Text = $"The upstream {upstream} is not touched.", TextWrapping = TextWrapping.Wrap });
+        }
+
+        confirmation.Children.Add(new TextBlock { Text = "No remote branches are deleted by this action.", TextWrapping = TextWrapping.Wrap });
+        var dialog = CreateDialog("Delete branch?", "Delete", confirmation);
         if (await dialog.ShowAsync() != ContentDialogResult.Primary)
         {
             return;
         }
 
+        if (!IsCurrentBranchMutationContext(sourceRoot, sourceName))
+        {
+            ShowError(
+                "Branch changed",
+                new InvalidOperationException("The repository or selected branch changed while the delete dialog was open; refresh and try again."));
+            await LoadBranchesAsync();
+            return;
+        }
+
+        string freshTip;
+        try
+        {
+            freshTip = await repositoryService.GetLocalBranchTipAsync(
+                sourceRoot,
+                sourceName,
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            ShowError("Unable to delete branch", exception);
+            await LoadBranchesAsync();
+            return;
+        }
+
+        if (!string.Equals(freshTip, expectedTip, StringComparison.OrdinalIgnoreCase))
+        {
+            ShowError(
+                "Branch changed",
+                new InvalidOperationException("The branch changed while the delete dialog was open; refresh and try again."));
+            await LoadBranchesAsync();
+            return;
+        }
+
+        var mutationContext = new BranchMutationContext(sourceRoot, sourceName, expectedTip);
         await RunRepositoryWriteAsync(
-            $"Deleting {branch.Name}…",
+            $"Deleting {sourceName}…",
             "Branch deleted",
             "Branch deletion cancelled; refreshing repository…",
             "Unable to delete branch",
-            (root, token) => repositoryService.DeleteBranchAsync(root, branch.Name, force: false, token),
+            (root, token) => repositoryService.DeleteBranchAsync(root, sourceName, force: false, mutationContext, token),
             refreshBranches: true,
-            refreshWorktrees: true);
+            refreshWorktrees: true,
+            expectedRoot: sourceRoot);
+    }
+
+    private bool IsCurrentBranchMutationContext(
+        string sourceRoot,
+        string sourceBranchName)
+    {
+        if (repositoryRoot is null
+            || !IsSamePath(repositoryRoot, sourceRoot)
+            || currentStatus is null
+            || !string.Equals(currentStatus.RootPath, sourceRoot, StringComparison.OrdinalIgnoreCase)
+            || selectedBranch is null
+            || !string.Equals(selectedBranch.Name, sourceBranchName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private async void AddWorktreeButton_Click(object sender, RoutedEventArgs e)
@@ -995,7 +1212,8 @@ public sealed partial class MainWindow
         bool refreshStashes = false,
         bool refreshRemotes = false,
         bool refreshTags = false,
-        string? expectedRoot = null)
+        string? expectedRoot = null,
+        string? selectBranchName = null)
     {
         if (!CanStartRepositoryWrite() || repositoryRoot is null)
         {
@@ -1046,7 +1264,7 @@ public sealed partial class MainWindow
         {
             try
             {
-                await RefreshAfterRepositoryWriteAsync(root, refreshBranches, refreshWorktrees, refreshStashes, refreshRemotes, refreshTags);
+                await RefreshAfterRepositoryWriteAsync(root, refreshBranches, refreshWorktrees, refreshStashes, refreshRemotes, refreshTags, selectBranchName);
             }
             catch (Exception refreshException)
             {
@@ -1081,7 +1299,8 @@ public sealed partial class MainWindow
         bool refreshWorktrees,
         bool refreshStashes,
         bool refreshRemotes,
-        bool refreshTags)
+        bool refreshTags,
+        string? selectBranchName = null)
     {
         if (repositoryRoot is null
             || !string.Equals(repositoryRoot, expectedRoot, StringComparison.OrdinalIgnoreCase))
@@ -1120,7 +1339,7 @@ public sealed partial class MainWindow
 
         if (refreshBranches)
         {
-            await LoadBranchesAsync();
+            await LoadBranchesAsync(selectBranchName);
         }
 
         if (refreshWorktrees || refreshStashes)

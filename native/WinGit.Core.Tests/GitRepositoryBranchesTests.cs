@@ -85,6 +85,153 @@ public sealed class GitRepositoryBranchesTests : IDisposable
         Assert.Equal("dirty local edit\n", File.ReadAllText(Path.Combine(repositoryRoot, "tracked.txt")));
     }
 
+    [Fact]
+    public async Task RenameRejectsExistingNameCollision()
+    {
+        WriteFile("root.txt", "root\n");
+        Commit("root");
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "alpha", null, CancellationToken.None);
+        await service.CreateBranchAsync(repositoryRoot, "beta", null, CancellationToken.None);
+        var alphaTip = await service.GetLocalBranchTipAsync(repositoryRoot, "alpha", CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.RenameBranchAsync(repositoryRoot, "alpha", "beta", CancellationToken.None));
+        Assert.Contains("already exists", exception.Message, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal(alphaTip, await service.GetLocalBranchTipAsync(repositoryRoot, "alpha", CancellationToken.None));
+        Assert.DoesNotContain(
+            await service.GetBranchesAsync(repositoryRoot, CancellationToken.None),
+            branch => branch.Name == "beta-renamed");
+    }
+
+    [Fact]
+    public async Task RenameRefusesStaleTip()
+    {
+        WriteFile("root.txt", "root\n");
+        Commit("root");
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "stale", null, CancellationToken.None);
+        var originalTip = await service.GetLocalBranchTipAsync(repositoryRoot, "stale", CancellationToken.None);
+        var mainName = RunGit(repositoryRoot, "branch", "--show-current").Trim();
+        RunGit(repositoryRoot, "checkout", "stale");
+        WriteFile("root.txt", "advanced\n");
+        Commit("advance stale");
+        var advancedTip = await service.GetLocalBranchTipAsync(repositoryRoot, "stale", CancellationToken.None);
+        Assert.NotEqual(originalTip, advancedTip);
+        RunGit(repositoryRoot, "checkout", mainName);
+
+        var context = new BranchMutationContext(repositoryRoot, "stale", originalTip);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.RenameBranchAsync(repositoryRoot, "stale", "stale-renamed", context, CancellationToken.None));
+        Assert.Contains("changed while", exception.Message, StringComparison.OrdinalIgnoreCase);
+
+        var branches = await service.GetBranchesAsync(repositoryRoot, CancellationToken.None);
+        Assert.Contains(branches, branch => branch.Name == "stale");
+        Assert.DoesNotContain(branches, branch => branch.Name == "stale-renamed");
+        Assert.Equal(advancedTip, await service.GetLocalBranchTipAsync(repositoryRoot, "stale", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task RenameIsCancelledBeforeMutation()
+    {
+        WriteFile("root.txt", "root\n");
+        Commit("root");
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "cancel-me", null, CancellationToken.None);
+        var tip = await service.GetLocalBranchTipAsync(repositoryRoot, "cancel-me", CancellationToken.None);
+
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => service.RenameBranchAsync(repositoryRoot, "cancel-me", "cancel-renamed", cancelled.Token));
+
+        Assert.Equal(tip, await service.GetLocalBranchTipAsync(repositoryRoot, "cancel-me", CancellationToken.None));
+        Assert.DoesNotContain(
+            await service.GetBranchesAsync(repositoryRoot, CancellationToken.None),
+            branch => branch.Name == "cancel-renamed");
+    }
+
+    [Fact]
+    public async Task RenameCurrentBranchPreservesCheckoutAndTracking()
+    {
+        WriteFile("root.txt", "root\n");
+        Commit("root");
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "side", null, CancellationToken.None);
+        var currentName = RunGit(repositoryRoot, "branch", "--show-current").Trim();
+        RunGit(repositoryRoot, "branch", "--set-upstream-to", "side");
+        var headBefore = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+
+        await service.RenameBranchAsync(repositoryRoot, currentName, "primary", CancellationToken.None);
+
+        Assert.Equal("primary", RunGit(repositoryRoot, "branch", "--show-current").Trim());
+        Assert.Equal(headBefore, RunGit(repositoryRoot, "rev-parse", "HEAD").Trim());
+        var renamed = Assert.Single(
+            await service.GetBranchesAsync(repositoryRoot, CancellationToken.None),
+            branch => branch.Name == "primary");
+        Assert.True(renamed.IsCurrent);
+        Assert.Equal("side", renamed.Upstream);
+        Assert.Equal("root\n", File.ReadAllText(Path.Combine(repositoryRoot, "root.txt")));
+    }
+
+    [Fact]
+    public async Task DeleteRefusesCurrentBranch()
+    {
+        WriteFile("root.txt", "root\n");
+        Commit("root");
+        var service = new GitRepositoryService();
+        var currentName = RunGit(repositoryRoot, "branch", "--show-current").Trim();
+        var headBefore = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.DeleteBranchAsync(repositoryRoot, currentName, force: false, CancellationToken.None));
+        Assert.Contains("currently checked out", exception.Message, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal(headBefore, RunGit(repositoryRoot, "rev-parse", "HEAD").Trim());
+        Assert.Equal(currentName, RunGit(repositoryRoot, "branch", "--show-current").Trim());
+        Assert.Equal("root\n", File.ReadAllText(Path.Combine(repositoryRoot, "root.txt")));
+    }
+
+    [Fact]
+    public async Task SafeDeleteRefusesUnmergedBranchWithoutForcing()
+    {
+        WriteFile("root.txt", "root\n");
+        Commit("root");
+        var mainName = RunGit(repositoryRoot, "branch", "--show-current").Trim();
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "unmerged", null, CancellationToken.None);
+        RunGit(repositoryRoot, "checkout", "unmerged");
+        WriteFile("root.txt", "diverged\n");
+        Commit("diverged commit");
+        var unmergedTip = await service.GetLocalBranchTipAsync(repositoryRoot, "unmerged", CancellationToken.None);
+        RunGit(repositoryRoot, "checkout", mainName);
+
+        var exception = await Assert.ThrowsAsync<GitCommandException>(
+            () => service.DeleteBranchAsync(repositoryRoot, "unmerged", force: false, CancellationToken.None));
+        Assert.Contains("not fully merged", exception.StandardError, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal(unmergedTip, await service.GetLocalBranchTipAsync(repositoryRoot, "unmerged", CancellationToken.None));
+        Assert.Equal(mainName, RunGit(repositoryRoot, "branch", "--show-current").Trim());
+        Assert.Equal("root\n", File.ReadAllText(Path.Combine(repositoryRoot, "root.txt")));
+    }
+
+    [Fact]
+    public async Task DeleteRefusesMissingBranch()
+    {
+        WriteFile("root.txt", "root\n");
+        Commit("root");
+        var service = new GitRepositoryService();
+        var headBefore = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.DeleteBranchAsync(repositoryRoot, "no/such-branch", force: false, CancellationToken.None));
+        Assert.Contains("no longer exists", exception.Message, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal(headBefore, RunGit(repositoryRoot, "rev-parse", "HEAD").Trim());
+        Assert.Equal("root\n", File.ReadAllText(Path.Combine(repositoryRoot, "root.txt")));
+    }
+
     public void Dispose()
     {
         DeleteDirectory(repositoryRoot);

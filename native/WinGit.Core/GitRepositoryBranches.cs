@@ -54,32 +54,106 @@ public sealed partial class GitRepositoryService
     }
 
     /// <summary>Renames a local branch without changing its worktree.</summary>
-    public async Task RenameBranchAsync(
+    public Task RenameBranchAsync(
         string root,
         string currentName,
         string newName,
         CancellationToken cancellationToken)
     {
+        return RenameBranchAsync(root, currentName, newName, expectedContext: null, cancellationToken);
+    }
+
+    /// <summary>Renames a local branch after revalidating a captured dialog context.</summary>
+    public async Task RenameBranchAsync(
+        string root,
+        string currentName,
+        string newName,
+        BranchMutationContext? expectedContext,
+        CancellationToken cancellationToken)
+    {
         var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
         var normalizedCurrentName = await ValidateBranchNameAsync(repositoryRoot, currentName, cancellationToken).ConfigureAwait(false);
         var normalizedNewName = await ValidateBranchNameAsync(repositoryRoot, newName, cancellationToken).ConfigureAwait(false);
+        if (string.Equals(normalizedCurrentName, normalizedNewName, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The new branch name must be different from the current branch name.", nameof(newName));
+        }
+
         await ExecuteMutationAsync(
             repositoryRoot,
             cancellationToken,
             async path =>
             {
+                var sourceTip = await ReadRefIdAsync(
+                    path,
+                    $"refs/heads/{normalizedCurrentName}",
+                    cancellationToken).ConfigureAwait(false);
+                if (sourceTip is null)
+                {
+                    throw new InvalidOperationException($"The branch '{normalizedCurrentName}' no longer exists; refresh the branch list and try again.");
+                }
+
+                ValidateBranchMutationContext(path, normalizedCurrentName, sourceTip, expectedContext);
+
+                var collisionTip = await ReadRefIdAsync(
+                    path,
+                    $"refs/heads/{normalizedNewName}",
+                    cancellationToken).ConfigureAwait(false);
+                // On a case-insensitive filesystem rev-parse can resolve the new
+                // name through the source ref itself, which is a case-only rename
+                // rather than a collision. Only an exact (case-sensitive) branch
+                // name match counts as a collision, matching the Electron retry
+                // behavior for case-only renames.
+                var forceSpellingChange = false;
+                if (collisionTip is not null)
+                {
+                    var existingNames = await ReadLocalBranchShortNamesAsync(path, cancellationToken).ConfigureAwait(false);
+                    if (existingNames.Contains(normalizedNewName))
+                    {
+                        throw new InvalidOperationException($"A branch named '{normalizedNewName}' already exists; choose a different name.");
+                    }
+
+                    forceSpellingChange = true;
+                }
+
+                await EnsureBranchNotCheckedOutElsewhereAsync(
+                    path,
+                    normalizedCurrentName,
+                    "rename",
+                    cancellationToken).ConfigureAwait(false);
+
+                // forceSpellingChange was decided above: only a rev-parse hit without
+                // an exact branch-name match (a case-only rename on a
+                // case-insensitive filesystem) forces the spelling change.
                 await processRunner.RunAsync(
                     path,
-                    ["branch", "--move", normalizedCurrentName, normalizedNewName],
+                    ["branch", forceSpellingChange ? "-M" : "-m", normalizedCurrentName, normalizedNewName],
                     cancellationToken).ConfigureAwait(false);
             }).ConfigureAwait(false);
     }
 
     /// <summary>Deletes a local branch, using safe -d unless force is explicitly requested.</summary>
+    public Task DeleteBranchAsync(
+        string root,
+        string name,
+        bool force,
+        CancellationToken cancellationToken)
+    {
+        return DeleteBranchAsync(root, name, force, expectedContext: null, cancellationToken);
+    }
+
+    /// <summary>Deletes a local branch after revalidating a captured dialog context.</summary>
+    /// <remarks>
+    /// Safe deletion never silently becomes forced deletion: callers pass
+    /// <c>force: false</c> and Git refuses when the branch has unmerged commits.
+    /// Forced deletion is only available through an explicit <c>force: true</c>
+    /// choice and the native UI does not offer one.
+    /// </remarks>
     public async Task DeleteBranchAsync(
         string root,
         string name,
         bool force,
+        BranchMutationContext? expectedContext,
         CancellationToken cancellationToken)
     {
         var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
@@ -89,11 +163,201 @@ public sealed partial class GitRepositoryService
             cancellationToken,
             async path =>
             {
+                var branchTip = await ReadRefIdAsync(
+                    path,
+                    $"refs/heads/{branchName}",
+                    cancellationToken).ConfigureAwait(false);
+                if (branchTip is null)
+                {
+                    throw new InvalidOperationException($"The branch '{branchName}' no longer exists; refresh the branch list and try again.");
+                }
+
+                ValidateBranchMutationContext(path, branchName, branchTip, expectedContext);
+
+                var currentBranch = await ReadCurrentBranchAsync(path, cancellationToken).ConfigureAwait(false);
+                if (string.Equals(currentBranch, branchName, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException($"The branch '{branchName}' is currently checked out; switch to another branch before deleting it.");
+                }
+
+                var worktreePath = await ReadBranchWorktreePathAsync(path, branchName, cancellationToken).ConfigureAwait(false);
+                if (worktreePath.Length != 0)
+                {
+                    throw new InvalidOperationException($"The branch '{branchName}' is checked out in the worktree at '{worktreePath}'; remove or switch that worktree before deleting it.");
+                }
+
+                var defaultBranchName = await TryGetDefaultBranchNameAsync(path, cancellationToken).ConfigureAwait(false);
+                if (string.Equals(defaultBranchName, branchName, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException($"The branch '{branchName}' appears to be the default branch; deleting it locally is not allowed from this view.");
+                }
+
                 await processRunner.RunAsync(
                     path,
                     ["branch", force ? "-D" : "-d", branchName],
                     cancellationToken).ConfigureAwait(false);
             }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves the repository default branch from a remote HEAD symbolic ref,
+    /// preferring <c>origin</c>. Returns null when no remote HEAD is configured
+    /// so callers never assume protection information that is unavailable.
+    /// </summary>
+    public async Task<string?> TryGetDefaultBranchNameAsync(
+        string root,
+        CancellationToken cancellationToken)
+    {
+        var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
+        var remotes = await GetRemotesAsync(repositoryRoot, cancellationToken).ConfigureAwait(false);
+        foreach (var remote in remotes
+                     .OrderByDescending(candidate => string.Equals(candidate.Name, "origin", StringComparison.Ordinal))
+                     .ThenBy(candidate => candidate.Name, StringComparer.Ordinal))
+        {
+            if (!RemoteNamePattern.IsMatch(remote.Name))
+            {
+                continue;
+            }
+
+            var target = await ReadRemoteHeadTargetAsync(repositoryRoot, remote.Name, cancellationToken).ConfigureAwait(false);
+            if (target is not null)
+            {
+                return target;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<string?> ReadRemoteHeadTargetAsync(
+        string repositoryRoot,
+        string remoteName,
+        CancellationToken cancellationToken)
+    {
+        var result = await processRunner.RunAsync(
+            repositoryRoot,
+            ["symbolic-ref", "--quiet", $"refs/remotes/{remoteName}/HEAD"],
+            cancellationToken,
+            expectedExitCodes: [1]).ConfigureAwait(false);
+        EnsureComplete(result, "remote HEAD lookup");
+        if (result.ExitCode != 0)
+        {
+            return null;
+        }
+
+        var target = DecodeUtf8(result.StandardOutput, "remote HEAD lookup").Trim();
+        var prefix = $"refs/remotes/{remoteName}/";
+        if (!target.StartsWith(prefix, StringComparison.Ordinal) || target.Length == prefix.Length)
+        {
+            return null;
+        }
+
+        return target[prefix.Length..];
+    }
+
+    private async Task<string?> ReadCurrentBranchAsync(
+        string repositoryRoot,
+        CancellationToken cancellationToken)
+    {
+        var result = await processRunner.RunAsync(
+            repositoryRoot,
+            ["symbolic-ref", "--quiet", "--short", "HEAD"],
+            cancellationToken,
+            expectedExitCodes: [1]).ConfigureAwait(false);
+        EnsureComplete(result, "current branch lookup");
+        if (result.ExitCode != 0)
+        {
+            return null;
+        }
+
+        var branch = DecodeUtf8(result.StandardOutput, "current branch lookup").Trim();
+        return branch.Length == 0 ? null : branch;
+    }
+
+    private async Task<string> ReadBranchWorktreePathAsync(
+        string repositoryRoot,
+        string branchName,
+        CancellationToken cancellationToken)
+    {
+        var result = await processRunner.RunAsync(
+            repositoryRoot,
+            ["for-each-ref", "--format=%(worktreepath)", $"refs/heads/{branchName}"],
+            cancellationToken).ConfigureAwait(false);
+        EnsureComplete(result, "branch worktree lookup");
+        return DecodeUtf8(result.StandardOutput, "branch worktree lookup").Trim();
+    }
+
+    /// <summary>
+    /// Reads exact (case-sensitive) local branch short names for collision checks.
+    /// </summary>
+    private async Task<HashSet<string>> ReadLocalBranchShortNamesAsync(
+        string repositoryRoot,
+        CancellationToken cancellationToken)
+    {
+        var result = await processRunner.RunAsync(
+            repositoryRoot,
+            ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+            cancellationToken).ConfigureAwait(false);
+        EnsureComplete(result, "branch name list");
+        return new HashSet<string>(
+            DecodeUtf8(result.StandardOutput, "branch name list")
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries),
+            StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Refuses to rename a branch that is checked out in another worktree.
+    /// Renaming the branch checked out in the current worktree stays allowed.
+    /// </summary>
+    private async Task EnsureBranchNotCheckedOutElsewhereAsync(
+        string repositoryRoot,
+        string branchName,
+        string operation,
+        CancellationToken cancellationToken)
+    {
+        var worktreePath = await ReadBranchWorktreePathAsync(repositoryRoot, branchName, cancellationToken).ConfigureAwait(false);
+        if (worktreePath.Length == 0)
+        {
+            return;
+        }
+
+        var currentBranch = await ReadCurrentBranchAsync(repositoryRoot, cancellationToken).ConfigureAwait(false);
+        if (string.Equals(currentBranch, branchName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"The branch '{branchName}' is checked out in the worktree at '{worktreePath}'; switch or remove that worktree before attempting to {operation} it.");
+    }
+
+    private static void ValidateBranchMutationContext(
+        string repositoryRoot,
+        string branchName,
+        string branchTip,
+        BranchMutationContext? expectedContext)
+    {
+        if (expectedContext is null)
+        {
+            return;
+        }
+
+        if (!string.Equals(
+                NormalizeRepositoryRoot(expectedContext.RootPath, expectedContext.RootPath),
+                repositoryRoot,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The repository changed while the branch dialog was open; refresh and try again.");
+        }
+
+        if (!string.Equals(expectedContext.BranchName, branchName, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The selected branch changed while the branch dialog was open; refresh and try again.");
+        }
+
+        if (!string.Equals(expectedContext.ExpectedTipId, branchTip, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The branch changed while the branch dialog was open; refresh and try again.");
+        }
     }
 
     /// <summary>Checks out a local branch using Git's normal dirty-worktree protection.</summary>
