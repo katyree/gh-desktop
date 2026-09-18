@@ -118,7 +118,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (captureOptions is { View: "repository-open-check" or "repository-picker-check" or "history-selection-check" or "whole-file-staging-check" or "partial-staging-check" or "partial-discard-check" or "commit-composer-check" }
+        if (captureOptions is { View: "repository-open-check" or "repository-picker-check" or "history-selection-check" or "whole-file-staging-check" or "partial-staging-check" or "partial-discard-check" or "commit-composer-check" or "hook-failure-check" }
             && TryGetHandlerCheckSettingsError() is { } settingsError)
         {
             await FailCaptureAsync(settingsError, App.CommandLineArguments);
