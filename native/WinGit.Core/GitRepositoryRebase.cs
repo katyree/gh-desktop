@@ -76,7 +76,12 @@ public sealed partial class GitRepositoryService
             }).ConfigureAwait(false);
     }
 
-    /// <summary>Continues a rebase after every tracked resolution has been staged.</summary>
+    /// <summary>
+    /// Continues a rebase after every tracked resolution has been staged.
+    /// When the staged resolutions leave nothing to commit for the current
+    /// pick (the resolution matches the base), the empty pick is skipped
+    /// automatically, matching the Electron continue behavior.
+    /// </summary>
     public async Task<RebaseOperationResult> ContinueRebaseAsync(
         string root,
         CancellationToken cancellationToken)
@@ -89,6 +94,11 @@ public sealed partial class GitRepositoryService
             {
                 var state = await ReadRebaseStateAsync(path, cancellationToken).ConfigureAwait(false);
                 EnsureRebaseCanContinue(state);
+
+                if (!await HasStagedRebaseResolutionAsync(path, cancellationToken).ConfigureAwait(false))
+                {
+                    return await SkipRebaseInMutationAsync(path, cancellationToken).ConfigureAwait(false);
+                }
 
                 try
                 {
@@ -135,37 +145,63 @@ public sealed partial class GitRepositoryService
             {
                 var state = await ReadRebaseStateAsync(path, cancellationToken).ConfigureAwait(false);
                 EnsureRebaseCanSkip(state);
-
-                try
-                {
-                    await processRunner.RunAsync(
-                        path,
-                        ["rebase", "--skip"],
-                        cancellationToken,
-                        environmentOverrides: NoOpEditorEnvironment).ConfigureAwait(false);
-                }
-                catch (GitCommandException)
-                {
-                    var failed = await ReadRebaseStateAsync(path, cancellationToken).ConfigureAwait(false);
-                    if (failed.IsInProgress && failed.HasUnresolvedConflicts)
-                    {
-                        return new RebaseOperationResult(
-                            RebaseOutcome.Conflicts,
-                            failed.CurrentHeadId,
-                            failed);
-                    }
-
-                    throw;
-                }
-
-                var after = await ReadRebaseStateAsync(path, cancellationToken).ConfigureAwait(false);
-                var outcome = after.IsInProgress
-                    ? after.HasUnresolvedConflicts
-                        ? RebaseOutcome.Conflicts
-                        : RebaseOutcome.InProgress
-                    : RebaseOutcome.Skipped;
-                return new RebaseOperationResult(outcome, after.CurrentHeadId, after);
+                return await SkipRebaseInMutationAsync(path, cancellationToken).ConfigureAwait(false);
             }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs <c>rebase --skip</c> for the current pick and reports the
+    /// resulting outcome. Shared by explicit skip requests and the automatic
+    /// empty-pick skip on continue.
+    /// </summary>
+    private async Task<RebaseOperationResult> SkipRebaseInMutationAsync(
+        string repositoryRoot,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await processRunner.RunAsync(
+                repositoryRoot,
+                ["rebase", "--skip"],
+                cancellationToken,
+                environmentOverrides: NoOpEditorEnvironment).ConfigureAwait(false);
+        }
+        catch (GitCommandException)
+        {
+            var failed = await ReadRebaseStateAsync(repositoryRoot, cancellationToken).ConfigureAwait(false);
+            if (failed.IsInProgress && failed.HasUnresolvedConflicts)
+            {
+                return new RebaseOperationResult(
+                    RebaseOutcome.Conflicts,
+                    failed.CurrentHeadId,
+                    failed);
+            }
+
+            throw;
+        }
+
+        var after = await ReadRebaseStateAsync(repositoryRoot, cancellationToken).ConfigureAwait(false);
+        var outcome = after.IsInProgress
+            ? after.HasUnresolvedConflicts
+                ? RebaseOutcome.Conflicts
+                : RebaseOutcome.InProgress
+            : RebaseOutcome.Skipped;
+        return new RebaseOperationResult(outcome, after.CurrentHeadId, after);
+    }
+
+    /// <summary>
+    /// Reports whether the index holds staged changes. Called after the
+    /// continue guards have refused unmerged paths and unstaged tracked
+    /// changes, so an empty answer means the current pick has nothing to
+    /// commit and must be skipped instead of continued.
+    /// </summary>
+    private async Task<bool> HasStagedRebaseResolutionAsync(
+        string repositoryRoot,
+        CancellationToken cancellationToken)
+    {
+        var status = await GetStatusAsync(repositoryRoot, cancellationToken).ConfigureAwait(false);
+        return status.Changes.Any(change =>
+            !IsUntracked(change) && change.IndexStatus.Length > 0);
     }
 
     /// <summary>Aborts an in-progress rebase using Git's normal worktree safeguards.</summary>
