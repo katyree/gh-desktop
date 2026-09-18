@@ -151,18 +151,14 @@ public sealed class GitRepositoryWorktreeStashTests : IDisposable
         WriteFile(repositoryRoot, "recover.txt", "recover this change\n");
         var checkoutException = await Assert.ThrowsAsync<InvalidOperationException>(
             () => service.CheckoutBranchWithStashAsync(repositoryRoot, "blocked", CancellationToken.None));
+        Assert.Contains("already checked out", checkoutException.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("blocked", checkoutException.Message, StringComparison.OrdinalIgnoreCase);
 
-        var stashes = await service.GetStashesAsync(repositoryRoot, CancellationToken.None);
-        var stash = Assert.Single(stashes);
-        Assert.Contains(stash.Reference, checkoutException.Message, StringComparison.Ordinal);
-        Assert.Contains(stash.CommitId, checkoutException.Message, StringComparison.Ordinal);
-        Assert.Equal(initialBranch, (await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Branch);
-        Assert.False(File.Exists(Path.Combine(repositoryRoot, "recover.txt")));
-
-        await service.ApplyStashAsync(repositoryRoot, stash.CommitId, restoreIndex: true, CancellationToken.None);
-        Assert.Equal("recover this change\n", File.ReadAllText(Path.Combine(repositoryRoot, "recover.txt")));
-        await service.DropStashAsync(repositoryRoot, stash.Reference, stash.CommitId, CancellationToken.None);
         Assert.Empty(await service.GetStashesAsync(repositoryRoot, CancellationToken.None));
+        Assert.Equal(initialBranch, (await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Branch);
+        Assert.Equal("recover this change\n", File.ReadAllText(Path.Combine(repositoryRoot, "recover.txt")));
+
+        File.Delete(Path.Combine(repositoryRoot, "recover.txt"));
         await service.RemoveWorktreeAsync(repositoryRoot, secondaryWorktreePath, CancellationToken.None);
         secondaryWorktreePath = null;
     }

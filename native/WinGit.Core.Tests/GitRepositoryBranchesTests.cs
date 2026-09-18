@@ -232,6 +232,62 @@ public sealed class GitRepositoryBranchesTests : IDisposable
         Assert.Equal("root\n", File.ReadAllText(Path.Combine(repositoryRoot, "root.txt")));
     }
 
+    [Fact]
+    public async Task CheckoutRefusesBranchCheckedOutInLinkedWorktree()
+    {
+        WriteFile("root.txt", "root\n");
+        Commit("root");
+        var service = new GitRepositoryService();
+        await service.CreateBranchAsync(repositoryRoot, "linked", null, CancellationToken.None);
+        var mainName = RunGit(repositoryRoot, "branch", "--show-current").Trim();
+        var headBefore = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+        var secondaryPath = Path.Combine(FixtureParent, Guid.NewGuid().ToString("N"));
+        try
+        {
+            await service.AddWorktreeAsync(repositoryRoot, secondaryPath, "linked", null, CancellationToken.None);
+
+            var plain = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.CheckoutBranchAsync(repositoryRoot, "linked", CancellationToken.None));
+            Assert.Contains("already checked out", plain.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("linked", plain.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("worktree", plain.Message, StringComparison.OrdinalIgnoreCase);
+
+            WriteFile("root.txt", "dirty local edit\n");
+            var withStash = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.CheckoutBranchWithStashAsync(repositoryRoot, "linked", CancellationToken.None));
+            Assert.Contains("already checked out", withStash.Message, StringComparison.OrdinalIgnoreCase);
+
+            var bring = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.CheckoutBranchBringingChangesAsync(repositoryRoot, "linked", CancellationToken.None));
+            Assert.Contains("already checked out", bring.Message, StringComparison.OrdinalIgnoreCase);
+
+            Assert.Equal(mainName, RunGit(repositoryRoot, "branch", "--show-current").Trim());
+            Assert.Equal(headBefore, RunGit(repositoryRoot, "rev-parse", "HEAD").Trim());
+            Assert.Equal("dirty local edit\n", File.ReadAllText(Path.Combine(repositoryRoot, "root.txt")));
+            Assert.Empty(await service.GetStashesAsync(repositoryRoot, CancellationToken.None));
+        }
+        finally
+        {
+            await service.RemoveWorktreeAsync(repositoryRoot, secondaryPath, CancellationToken.None);
+            DeleteDirectory(secondaryPath);
+        }
+    }
+
+    [Fact]
+    public async Task CheckoutCurrentBranchSucceedsAsNoop()
+    {
+        WriteFile("root.txt", "root\n");
+        Commit("root");
+        var service = new GitRepositoryService();
+        var currentName = RunGit(repositoryRoot, "branch", "--show-current").Trim();
+        var headBefore = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+
+        await service.CheckoutBranchAsync(repositoryRoot, currentName, CancellationToken.None);
+
+        Assert.Equal(currentName, RunGit(repositoryRoot, "branch", "--show-current").Trim());
+        Assert.Equal(headBefore, RunGit(repositoryRoot, "rev-parse", "HEAD").Trim());
+    }
+
     public void Dispose()
     {
         DeleteDirectory(repositoryRoot);
