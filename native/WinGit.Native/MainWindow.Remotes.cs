@@ -131,6 +131,18 @@ public sealed partial class MainWindow
 
     private void CancelOperationButton_Click(object sender, RoutedEventArgs e)
     {
+        // Task 22: distinguish a cancellation request from confirmed
+        // cancellation. The request is acknowledged immediately; the owning
+        // operation reports confirmation after it observes cancellation,
+        // refreshes repository state, and releases busy. Mutations hide this
+        // control (see SetBusy) because killing Git mid-write is unsupported.
+        if (!BusyRing.IsActive || mutationInProgress || !currentOperationSupportsCancellation)
+        {
+            return;
+        }
+
+        StatusText.Text = "Cancelling… waiting for the current read to stop. The view will refresh to confirm.";
+        CancelOperationButton.IsEnabled = false;
         operationCancellation?.Cancel();
     }
 

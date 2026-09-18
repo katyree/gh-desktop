@@ -455,9 +455,16 @@ public sealed partial class MainWindow
         }
 
         mutationInProgress = true;
+        // Task 22: merge/rebase writes run to completion; cancellation is not
+        // offered mid-mutation. A repository switch still supersedes via a
+        // newer generation; root/HEAD guards prevent wrong-repository writes.
         var operation = BeginOperation(rebase
             ? $"Rebasing {request.CurrentBranch} onto {request.SourceBranch}…"
-            : $"Merging {request.SourceBranch} into {request.CurrentBranch}…");
+            : $"Merging {request.SourceBranch} into {request.CurrentBranch}…",
+            supportsCancellation: false);
+        var resultText = string.Empty;
+        var wasCancelled = false;
+        var mutationSucceeded = false;
         try
         {
             var status = await repositoryService.GetStatusAsync(request.Root, operation.Token);
@@ -476,6 +483,7 @@ public sealed partial class MainWindow
                     ShowError(
                         "Repository changed",
                         new InvalidOperationException("The current branch or HEAD changed while the confirmation was open. Refresh and review the branch again."));
+                    resultText = StatusText.Text;
                 }
 
                 return;
@@ -489,7 +497,8 @@ public sealed partial class MainWindow
                     request.ExpectedHeadId,
                     operation.Token);
                 ErrorBar.IsOpen = false;
-                StatusText.Text = FormatRebaseResult(result);
+                resultText = FormatRebaseResult(result);
+                StatusText.Text = resultText;
             }
             else
             {
@@ -499,16 +508,22 @@ public sealed partial class MainWindow
                     request.ExpectedHeadId,
                     operation.Token);
                 ErrorBar.IsOpen = false;
-                StatusText.Text = FormatMergeResult(result);
+                resultText = FormatMergeResult(result);
+                StatusText.Text = resultText;
             }
+
+            mutationSucceeded = true;
         }
         catch (OperationCanceledException) when (operation.Token.IsCancellationRequested)
         {
-            StatusText.Text = $"{(rebase ? "Rebase" : "Merge")} canceled; repository was refreshed. Check the operation panel for its current state.";
+            wasCancelled = true;
+            resultText = $"{(rebase ? "Rebase" : "Merge")} cancel requested.";
+            StatusText.Text = "Cancel requested… refreshing repository state to confirm.";
         }
         catch (Exception exception)
         {
             ShowError(rebase ? "Unable to rebase branch" : "Unable to merge branch", exception);
+            resultText = StatusText.Text;
         }
         finally
         {
@@ -519,10 +534,21 @@ public sealed partial class MainWindow
             catch (Exception refreshException)
             {
                 ShowError("Unable to refresh repository after Git operation", refreshException);
+                resultText = StatusText.Text;
             }
 
-            mutationInProgress = false;
-            SetBusy(false, StatusText.Text);
+            if (string.Equals(repositoryRoot, request.Root, StringComparison.OrdinalIgnoreCase)
+                && operation.Generation == operationGeneration
+                && !string.IsNullOrWhiteSpace(resultText))
+            {
+                StatusText.Text = wasCancelled
+                    ? $"{(rebase ? "Rebase" : "Merge")} cancel confirmed after refresh. Check the operation panel for its current state before retrying; nothing was repeated automatically."
+                    : mutationSucceeded
+                        ? resultText
+                        : $"{resultText} Refresh completed. Verify the operation panel before retrying; nothing was repeated automatically.";
+            }
+
+            EndMutationOperation(operation.Generation, StatusText.Text);
         }
     }
 
@@ -898,7 +924,14 @@ public sealed partial class MainWindow
         }
 
         mutationInProgress = true;
-        var operation = BeginOperation(progress);
+        // Task 22: operation-panel continue/skip/abort writes run to
+        // completion. Cancellation is not offered mid-mutation; retry always
+        // revalidates the captured snapshot against fresh Git state below and
+        // never repeats automatically after an uncertain outcome.
+        var operation = BeginOperation(progress, supportsCancellation: false);
+        var resultText = string.Empty;
+        var wasCancelled = false;
+        var mutationSucceeded = false;
         try
         {
             var isCurrent = await IsConfirmedGitOperationCurrentAsync(snapshot, operation.Token);
@@ -914,6 +947,7 @@ public sealed partial class MainWindow
                     ShowError(
                         "Git operation changed",
                         new InvalidOperationException("The active Git operation changed while the confirmation was open. The repository was refreshed without running the requested action."));
+                    resultText = StatusText.Text;
                 }
 
                 return;
@@ -921,15 +955,20 @@ public sealed partial class MainWindow
 
             var resultMessage = await mutation(snapshot.Root, operation.Token);
             ErrorBar.IsOpen = false;
-            StatusText.Text = string.IsNullOrWhiteSpace(resultMessage) ? success : resultMessage;
+            resultText = string.IsNullOrWhiteSpace(resultMessage) ? success : resultMessage;
+            StatusText.Text = resultText;
+            mutationSucceeded = true;
         }
         catch (OperationCanceledException) when (operation.Token.IsCancellationRequested)
         {
-            StatusText.Text = $"{snapshot.Kind} action canceled; repository was refreshed. Check the operation panel for its current state.";
+            wasCancelled = true;
+            resultText = $"{snapshot.Kind} action cancel requested.";
+            StatusText.Text = "Cancel requested… refreshing repository state to confirm.";
         }
         catch (Exception exception)
         {
             ShowError($"Unable to update {snapshot.Kind.ToString().ToLowerInvariant()}", exception);
+            resultText = StatusText.Text;
         }
         finally
         {
@@ -940,10 +979,21 @@ public sealed partial class MainWindow
             catch (Exception refreshException)
             {
                 ShowError("Unable to refresh repository after Git operation", refreshException);
+                resultText = StatusText.Text;
             }
 
-            mutationInProgress = false;
-            SetBusy(false, StatusText.Text);
+            if (string.Equals(repositoryRoot, snapshot.Root, StringComparison.OrdinalIgnoreCase)
+                && operation.Generation == operationGeneration
+                && !string.IsNullOrWhiteSpace(resultText))
+            {
+                StatusText.Text = wasCancelled
+                    ? $"{snapshot.Kind} action cancel confirmed after refresh. Check the operation panel for its current state before retrying; nothing was repeated automatically."
+                    : mutationSucceeded
+                        ? resultText
+                        : $"{resultText} Refresh completed. Verify the operation panel before retrying; nothing was repeated automatically.";
+            }
+
+            EndMutationOperation(operation.Generation, StatusText.Text);
         }
     }
 
