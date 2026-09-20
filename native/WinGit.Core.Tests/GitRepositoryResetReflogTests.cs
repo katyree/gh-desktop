@@ -121,6 +121,42 @@ public sealed class GitRepositoryResetReflogTests : IDisposable
         Assert.NotEmpty(latest.Subject);
     }
 
+    [Fact]
+    public async Task RecentBranchesFollowCheckoutOrderRespectLimitAndRenameExclusion()
+    {
+        WriteFile("root.txt", "root\n");
+        Commit("root");
+
+        var service = new GitRepositoryService();
+        RunGit(repositoryRoot, "branch", "bravo");
+        RunGit(repositoryRoot, "branch", "charlie");
+        RunGit(repositoryRoot, "checkout", "bravo");
+        RunGit(repositoryRoot, "checkout", "charlie");
+        RunGit(repositoryRoot, "checkout", "bravo");
+
+        var recent = await service.GetRecentBranchNamesAsync(repositoryRoot, 5, CancellationToken.None);
+        Assert.Equal(["bravo", "charlie"], recent);
+
+        var limited = await service.GetRecentBranchNamesAsync(repositoryRoot, 1, CancellationToken.None);
+        Assert.Equal(["bravo"], limited);
+
+        RunGit(repositoryRoot, "branch", "-m", "bravo", "bravo-renamed");
+        var afterRename = await service.GetRecentBranchNamesAsync(repositoryRoot, 5, CancellationToken.None);
+        Assert.Equal(["bravo-renamed", "charlie"], afterRename);
+    }
+
+    [Fact]
+    public async Task RecentBranchesAreEmptyForUnbornRepositoriesAndValidatedLimits()
+    {
+        var service = new GitRepositoryService();
+        Assert.Empty(await service.GetRecentBranchNamesAsync(repositoryRoot, 5, CancellationToken.None));
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => service.GetRecentBranchNamesAsync(repositoryRoot, 0, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => service.GetRecentBranchNamesAsync(repositoryRoot, 101, CancellationToken.None));
+    }
+
     public void Dispose()
     {
         DeleteDirectory(repositoryRoot);

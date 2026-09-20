@@ -1595,6 +1595,7 @@ public sealed partial class MainWindow : Window
         HistoryList.IsEnabled = !mutationInProgress && (!busy || allowHistorySelection);
         HistoryFilesList.IsEnabled = !busy && !mutationInProgress;
         BranchesList.IsEnabled = !busy && !mutationInProgress;
+        RecentBranchesBox.IsEnabled = !busy && !mutationInProgress;
         WorktreesList.IsEnabled = !busy && !mutationInProgress;
         StashesList.IsEnabled = !busy && !mutationInProgress;
         SubmodulesList.IsEnabled = !busy && !mutationInProgress;
