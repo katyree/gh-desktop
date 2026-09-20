@@ -113,6 +113,7 @@ public enum SquashOperationFailureReason
     OperationInProgress,
     StalePlan,
     InvalidMessage,
+    UndoUnavailable,
 }
 
 /// <summary>Raised when a captured squash cannot safely be previewed or applied.</summary>
@@ -606,6 +607,73 @@ public sealed partial class GitRepositoryService
                     plan,
                     replacementMessage,
                     cancellationToken).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Undoes a completed squash by restoring the plan's pre-squash tip. The
+    /// undo is one-shot: it requires a clean worktree on the squashed branch
+    /// with HEAD still at the supplied post-squash tip, so newer commits are
+    /// never discarded silently.
+    /// </summary>
+    public async Task<RebaseOperationResult> UndoSquashAsync(
+        string root,
+        SquashPlan plan,
+        string postSquashHeadId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ValidateObjectId(postSquashHeadId, nameof(postSquashHeadId));
+        var candidate = ValidateDirectory(root, nameof(root));
+        var repositoryRoot = await ResolveRepositoryRootAsync(candidate, cancellationToken).ConfigureAwait(false);
+        EnsureSquashPlanRoot(repositoryRoot, plan);
+
+        return await ExecuteMutationAsync(
+            repositoryRoot,
+            cancellationToken,
+            async path =>
+            {
+                var operation = await ReadMergeStateAsync(path, cancellationToken).ConfigureAwait(false);
+                if (operation.OperationKind != GitOperationKind.None || operation.HasUnresolvedConflicts)
+                {
+                    throw new SquashOperationBlockedException(
+                        SquashOperationFailureReason.OperationInProgress,
+                        "Undoing the squash is unavailable while a Git operation or unresolved conflict is active.");
+                }
+
+                var status = await GetStatusAsync(path, cancellationToken).ConfigureAwait(false);
+                if (!string.Equals(status.Branch, plan.Branch, StringComparison.Ordinal))
+                {
+                    throw new SquashOperationBlockedException(
+                        SquashOperationFailureReason.StalePlan,
+                        "The branch changed since the squash completed; undo is unavailable.");
+                }
+
+                if (status.Changes.Count > 0)
+                {
+                    throw new SquashOperationBlockedException(
+                        SquashOperationFailureReason.DirtyWorktree,
+                        "Commit or set aside every local change before undoing the squash.");
+                }
+
+                if (!string.Equals(status.HeadId, postSquashHeadId, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new SquashOperationBlockedException(
+                        SquashOperationFailureReason.UndoUnavailable,
+                        "The branch tip changed since the squash completed; undo is unavailable.");
+                }
+
+                await processRunner.RunAsync(
+                    path,
+                    ["reset", "--hard", plan.ExpectedHeadId],
+                    cancellationToken).ConfigureAwait(false);
+                var after = await ReadRebaseStateAsync(path, cancellationToken).ConfigureAwait(false);
+                if (!string.Equals(after.CurrentHeadId, plan.ExpectedHeadId, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("Undoing the squash left unexpected repository state; refresh and review the repository before retrying.");
+                }
+
+                return new RebaseOperationResult(RebaseOutcome.Completed, after.CurrentHeadId, after);
             }).ConfigureAwait(false);
     }
 

@@ -1337,6 +1337,10 @@
                                                       Label="Squash selected"
                                                       Click="HistorySquashButton_Click"
                                                       AutomationProperties.Name="Squash selected history commits" />
+                                        <AppBarButton x:Name="HistoryUndoSquashButton"
+                                                      Label="Undo squash"
+                                                      Click="HistoryUndoSquashButton_Click"
+                                                      AutomationProperties.Name="Undo the last completed squash" />
                                     </CommandBar.SecondaryCommands>
                                 </CommandBar>
                             </Grid>

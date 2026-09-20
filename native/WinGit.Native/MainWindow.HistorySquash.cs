@@ -12,6 +12,8 @@ public sealed partial class MainWindow
     private SquashPlan? activeSquashPlan;
     private string? activeSquashMessage;
     private string? squashRecoveryUnavailableRoot;
+    private SquashPlan? squashUndoPlan;
+    private string? squashUndoPostTip;
 
     private sealed record HistorySquashRequest(
         string Root,
@@ -31,6 +33,9 @@ public sealed partial class MainWindow
             .Select(row => row.Commit.Id)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var hasTarget = commitRows.Any(row => !selectedIds.Contains(row.Commit.Id));
+        var currentRepositoryStatus = currentStatus is { IsDetached: false, IsUnborn: false } readyStatus
+            ? readyStatus
+            : null;
         var canStart = repositoryRoot is not null
             && currentWorkspace == "history"
             && !diagnosticCaptureMode
@@ -39,7 +44,7 @@ public sealed partial class MainWindow
             && !mutationInProgress
             && !BusyRing.IsActive
             && activeGitOperationKind == GitOperationKind.None
-            && currentStatus is { IsDetached: false, IsUnborn: false } status
+            && currentRepositoryStatus is { } status
             && !string.IsNullOrWhiteSpace(status.Branch)
             && !string.IsNullOrWhiteSpace(status.HeadId)
             && status.Changes.Count == 0;
@@ -51,6 +56,20 @@ public sealed partial class MainWindow
             && selectedRows.Length > 0
             && selectedRows.Length <= 1_000
             && hasTarget;
+
+        // The undo offer is one-shot and validated fresh on every refresh:
+        // it stays enabled only while the tree is clean on the squashed
+        // branch with HEAD still at the post-squash tip.
+        if (HistoryUndoSquashButton is not null)
+        {
+            HistoryUndoSquashButton.IsEnabled = canStart
+                && currentRepositoryStatus is { } undoStatus
+                && squashUndoPlan is { } undoPlan
+                && squashUndoPostTip is { } undoTip
+                && string.Equals(repositoryRoot, undoPlan.RootPath, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(undoStatus.Branch, undoPlan.Branch, StringComparison.Ordinal)
+                && string.Equals(undoStatus.HeadId, undoTip, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private async void HistorySquashButton_Click(
@@ -472,7 +491,19 @@ public sealed partial class MainWindow
                 replacementMessage,
                 operation.Token);
             ErrorBar.IsOpen = false;
-            StatusText.Text = FormatHistorySquashResult(result);
+            if (result.Outcome == RebaseOutcome.Completed)
+            {
+                squashUndoPlan = plan;
+                squashUndoPostTip = result.HeadId;
+                var squashedCount = plan.SelectedCommitIds.Count;
+                StatusText.Text = $"Squashed {squashedCount} {(squashedCount == 1 ? "commit" : "commits")} into {ShortObjectId(result.HeadId)}. Undo squash is available from History.";
+            }
+            else
+            {
+                squashUndoPlan = null;
+                squashUndoPostTip = null;
+                StatusText.Text = FormatHistorySquashResult(result);
+            }
         }
         catch (OperationCanceledException) when (operation.Token.IsCancellationRequested)
         {
@@ -499,6 +530,110 @@ public sealed partial class MainWindow
 
             mutationInProgress = false;
             SetBusy(false, StatusText.Text);
+            UpdateHistorySquashControls();
+        }
+    }
+
+    private async void HistoryUndoSquashButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var plan = squashUndoPlan;
+        var postTip = squashUndoPostTip;
+        if (!CanStartRepositoryWrite()
+            || plan is null
+            || postTip is null
+            || repositoryRoot is null
+            || currentWorkspace != "history"
+            || mutationInProgress
+            || BusyRing.IsActive
+            || activeGitOperationKind != GitOperationKind.None
+            || currentStatus is not { IsDetached: false, IsUnborn: false } status
+            || status.Changes.Count != 0
+            || !string.Equals(repositoryRoot, plan.RootPath, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(status.Branch, plan.Branch, StringComparison.Ordinal)
+            || !string.Equals(status.HeadId, postTip, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var dialog = CreateDialog(
+            "Undo squash?",
+            "Undo squash",
+            new TextBlock
+            {
+                Text = $"Restore \"{plan.Branch}\" to the pre-squash tip {ShortObjectId(plan.ExpectedHeadId)}? The squashed commit at {ShortObjectId(postTip)} is discarded. This cannot be undone by WinGit.",
+                TextWrapping = TextWrapping.Wrap,
+            });
+        dialog.DefaultButton = ContentDialogButton.Secondary;
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        await RunHistoryUndoSquashAsync(plan, postTip);
+    }
+
+    private async Task RunHistoryUndoSquashAsync(SquashPlan plan, string postSquashTip)
+    {
+        if (repositoryRoot is null
+            || currentWorkspace != "history"
+            || mutationInProgress
+            || BusyRing.IsActive
+            || activeGitOperationKind != GitOperationKind.None
+            || !string.Equals(repositoryRoot, plan.RootPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        mutationInProgress = true;
+        var operation = BeginOperation("Undoing squash…");
+        try
+        {
+            var result = await repositoryService.UndoSquashAsync(
+                plan.RootPath,
+                plan,
+                postSquashTip,
+                operation.Token);
+            ErrorBar.IsOpen = false;
+            squashUndoPlan = null;
+            squashUndoPostTip = null;
+            StatusText.Text = $"Squash undone; restored {ShortObjectId(result.HeadId)}.";
+        }
+        catch (OperationCanceledException) when (operation.Token.IsCancellationRequested)
+        {
+            StatusText.Text = "Squash undo canceled; repository was refreshed.";
+        }
+        catch (SquashOperationBlockedException exception) when (
+            exception.Reason is SquashOperationFailureReason.UndoUnavailable
+                or SquashOperationFailureReason.StalePlan)
+        {
+            squashUndoPlan = null;
+            squashUndoPostTip = null;
+            ShowError("Squash undo unavailable", exception);
+        }
+        catch (SquashOperationBlockedException exception)
+        {
+            ShowError("Squash undo unavailable", exception);
+        }
+        catch (Exception exception)
+        {
+            ShowError("Unable to undo squash", exception);
+        }
+        finally
+        {
+            try
+            {
+                await RefreshAfterGitOperationAsync(plan.RootPath);
+            }
+            catch (Exception refreshException)
+            {
+                ShowError("Unable to refresh repository after squash undo", refreshException);
+            }
+
+            mutationInProgress = false;
+            SetBusy(false, StatusText.Text);
+            UpdateHistorySquashControls();
         }
     }
 

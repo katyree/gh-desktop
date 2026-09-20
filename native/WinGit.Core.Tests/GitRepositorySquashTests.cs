@@ -282,6 +282,77 @@ public sealed class GitRepositorySquashTests : IDisposable
             RunGit(repositoryRoot, "show", "--no-patch", "--format=%s%n%b", "HEAD").Trim());
     }
 
+    [Fact]
+    public async Task UndoSquashRestoresPreSquashHistory()
+    {
+        CommitFile("root", "root", "Root Author", "root@example.invalid");
+        CommitFile("first", "first", "First Author", "first@example.invalid");
+        var firstCommit = Head();
+        CommitFile("second", "second", "Second Author", "second@example.invalid");
+
+        var service = new GitRepositoryService();
+        var plan = await service.CaptureSquashPlanFromCurrentHistoryAsync(
+            repositoryRoot,
+            [Head()],
+            firstCommit);
+        var preSquashTip = Head();
+
+        var result = await service.SquashAsync(repositoryRoot, plan, "squashed summary");
+        Assert.Equal(RebaseOutcome.Completed, result.Outcome);
+        var postSquashTip = result.HeadId;
+        Assert.NotEqual(preSquashTip, postSquashTip);
+
+        var undone = await service.UndoSquashAsync(repositoryRoot, plan, postSquashTip);
+        Assert.Equal(RebaseOutcome.Completed, undone.Outcome);
+        Assert.Equal(preSquashTip, undone.HeadId);
+        Assert.Equal(preSquashTip, Head());
+        Assert.Equal(
+            ["second", "first", "root"],
+            (await service.GetHistoryAsync(repositoryRoot, 20)).Select(commit => commit.Summary));
+        Assert.Empty((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+    }
+
+    [Fact]
+    public async Task UndoSquashRefusesMovedHeadDirtyTreeAndReuse()
+    {
+        CommitFile("root", "root", "Root Author", "root@example.invalid");
+        CommitFile("first", "first", "First Author", "first@example.invalid");
+        var firstCommit = Head();
+        CommitFile("second", "second", "Second Author", "second@example.invalid");
+
+        var service = new GitRepositoryService();
+        var plan = await service.CaptureSquashPlanFromCurrentHistoryAsync(
+            repositoryRoot,
+            [Head()],
+            firstCommit);
+        var preSquashTip = Head();
+
+        var result = await service.SquashAsync(repositoryRoot, plan, "squashed summary");
+        var postSquashTip = result.HeadId;
+
+        CommitFile("newer", "newer", "Newer Author", "newer@example.invalid");
+        var moved = await Assert.ThrowsAsync<SquashOperationBlockedException>(
+            () => service.UndoSquashAsync(repositoryRoot, plan, postSquashTip));
+        Assert.Equal(SquashOperationFailureReason.UndoUnavailable, moved.Reason);
+        Assert.Equal("newer", (await service.GetHistoryAsync(repositoryRoot, 1)).Single().Summary);
+
+        RunGit(repositoryRoot, "reset", "--hard", postSquashTip);
+        WriteFile("dirty.txt", "dirty\n");
+        var dirty = await Assert.ThrowsAsync<SquashOperationBlockedException>(
+            () => service.UndoSquashAsync(repositoryRoot, plan, postSquashTip));
+        Assert.Equal(SquashOperationFailureReason.DirtyWorktree, dirty.Reason);
+        File.Delete(Path.Combine(repositoryRoot, "dirty.txt"));
+
+        var undone = await service.UndoSquashAsync(repositoryRoot, plan, postSquashTip);
+        Assert.Equal(RebaseOutcome.Completed, undone.Outcome);
+        Assert.Equal(preSquashTip, Head());
+
+        var reused = await Assert.ThrowsAsync<SquashOperationBlockedException>(
+            () => service.UndoSquashAsync(repositoryRoot, plan, postSquashTip));
+        Assert.Equal(SquashOperationFailureReason.UndoUnavailable, reused.Reason);
+        Assert.Equal(preSquashTip, Head());
+    }
+
     public void Dispose()
     {
         DeleteDirectory(repositoryRoot);
