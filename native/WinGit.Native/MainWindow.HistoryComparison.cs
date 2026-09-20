@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using WinGit.Core;
 
 namespace WinGit.Native;
@@ -480,24 +481,54 @@ public sealed partial class MainWindow
             return;
         }
 
-        var omitted = snapshot.OmittedSelectedCommitIds.Select(id =>
-        {
-            var row = commitRows.FirstOrDefault(candidate =>
-                string.Equals(candidate.Commit.Id, id, StringComparison.OrdinalIgnoreCase));
-            return row is null ? ShortObjectId(id) : $"{ShortObjectId(id)}  {row.Summary}";
-        });
+        // Electron's unreachable-commits dialog shows both tabs: the selected
+        // commits outside the ancestry path (their changes are not shown) and
+        // the reachable ones (their changes are included).
+        var omitted = snapshot.OmittedSelectedCommitIds
+            .Select(FormatReachabilityCommitRow)
+            .ToArray();
+        var reachable = snapshot.ReachableSelectedCommitIds
+            .Select(FormatReachabilityCommitRow)
+            .ToArray();
+        var omittedText = omitted.Length == 1 ? "commit" : "commits";
         var dialog = CreateDialog(
-            "Some selected commits are omitted",
+            "Commit reachability",
             "Close",
-            new TextBlock
+            new StackPanel
             {
-                Text = "These selected commits are not part of the selected range's final commit history, so their changes are omitted from this combined diff:\n\n"
-                    + string.Join("\n", omitted),
-                TextWrapping = TextWrapping.Wrap,
+                Spacing = 10,
+                MaxWidth = 700,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = $"You will not see changes from the following {omitted.Length} {omittedText} because {(omitted.Length == 1 ? "it's" : "they're")} not in the ancestry path of the most recent commit in your selection.",
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                    new TextBlock
+                    {
+                        Text = $"Unreachable ({omitted.Length})\n{string.Join("\n", omitted)}",
+                        TextWrapping = TextWrapping.Wrap,
+                        FontFamily = new FontFamily("Cascadia Mono"),
+                    },
+                    new TextBlock
+                    {
+                        Text = $"Reachable — included in the combined diff ({reachable.Length})\n{string.Join("\n", reachable)}",
+                        TextWrapping = TextWrapping.Wrap,
+                        FontFamily = new FontFamily("Cascadia Mono"),
+                    },
+                },
             });
         dialog.SecondaryButtonText = string.Empty;
         dialog.DefaultButton = ContentDialogButton.Primary;
         await dialog.ShowAsync();
+    }
+
+    private string FormatReachabilityCommitRow(string commitId)
+    {
+        var row = commitRows.FirstOrDefault(candidate =>
+            string.Equals(candidate.Commit.Id, commitId, StringComparison.OrdinalIgnoreCase));
+        return row is null ? ShortObjectId(commitId) : $"{ShortObjectId(commitId)}  {row.Summary}";
     }
 
     private bool IsHistorySelectionCurrent(IReadOnlyList<CommitRow> rows)
