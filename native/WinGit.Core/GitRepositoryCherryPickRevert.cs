@@ -421,7 +421,12 @@ public sealed partial class GitRepositoryService
             }).ConfigureAwait(false);
     }
 
-    /// <summary>Continues a revert after every tracked resolution is staged.</summary>
+    /// <summary>
+    /// Continues a revert after every tracked resolution is staged. When the
+    /// staged resolutions leave nothing to commit, an empty revert commit is
+    /// recorded so the revert stays visible in history, matching the
+    /// cherry-pick continue behavior.
+    /// </summary>
     public async Task<RevertOperationResult> ContinueRevertAsync(
         string root,
         CancellationToken cancellationToken)
@@ -434,6 +439,12 @@ public sealed partial class GitRepositoryService
             {
                 var stateBefore = await ReadCommitOperationSnapshotAsync(path, cancellationToken).ConfigureAwait(false);
                 EnsureRevertCanContinue(stateBefore);
+
+                if (!await HasStagedCommitResolutionAsync(path, cancellationToken).ConfigureAwait(false))
+                {
+                    return await ContinueEmptiedRevertAsync(path, cancellationToken).ConfigureAwait(false);
+                }
+
                 try
                 {
                     await processRunner.RunAsync(
@@ -471,6 +482,90 @@ public sealed partial class GitRepositoryService
                     : RevertOutcome.Completed;
                 return new RevertOperationResult(outcome, stateAfter.CurrentHeadId, stateAfter);
             }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Records an emptied revert with <c>commit --allow-empty</c> and advances
+    /// the sequencer when work remains, so the revert remains visible in
+    /// history. Reports the resulting sequence outcome.
+    /// </summary>
+    private async Task<RevertOperationResult> ContinueEmptiedRevertAsync(
+        string repositoryRoot,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await processRunner.RunAsync(
+                repositoryRoot,
+                ["commit", "--allow-empty", "--no-edit"],
+                cancellationToken,
+                environmentOverrides: NoOpEditorEnvironment).ConfigureAwait(false);
+        }
+        catch (GitCommandException commandException)
+        {
+            var commitFailed = await ReadCommitOperationSnapshotPreservingFailureAsync(
+                repositoryRoot,
+                commandException,
+                cancellationToken).ConfigureAwait(false);
+            if (commitFailed.OperationKind == GitOperationKind.Revert
+                && commitFailed.HasUnresolvedConflicts)
+            {
+                var commitConflicted = CreateRevertState(commitFailed);
+                return new RevertOperationResult(
+                    RevertOutcome.Conflicts,
+                    commitConflicted.CurrentHeadId,
+                    commitConflicted);
+            }
+
+            ExceptionDispatchInfo.Capture(commandException).Throw();
+            throw;
+        }
+
+        // Recording the empty commit finishes a final revert on its own; only
+        // advance the sequencer explicitly when work remains.
+        var committed = await ReadCommitOperationSnapshotAsync(repositoryRoot, cancellationToken).ConfigureAwait(false);
+        if (committed.OperationKind != GitOperationKind.Revert)
+        {
+            var finished = CreateRevertState(committed);
+            return new RevertOperationResult(RevertOutcome.Completed, finished.CurrentHeadId, finished);
+        }
+
+        try
+        {
+            await processRunner.RunAsync(
+                repositoryRoot,
+                ["revert", "--continue"],
+                cancellationToken,
+                environmentOverrides: NoOpEditorEnvironment).ConfigureAwait(false);
+        }
+        catch (GitCommandException commandException)
+        {
+            var continueFailed = await ReadCommitOperationSnapshotPreservingFailureAsync(
+                repositoryRoot,
+                commandException,
+                cancellationToken).ConfigureAwait(false);
+            if (continueFailed.OperationKind == GitOperationKind.Revert
+                && continueFailed.HasUnresolvedConflicts)
+            {
+                var continueConflicted = CreateRevertState(continueFailed);
+                return new RevertOperationResult(
+                    RevertOutcome.Conflicts,
+                    continueConflicted.CurrentHeadId,
+                    continueConflicted);
+            }
+
+            ExceptionDispatchInfo.Capture(commandException).Throw();
+            throw;
+        }
+
+        var after = await ReadCommitOperationSnapshotAsync(repositoryRoot, cancellationToken).ConfigureAwait(false);
+        var stateAfter = CreateRevertState(after);
+        var outcome = stateAfter.IsInProgress
+            ? stateAfter.HasUnresolvedConflicts
+                ? RevertOutcome.Conflicts
+                : RevertOutcome.InProgress
+            : RevertOutcome.Completed;
+        return new RevertOperationResult(outcome, stateAfter.CurrentHeadId, stateAfter);
     }
 
     /// <summary>Explicitly skips the current revert commit.</summary>

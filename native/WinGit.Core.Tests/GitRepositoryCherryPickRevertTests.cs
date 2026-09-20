@@ -85,6 +85,46 @@ public sealed class GitRepositoryCherryPickRevertTests : IDisposable
     }
 
     [Fact]
+    public async Task ContinueRevertCommitsResolutionEmptiedRevert()
+    {
+        WriteFile("shared.txt", "base\n");
+        Commit("root");
+
+        var service = new GitRepositoryService();
+        WriteFile("shared.txt", "second\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        await service.CommitAsync(repositoryRoot, "second", null, amend: false, CancellationToken.None);
+        WriteFile("shared.txt", "third\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        await service.CommitAsync(repositoryRoot, "third", null, amend: false, CancellationToken.None);
+        var targetCommit = RunGit(repositoryRoot, "rev-parse", "HEAD~1").Trim();
+        var headBefore = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+
+        var conflict = await service.RevertCommitAsync(
+            repositoryRoot,
+            targetCommit,
+            headBefore,
+            CancellationToken.None);
+        Assert.Equal(RevertOutcome.Conflicts, conflict.Outcome);
+        Assert.Equal(GitOperationKind.Revert, conflict.State.OperationKind);
+
+        // Resolve by keeping the current content: nothing remains to commit.
+        // Continuing must record the empty revert instead of failing raw.
+        WriteFile("shared.txt", "third\n");
+        await service.StageFilesAsync(repositoryRoot, ["shared.txt"], CancellationToken.None);
+        var continued = await service.ContinueRevertAsync(repositoryRoot, CancellationToken.None);
+
+        Assert.Equal(RevertOutcome.Completed, continued.Outcome);
+        Assert.False(continued.State.IsInProgress);
+        var newHead = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+        Assert.NotEqual(headBefore, newHead);
+        Assert.Equal("Revert \"second\"", RunGit(repositoryRoot, "log", "-1", "--format=%s").Trim());
+        Assert.Empty(RunGit(repositoryRoot, "diff", headBefore, newHead).Trim());
+        Assert.Equal("third\n", File.ReadAllText(Path.Combine(repositoryRoot, "shared.txt")));
+        Assert.Empty((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+    }
+
+    [Fact]
     public async Task CherryPickConflictReportsStateRoutesContinueAndAbortSafely()
     {
         WriteFile("shared.txt", "base\n");
