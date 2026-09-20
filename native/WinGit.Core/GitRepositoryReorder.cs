@@ -80,6 +80,7 @@ public enum ReorderOperationFailureReason
     UnbornRepository,
     OperationInProgress,
     StalePlan,
+    NoChange,
 }
 
 /// <summary>Raised when a captured reorder cannot safely be previewed or applied.</summary>
@@ -252,6 +253,15 @@ public sealed partial class GitRepositoryService
         }
 
         retained.InsertRange(insertionIndex, selected);
+        if (retained.Select(commit => commit.Id).SequenceEqual(
+                history.Select(entry => entry.Id),
+                StringComparer.OrdinalIgnoreCase))
+        {
+            throw new ReorderOperationBlockedException(
+                ReorderOperationFailureReason.NoChange,
+                "The selected commits are already in that order; there is nothing to reorder.");
+        }
+
         return new ReorderPlan(
             repositoryRoot,
             status.Branch,

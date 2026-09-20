@@ -84,6 +84,45 @@ public sealed class GitRepositoryReorderTests : IDisposable
     }
 
     [Fact]
+    public async Task CapturePlanRefusesUnchangedOrder()
+    {
+        WriteFile("root.txt", "root\n");
+        Commit("root");
+
+        WriteFile("second.txt", "second\n");
+        Commit("second");
+        var secondCommit = Head();
+
+        WriteFile("third.txt", "third\n");
+        Commit("third");
+        var thirdCommit = Head();
+        var headBefore = Head();
+
+        var service = new GitRepositoryService();
+
+        // Selecting the middle commit before its current successor replays
+        // history unchanged; running an interactive rebase for that would
+        // rewrite every commit ID for nothing.
+        var beforeTarget = await Assert.ThrowsAsync<ReorderOperationBlockedException>(
+            () => service.CaptureReorderPlanAsync(
+                repositoryRoot,
+                [secondCommit],
+                thirdCommit,
+                lastRetainedCommitId: null));
+        Assert.Equal(ReorderOperationFailureReason.NoChange, beforeTarget.Reason);
+
+        var moveToEnd = await Assert.ThrowsAsync<ReorderOperationBlockedException>(
+            () => service.CaptureReorderPlanAsync(
+                repositoryRoot,
+                [thirdCommit],
+                beforeCommitId: null,
+                lastRetainedCommitId: null));
+        Assert.Equal(ReorderOperationFailureReason.NoChange, moveToEnd.Reason);
+
+        Assert.Equal(headBefore, Head());
+    }
+
+    [Fact]
     public async Task ReorderToEndUsesRetainedBaseAndRejectsInvalidOrStalePlans()
     {
         WriteFile("root.txt", "root\n");
