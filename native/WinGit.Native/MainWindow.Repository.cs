@@ -18,18 +18,23 @@ public sealed partial class MainWindow
         var operation = BeginOperation("Loading branches…");
         try
         {
-            var branches = await repositoryService.GetBranchesAsync(root, operation.Token);
+            var branchesTask = repositoryService.GetBranchesAsync(root, operation.Token);
+            var recentTask = LoadRecentBranchNamesQuietAsync(root, operation.Token);
+            await Task.WhenAll(branchesTask, recentTask);
             if (!IsCurrent(operation.Generation, operation.Token)
                 || !string.Equals(repositoryRoot, root, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
+            var branches = branchesTask.Result;
             branchRows.Clear();
             foreach (var branch in branches)
             {
                 branchRows.Add(new BranchRow(branch));
             }
+
+            UpdateRecentBranchesBox(recentTask.Result, branches);
 
             branchesLoaded = true;
             selectedBranch = null;
@@ -161,6 +166,67 @@ public sealed partial class MainWindow
         if (index >= 0)
         {
             BranchesList.SelectedIndex = index;
+        }
+    }
+
+    /// <summary>
+    /// Reads recent branch names without failing the branch load. Cancellation
+    /// still propagates so a newer repository operation takes over.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> LoadRecentBranchNamesQuietAsync(
+        string root,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await repositoryService.GetRecentBranchNamesAsync(root, 6, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Shows up to five recent branches that still exist locally, excluding
+    /// the current branch like Electron's refreshRecentBranches. Selecting a
+    /// name jumps to its row in the branch list.
+    /// </summary>
+    private void UpdateRecentBranchesBox(
+        IReadOnlyList<string> recentNames,
+        IReadOnlyList<BranchSummary> branches)
+    {
+        var current = branches.FirstOrDefault(branch => branch.IsCurrent)?.Name;
+        var local = branches
+            .Select(branch => branch.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        var items = recentNames
+            .Where(name => !string.Equals(name, current, StringComparison.Ordinal)
+                && local.Contains(name))
+            .Take(5)
+            .ToArray();
+        RecentBranchesBox.Items.Clear();
+        foreach (var item in items)
+        {
+            RecentBranchesBox.Items.Add(item);
+        }
+
+        RecentBranchesBox.SelectedIndex = -1;
+        RecentBranchesBox.Visibility = items.Length == 0
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    private void RecentBranchesBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (RecentBranchesBox.SelectedItem is string name)
+        {
+            SelectBranchRow(name);
+            RecentBranchesBox.SelectedIndex = -1;
         }
     }
 

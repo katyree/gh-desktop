@@ -1414,13 +1414,15 @@
                         <Grid Grid.Column="0" Padding="8,0,8,8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="54" />
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <Grid Padding="8,0">
                                 <TextBlock Text="Branches" Style="{StaticResource PanelTitleStyle}" VerticalAlignment="Center" />
                                 <Button x:Name="CreateBranchButton" Content="New branch" Click="CreateBranchButton_Click" HorizontalAlignment="Right" VerticalAlignment="Center" AutomationProperties.Name="Create branch" />
                             </Grid>
-                            <ListView x:Name="BranchesList" Grid.Row="1" ItemTemplate="{StaticResource BranchRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="BranchesList_SelectionChanged" SelectionMode="Single" AutomationProperties.Name="Local branches" />
+                            <ComboBox x:Name="RecentBranchesBox" Grid.Row="1" Margin="8,0,8,8" PlaceholderText="Recent branches" SelectionChanged="RecentBranchesBox_SelectionChanged" Visibility="Collapsed" AutomationProperties.Name="Recent branches" />
+                            <ListView x:Name="BranchesList" Grid.Row="2" ItemTemplate="{StaticResource BranchRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="BranchesList_SelectionChanged" SelectionMode="Single" AutomationProperties.Name="Local branches" />
                         </Grid>
                         <Border Grid.Column="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
                         <Grid Grid.Column="2" Padding="24,18">
