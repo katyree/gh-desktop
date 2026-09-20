@@ -208,6 +208,35 @@ public sealed partial class MainWindow
             var mode = modeBox.SelectedItem is ComboBoxItem { Tag: GitResetMode selectedMode }
                 ? selectedMode
                 : GitResetMode.Mixed;
+            if (mode == GitResetMode.Hard && await HasUncommittedChangesAsync(request))
+            {
+                // Electron's warning-before-reset: a hard reset discards
+                // uncommitted work, so it needs its own destructive
+                // confirmation even after the mode dialog.
+                var warningDialog = CreateDialog(
+                    "Discard uncommitted changes?",
+                    "Continue",
+                    new TextBlock
+                    {
+                        Text = "You have changes in progress. Resetting to a previous commit might result in some of these changes being lost. Do you want to continue anyway?",
+                        TextWrapping = TextWrapping.Wrap,
+                    });
+                warningDialog.DefaultButton = ContentDialogButton.Secondary;
+                if (await warningDialog.ShowAsync() != ContentDialogResult.Primary)
+                {
+                    return;
+                }
+
+                if (!IsHistoryResetRequestCurrent(request))
+                {
+                    ShowError(
+                        "Reset stopped",
+                        new InvalidOperationException(
+                            "The branch, HEAD, or selected target changed while the confirmation was open. Refresh History and review the reset again."));
+                    return;
+                }
+            }
+
             historyResetDialogOpen = false;
             UpdateHistoryResetControls();
             await RunHistoryResetAsync(request with { Mode = mode });
@@ -519,6 +548,24 @@ public sealed partial class MainWindow
     private bool IsSelectedHistoryResetTargetCurrent(string targetCommitId) =>
         GetSelectedHistoryCommitRows() is [var selected]
         && string.Equals(selected.Commit.Id, targetCommitId, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Reads fresh status for the destructive hard-reset warning. Fails safe
+    /// toward warning: when status cannot be read, the reset run revalidates
+    /// and reports the real error next.
+    /// </summary>
+    private async Task<bool> HasUncommittedChangesAsync(HistoryResetRequest request)
+    {
+        try
+        {
+            var status = await repositoryService.GetStatusAsync(request.Root, CancellationToken.None);
+            return status.Changes.Count > 0;
+        }
+        catch (Exception)
+        {
+            return true;
+        }
+    }
 
     private static TextBlock CreateResetDetailTextBlock(string label, string value) => new()
     {
