@@ -70,7 +70,7 @@ New-Item -ItemType Directory -Force -Path (Split-Path $capturePath) | Out-Null
   --theme light
 ```
 
-Use `--view history`, `settings`, `branches`, `worktrees`, or `stashes` for the
+Use `--view history`, `settings`, `branches`, `worktrees`, `stashes`, `remotes`, `tags`, or `submodules` for the
 other views. Add `--compare-branch <local-branch>` to a History capture to show
 the captured Ahead and Behind counts for that branch. Use `--theme dark` for
 the dark palette. The native appearance scope has one light palette and one

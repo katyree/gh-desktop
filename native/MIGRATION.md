@@ -85,7 +85,7 @@ the previous commit, and checks the SHA-256 repository empty-tree baseline.
 
 These files are local verification artifacts and are ignored by
 `native/.gitignore`. The capture path was exercised with
-`--capture <absolute-png> --view <changes|history|settings|branches|worktrees|stashes|remotes|tags>
+`--capture <absolute-png> --view <changes|history|settings|branches|worktrees|stashes|remotes|tags|submodules>
 --repository <path> --theme <light|dark>`. The captures prove native startup,
 repository loading, and rendering for the captured views. They do not prove
 full staging, history search, authentication, or accessibility behavior.
@@ -418,8 +418,7 @@ modified, and the child stayed at
 the library hash remained
 `E17CDB7B2A78E614224B8A5BD41FAB7EC54301150A8355C31B195C2AA119CF72`.
 Recursive, network, uninitialized, and broader failure cases remain
-unverified. A post-await workspace guard is in the current source but was
-added after the `12A1` publish and needs a later build check.
+unverified. The post-await workspace guard passed its later build check (Release win-x64, zero warnings and errors): an async-context audit found every submodule flow already gated — the submodule list load checks generation, root, and workspace before and on failure, the update dialog is modal with Core snapshot revalidation inside the mutation, and the diff open-target path revalidates root, workspace, visibility, selection, containment, and mutation state after its await — so no source change was needed there. Capture now supports `--view submodules`: a copied published artifact rendered an initialized `modules/test-library` row with matching HEAD/index IDs, clean nested state, and Open/Update actions without mutating the fixture.
 
 ## 8. Settings, themes, and accessibility
 

@@ -91,7 +91,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (options.View is "changes" or "history" or "branches" or "worktrees" or "stashes" or "remotes" or "tags")
+            if (options.View is "changes" or "history" or "branches" or "worktrees" or "stashes" or "remotes" or "tags" or "submodules")
             {
                 if (string.IsNullOrWhiteSpace(options.RepositoryPath))
                 {
@@ -161,6 +161,11 @@ public sealed partial class MainWindow
                 {
                     MainNavigation.SelectedItem = MainNavigation.MenuItems[6];
                     ShowWorkspace("tags");
+                }
+                else if (options.View == "submodules")
+                {
+                    MainNavigation.SelectedItem = MainNavigation.MenuItems[4];
+                    ShowWorkspace("submodules");
                 }
                 else
                 {
