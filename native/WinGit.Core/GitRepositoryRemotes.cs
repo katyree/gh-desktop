@@ -177,6 +177,30 @@ public sealed partial class GitRepositoryService
     }
 
     /// <summary>
+    /// Maps a failed push, reporting a rejected ref with pull-first guidance
+    /// before falling back to shared transport explanations.
+    /// </summary>
+    private static Exception MapPushFailure(
+        string remoteName,
+        string localBranch,
+        string remoteBranch,
+        string? remoteUrl,
+        GitCommandException exception)
+    {
+        if (Regex.IsMatch(
+                exception.StandardError,
+                @"\[rejected\].*fetch first|updates were rejected because the remote contains work",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            return new InvalidOperationException(
+                $"Push rejected: '{remoteName}/{remoteBranch}' already contains work missing from '{localBranch}'. Fetch and pull the remote branch first, then push again; force push needs its own explicit confirmation.",
+                exception);
+        }
+
+        return MapTransportFailure("pushing to", remoteName, remoteUrl, exception);
+    }
+
+    /// <summary>
     /// Maps a failed fast-forward pull, reporting the merge-or-rebase path
     /// for divergence and the preservation requirement for dirty worktrees
     /// before falling back to shared transport explanations.
@@ -380,7 +404,11 @@ public sealed partial class GitRepositoryService
             }).ConfigureAwait(false);
     }
 
-    /// <summary>Pushes one explicit local branch to one explicit remote branch without force.</summary>
+    /// <summary>
+    /// Pushes one explicit local branch to one explicit remote branch without
+    /// force. A rejected ref reports the ref with pull-first guidance instead
+    /// of raw Git output; transport failures name the remote host.
+    /// </summary>
     public async Task PushAsync(
         string root,
         string remoteName,
@@ -406,14 +434,27 @@ public sealed partial class GitRepositoryService
             {
                 var normalizedRemote = await EnsureRemoteExistsAsync(path, remoteName, cancellationToken).ConfigureAwait(false);
                 await EnsureLocalBranchExistsAsync(path, normalizedLocalBranch, cancellationToken).ConfigureAwait(false);
-                await RunRemoteCommandAsync(
-                    path,
-                    [
-                        "push",
+                var remoteUrl = await ReadRemoteUrlAsync(path, normalizedRemote, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await RunRemoteCommandAsync(
+                        path,
+                        [
+                            "push",
+                            normalizedRemote,
+                            $"refs/heads/{normalizedLocalBranch}:refs/heads/{normalizedRemoteBranch}",
+                        ],
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (GitCommandException exception)
+                {
+                    throw MapPushFailure(
                         normalizedRemote,
-                        $"refs/heads/{normalizedLocalBranch}:refs/heads/{normalizedRemoteBranch}",
-                    ],
-                    cancellationToken).ConfigureAwait(false);
+                        normalizedLocalBranch,
+                        normalizedRemoteBranch,
+                        remoteUrl,
+                        exception);
+                }
             }).ConfigureAwait(false);
     }
 
