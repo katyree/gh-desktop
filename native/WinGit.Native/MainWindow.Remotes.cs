@@ -90,12 +90,14 @@ public sealed partial class MainWindow
                 ? "Add a remote to fetch, pull, or push this repository."
                 : "Choose a remote to view its URL and run a transport action.";
             RemoteTransportBranchText.Text = FormatTransportBranchHint();
+            UpdateForkContributionSection();
             return;
         }
 
         SelectedRemoteNameText.Text = selectedRemote.Name;
         SelectedRemoteUrlText.Text = $"URL: {selectedRemote.Url}";
         RemoteTransportBranchText.Text = FormatTransportBranchHint();
+        UpdateForkContributionSection();
     }
 
     private string FormatTransportBranchHint()
@@ -1103,23 +1105,35 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetName(remoteBranchBox, "Remote branch to push");
         var errorBar = CreateDialogErrorBar();
+        var pushContent = new StackPanel
+        {
+            Spacing = 12,
+            Children =
+            {
+                errorBar,
+                new TextBlock
+                {
+                    Text = $"Push the checked-out local branch \"{localBranch}\" to {remoteName}/…. This operation never forces the remote branch.",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                remoteBranchBox,
+            },
+        };
+        var forkNote = FormatForkContributionPushNote(remoteName);
+        if (forkNote is not null)
+        {
+            pushContent.Children.Add(new TextBlock
+            {
+                Text = forkNote,
+                TextWrapping = TextWrapping.Wrap,
+                Style = (Style)RootGrid.Resources["SecondaryTextStyle"],
+            });
+        }
+
         var dialog = CreateDialog(
             "Push remote",
             "Push",
-            new StackPanel
-            {
-                Spacing = 12,
-                Children =
-                {
-                    errorBar,
-                    new TextBlock
-                    {
-                        Text = $"Push the checked-out local branch \"{localBranch}\" to {remoteName}/…. This operation never forces the remote branch.",
-                        TextWrapping = TextWrapping.Wrap,
-                    },
-                    remoteBranchBox,
-                },
-            });
+            pushContent);
 
         while (true)
         {
