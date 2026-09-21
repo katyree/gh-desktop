@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using WinGit.Core.GitHub;
 
 namespace WinGit.Core;
 
@@ -187,6 +188,11 @@ public sealed partial class GitRepositoryService
         string? remoteUrl,
         GitCommandException exception)
     {
+        if (GitHubSecretScanning.TryFormatPushProtectionSummary(exception.StandardError) is string protectionSummary)
+        {
+            return new InvalidOperationException(protectionSummary, exception);
+        }
+
         if (Regex.IsMatch(
                 exception.StandardError,
                 @"\[rejected\].*stale info",
