@@ -332,6 +332,67 @@ public sealed class GitRepositoryRemotesTests : IDisposable
         Assert.Equal(headBefore, RunGit(seedPath, "rev-parse", "HEAD").Trim());
     }
 
+    [Fact]
+    public async Task PushRejectionNamesRefWithPullFirstGuidance()
+    {
+        RunGit(fixtureRoot, "init", "--bare", bareRemotePath);
+        RunGit(bareRemotePath, "symbolic-ref", "HEAD", "refs/heads/main");
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+
+        var service = new GitRepositoryService();
+        await service.AddRemoteAsync(seedPath, "origin", bareRemotePath, CancellationToken.None);
+        await service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+        RunGit(fixtureRoot, "clone", "--branch", "main", bareRemotePath, firstClonePath);
+        ConfigureClone(firstClonePath);
+
+        WriteFile(seedPath, "tracked.txt", "seed remote\n");
+        Commit(seedPath, "seed remote");
+        await service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+        WriteFile(firstClonePath, "tracked.txt", "clone local\n");
+        Commit(firstClonePath, "clone local");
+        var cloneHead = RunGit(firstClonePath, "rev-parse", "HEAD").Trim();
+        var remoteHead = RunGit(bareRemotePath, "rev-parse", "refs/heads/main").Trim();
+
+        var rejected = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.PushAsync(firstClonePath, "origin", "main", "main", CancellationToken.None));
+        Assert.Contains("origin/main", rejected.Message, StringComparison.Ordinal);
+        Assert.Contains("pull", rejected.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.IsType<GitCommandException>(rejected.InnerException);
+        Assert.Equal(cloneHead, RunGit(firstClonePath, "rev-parse", "HEAD").Trim());
+        Assert.Equal(remoteHead, RunGit(bareRemotePath, "rev-parse", "refs/heads/main").Trim());
+    }
+
+    [Fact]
+    public async Task PushFailureNamesUnreachableHostAndPreservesState()
+    {
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+
+        var service = new GitRepositoryService();
+        await service.AddRemoteAsync(
+            seedPath,
+            "origin",
+            "https://nonexistent.invalid/owner/repository.git",
+            CancellationToken.None);
+        var headBefore = RunGit(seedPath, "rev-parse", "HEAD").Trim();
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None));
+        Assert.Contains("nonexistent.invalid", failure.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(headBefore, RunGit(seedPath, "rev-parse", "HEAD").Trim());
+    }
+
     public void Dispose()
     {
         DeleteDirectory(fixtureRoot);
