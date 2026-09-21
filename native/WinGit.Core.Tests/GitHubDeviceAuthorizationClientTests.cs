@@ -191,6 +191,34 @@ public sealed class GitHubDeviceAuthorizationClientTests
         Assert.Equal(1, timeoutHandler.CallCount);
     }
 
+    [Fact]
+    public async Task DeviceFlowTreatsInvalidDeviceCodeAsExpiredSession()
+    {
+        var handler = new SequenceHandler(
+            (_, call, _) =>
+                Task.FromResult(
+                    call == 1
+                        ? JsonResponse(
+                            """
+                            {"device_code":"stale-device","user_code":"STAL-1234","verification_uri":"https://github.example.test/login/device","expires_in":900,"interval":1}
+                            """ )
+                        : JsonResponse("{\"error\":\"incorrect_device_code\"}")));
+        using var httpClient = new HttpClient(handler);
+        using var client = new GitHubDeviceAuthorizationClient(
+            new GitHubDeviceAuthorizationClientOptions(
+                "test-public-client",
+                new Uri("https://github.example.test")),
+            httpClient,
+            (_, _) => Task.CompletedTask);
+        var authorization = await client.StartDeviceAuthorizationAsync();
+        var stale = await Assert.ThrowsAsync<
+            GitHubDeviceAuthorizationException>(
+            () => client.PollAsync(authorization));
+        Assert.Equal(GitHubDeviceFlowErrorKind.Expired, stale.Kind);
+        Assert.Contains("Start again", stale.Message, StringComparison.Ordinal);
+        Assert.Equal(2, handler.CallCount);
+    }
+
     private static HttpResponseMessage JsonResponse(string content) =>
         new(HttpStatusCode.OK)
         {

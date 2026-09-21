@@ -452,6 +452,7 @@ public sealed class GitHubDeviceAuthorizationClient : IDisposable
                     continue;
                 case "expired_token":
                 case "token_expired":
+                case "incorrect_device_code":
                     throw new GitHubDeviceAuthorizationException(
                         GitHubDeviceFlowErrorKind.Expired);
                 case "access_denied":
