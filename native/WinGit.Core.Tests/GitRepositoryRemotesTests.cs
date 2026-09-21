@@ -104,13 +104,17 @@ public sealed class GitRepositoryRemotesTests : IDisposable
         await firstService.PushAsync(firstClonePath, "origin", "main", "main", CancellationToken.None);
         WriteFile(secondClonePath, "keep-dirty.txt", "keep this local edit\n");
 
-        await Assert.ThrowsAsync<GitCommandException>(
+        // The branches have diverged (plus an untracked file), so the
+        // fast-forward pull reports the merge-or-rebase path.
+        var divergedLocal = await Assert.ThrowsAsync<InvalidOperationException>(
             () => secondService.PullFastForwardOnlyAsync(
                 secondClonePath,
                 "origin",
                 "main",
                 "main",
                 CancellationToken.None));
+        Assert.Contains("diverged", divergedLocal.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.IsType<GitCommandException>(divergedLocal.InnerException);
         Assert.Equal(secondCommitId, RunGit(secondClonePath, "rev-parse", "HEAD").Trim());
         Assert.Equal(
             "second local commit\n",
@@ -205,6 +209,127 @@ public sealed class GitRepositoryRemotesTests : IDisposable
 
         Assert.Equal(headBefore, RunGit(seedPath, "rev-parse", "HEAD").Trim());
         Assert.Equal("seed\n", File.ReadAllText(Path.Combine(seedPath, "tracked.txt")));
+    }
+
+    [Fact]
+    public async Task PullRefusesToOverwriteDirtyTrackedChanges()
+    {
+        RunGit(fixtureRoot, "init", "--bare", bareRemotePath);
+        RunGit(bareRemotePath, "symbolic-ref", "HEAD", "refs/heads/main");
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+
+        var service = new GitRepositoryService();
+        await service.AddRemoteAsync(seedPath, "origin", bareRemotePath, CancellationToken.None);
+        await service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+        RunGit(fixtureRoot, "clone", "--branch", "main", bareRemotePath, firstClonePath);
+        ConfigureClone(firstClonePath);
+
+        WriteFile(seedPath, "tracked.txt", "seed remote\n");
+        Commit(seedPath, "seed remote");
+        await service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+        WriteFile(firstClonePath, "tracked.txt", "dirty local edit\n");
+        var cloneHead = RunGit(firstClonePath, "rev-parse", "HEAD").Trim();
+
+        var dirtyRefused = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.PullFastForwardOnlyAsync(
+                firstClonePath,
+                "origin",
+                "main",
+                "main",
+                CancellationToken.None));
+        Assert.Contains("local changes", dirtyRefused.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.IsType<GitCommandException>(dirtyRefused.InnerException);
+        Assert.Equal(cloneHead, RunGit(firstClonePath, "rev-parse", "HEAD").Trim());
+        Assert.Equal("dirty local edit\n", File.ReadAllText(Path.Combine(firstClonePath, "tracked.txt")));
+    }
+
+    [Fact]
+    public async Task PullReportsDivergedBranchesWithMergeOrRebasePath()
+    {
+        RunGit(fixtureRoot, "init", "--bare", bareRemotePath);
+        RunGit(bareRemotePath, "symbolic-ref", "HEAD", "refs/heads/main");
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+
+        var service = new GitRepositoryService();
+        await service.AddRemoteAsync(seedPath, "origin", bareRemotePath, CancellationToken.None);
+        await service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+        RunGit(fixtureRoot, "clone", "--branch", "main", bareRemotePath, firstClonePath);
+        ConfigureClone(firstClonePath);
+
+        WriteFile(seedPath, "tracked.txt", "seed remote\n");
+        Commit(seedPath, "seed remote");
+        await service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+        WriteFile(firstClonePath, "tracked.txt", "clone local\n");
+        Commit(firstClonePath, "clone local");
+        var cloneHead = RunGit(firstClonePath, "rev-parse", "HEAD").Trim();
+
+        var diverged = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.PullFastForwardOnlyAsync(
+                firstClonePath,
+                "origin",
+                "main",
+                "main",
+                CancellationToken.None));
+        Assert.Contains("diverged", diverged.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Merge", diverged.Message, StringComparison.Ordinal);
+        Assert.Contains("rebase", diverged.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.IsType<GitCommandException>(diverged.InnerException);
+        Assert.Equal(cloneHead, RunGit(firstClonePath, "rev-parse", "HEAD").Trim());
+        Assert.Equal("clone local\n", File.ReadAllText(Path.Combine(firstClonePath, "tracked.txt")));
+    }
+
+    [Fact]
+    public async Task PullFailureNamesUnreachableHostAndRefreshesHeadOnSuccess()
+    {
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+
+        var service = new GitRepositoryService();
+        await service.AddRemoteAsync(
+            seedPath,
+            "origin",
+            "https://nonexistent.invalid/owner/repository.git",
+            CancellationToken.None);
+        var headBefore = RunGit(seedPath, "rev-parse", "HEAD").Trim();
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.PullFastForwardOnlyAsync(
+                seedPath,
+                "origin",
+                "main",
+                "main",
+                CancellationToken.None));
+        Assert.Contains("nonexistent.invalid", failure.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(headBefore, RunGit(seedPath, "rev-parse", "HEAD").Trim());
+
+        await service.SetRemoteUrlAsync(seedPath, "origin", bareRemotePath, CancellationToken.None);
+        RunGit(fixtureRoot, "init", "--bare", bareRemotePath);
+        RunGit(bareRemotePath, "symbolic-ref", "HEAD", "refs/heads/main");
+        await service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+        RunGit(seedPath, "remote", "set-head", "-d", "origin");
+        Assert.Null(await service.TryGetDefaultBranchNameAsync(seedPath, CancellationToken.None));
+
+        await service.PullFastForwardOnlyAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+
+        Assert.Equal("main", await service.TryGetDefaultBranchNameAsync(seedPath, CancellationToken.None));
+        Assert.Equal(headBefore, RunGit(seedPath, "rev-parse", "HEAD").Trim());
     }
 
     public void Dispose()
