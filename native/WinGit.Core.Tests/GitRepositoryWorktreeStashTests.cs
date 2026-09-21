@@ -283,6 +283,63 @@ public sealed class GitRepositoryWorktreeStashTests : IDisposable
         Assert.Empty(await service.GetStashesAsync(repositoryRoot, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task AddWorktreeRefusesBranchCheckedOutElsewhere()
+    {
+        WriteFile(repositoryRoot, "tracked.txt", "base\n");
+        Commit(repositoryRoot, "initial");
+        RunGit(repositoryRoot, "branch", "feature/worktree");
+
+        var service = new GitRepositoryService();
+        secondaryWorktreePath = Path.Combine(FixtureParent, Guid.NewGuid().ToString("N"));
+        await service.AddWorktreeAsync(
+            repositoryRoot,
+            secondaryWorktreePath,
+            "feature/worktree",
+            newBranchName: null,
+            CancellationToken.None);
+        try
+        {
+            var thirdPath = Path.Combine(FixtureParent, Guid.NewGuid().ToString("N"));
+            var refused = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.AddWorktreeAsync(
+                    repositoryRoot,
+                    thirdPath,
+                    "feature/worktree",
+                    newBranchName: null,
+                    CancellationToken.None));
+            Assert.Contains("already checked out", refused.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("feature/worktree", refused.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(Directory.Exists(thirdPath));
+
+            // Creating a new branch from the in-use branch stays allowed.
+            var freshPath = Path.Combine(FixtureParent, Guid.NewGuid().ToString("N"));
+            try
+            {
+                await service.AddWorktreeAsync(
+                    repositoryRoot,
+                    freshPath,
+                    "feature/worktree",
+                    "fresh-from-feature",
+                    CancellationToken.None);
+                Assert.True(Directory.Exists(freshPath));
+            }
+            finally
+            {
+                await service.RemoveWorktreeAsync(repositoryRoot, freshPath, CancellationToken.None);
+            }
+
+            Assert.Contains(
+                await service.GetWorktreesAsync(repositoryRoot, CancellationToken.None),
+                worktree => PathsEqual(worktree.Path, secondaryWorktreePath));
+        }
+        finally
+        {
+            await service.RemoveWorktreeAsync(repositoryRoot, secondaryWorktreePath, CancellationToken.None);
+            secondaryWorktreePath = null;
+        }
+    }
+
     public void Dispose()
     {
         DeleteDirectory(secondaryWorktreePath);
