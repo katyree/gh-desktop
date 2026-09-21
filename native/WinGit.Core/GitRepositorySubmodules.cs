@@ -43,7 +43,8 @@ public sealed partial class GitRepositoryService
 
     /// <summary>
     /// Updates one explicitly selected submodule to the commit recorded in the
-    /// containing index. The captured gitlink and local HEAD are checked again
+    /// containing index, including nested submodules like Electron's recursive
+    /// update. The captured gitlink and local HEAD are checked again
     /// inside the serialized mutation gate before Git can change the worktree.
     /// </summary>
     public async Task UpdateSubmoduleAsync(
@@ -122,6 +123,7 @@ public sealed partial class GitRepositoryService
                         "update",
                         "--init",
                         "--checkout",
+                        "--recursive",
                         "--",
                         normalizedPath,
                     ],

@@ -260,6 +260,119 @@ public sealed class GitRepositorySubmodulesTests : IDisposable
         Assert.False(removedDiff.SubmoduleComparison.IsAdded);
     }
 
+    [Fact]
+    public async Task RecursiveUpdateBringsNestedSubmodulesToRecordedCommits()
+    {
+        var grandchildRoot = Path.Combine(fixtureRoot, "grandchild-source");
+        var childRoot = Path.Combine(fixtureRoot, "child-source");
+        var repositoryRoot = Path.Combine(fixtureRoot, "super");
+        Directory.CreateDirectory(grandchildRoot);
+        Directory.CreateDirectory(childRoot);
+        Directory.CreateDirectory(repositoryRoot);
+        ConfigureRepository(grandchildRoot);
+        ConfigureRepository(childRoot);
+        ConfigureRepository(repositoryRoot);
+
+        WriteFile(grandchildRoot, "library.txt", "first\n");
+        Commit(grandchildRoot, "grandchild first");
+        var grandchildFirst = RunGit(grandchildRoot, "rev-parse", "HEAD").Trim();
+
+        WriteFile(childRoot, "child.txt", "child\n");
+        RunGit(
+            childRoot,
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            grandchildRoot,
+            "nested");
+        Commit(childRoot, "child with nested");
+        var childFirst = RunGit(childRoot, "rev-parse", "HEAD").Trim();
+
+        const string submodulePath = "modules/child";
+        RunGit(
+            repositoryRoot,
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            childRoot,
+            submodulePath);
+        WriteFile(repositoryRoot, "parent.txt", "parent\n");
+        Commit(repositoryRoot, "add child submodule");
+        var checkedOutPath = Path.Combine(
+            repositoryRoot,
+            submodulePath.Replace('/', Path.DirectorySeparatorChar));
+        var nestedPath = Path.Combine(checkedOutPath, "nested");
+        RunGit(
+            repositoryRoot,
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "update",
+            "--init",
+            "--recursive");
+        Assert.Equal(grandchildFirst, RunGit(nestedPath, "rev-parse", "HEAD").Trim());
+
+        // Advance the grandchild and record it in a new child commit.
+        WriteFile(grandchildRoot, "library.txt", "second\n");
+        Commit(grandchildRoot, "grandchild second");
+        var grandchildSecond = RunGit(grandchildRoot, "rev-parse", "HEAD").Trim();
+        var childNestedPath = Path.Combine(childRoot, "nested");
+        RunGit(
+            childNestedPath,
+            "-c",
+            "protocol.file.allow=always",
+            "fetch",
+            "origin");
+        RunGit(childNestedPath, "checkout", "--quiet", grandchildSecond);
+        RunGit(childRoot, "add", "--", "nested");
+        Commit(childRoot, "advance nested");
+        var childSecond = RunGit(childRoot, "rev-parse", "HEAD").Trim();
+
+        RunGit(
+            repositoryRoot,
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            $"160000,{childSecond},{submodulePath}");
+        // Make the new nested commit available to the parent's nested clone
+        // without network access, mirroring a fetched remote.
+        RunGit(
+            nestedPath,
+            "-c",
+            "protocol.file.allow=always",
+            "fetch",
+            "origin");
+        RunGit(
+            checkedOutPath,
+            "-c",
+            "protocol.file.allow=always",
+            "fetch",
+            "origin");
+        var service = new GitRepositoryService();
+        var differentGitlink = Assert.Single(
+            await service.GetSubmodulesAsync(repositoryRoot, CancellationToken.None));
+        Assert.Equal(childSecond, differentGitlink.ExpectedIndexCommitId);
+        Assert.Equal(childFirst, differentGitlink.CheckedOutHeadCommitId);
+
+        await service.UpdateSubmoduleAsync(
+            repositoryRoot,
+            differentGitlink,
+            CancellationToken.None);
+
+        Assert.Equal(childSecond, RunGit(checkedOutPath, "rev-parse", "HEAD").Trim());
+        Assert.Equal(grandchildSecond, RunGit(nestedPath, "rev-parse", "HEAD").Trim());
+        Assert.Equal("second\n", File.ReadAllText(Path.Combine(nestedPath, "library.txt")));
+        // The worktree gitlink now matches the index; only the deliberate
+        // uncommitted index edit remains.
+        var gitlinkChange = Assert.Single(
+            (await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes,
+            change => change.Path == submodulePath);
+        Assert.Equal("M", gitlinkChange.IndexStatus);
+        Assert.Empty(gitlinkChange.WorkTreeStatus);
+    }
+
     public void Dispose() => DeleteDirectory(fixtureRoot);
 
     private static void ConfigureRepository(string path)
