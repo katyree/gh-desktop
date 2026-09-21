@@ -152,12 +152,14 @@ public sealed partial class MainWindow
                 }
                 else if (options.View == "remotes")
                 {
-                    MainNavigation.SelectedItem = MainNavigation.MenuItems[4];
+                    // Navigation items: 0 changes, 1 history, 2 branches,
+                    // 3 worktrees, 4 submodules, 5 remotes, 6 tags.
+                    MainNavigation.SelectedItem = MainNavigation.MenuItems[5];
                     ShowWorkspace("remotes");
                 }
                 else if (options.View == "tags")
                 {
-                    MainNavigation.SelectedItem = MainNavigation.MenuItems[5];
+                    MainNavigation.SelectedItem = MainNavigation.MenuItems[6];
                     ShowWorkspace("tags");
                 }
                 else
