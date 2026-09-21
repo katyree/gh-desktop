@@ -56,7 +56,11 @@ public sealed partial class GitRepositoryService
             }).ConfigureAwait(false);
     }
 
-    /// <summary>Clones a repository into an unoccupied destination and returns its status.</summary>
+    /// <summary>
+    /// Clones a repository into an unoccupied destination and returns its
+    /// status. Transport failures name the source host through the shared
+    /// mapper instead of surfacing raw Git output.
+    /// </summary>
     public async Task<RepositoryStatus> CloneAsync(
         string url,
         string destination,
@@ -91,7 +95,15 @@ public sealed partial class GitRepositoryService
                 arguments.Add("--");
                 arguments.Add(remoteUrl);
                 arguments.Add(destinationPath);
-                await RunRemoteCommandAsync(workingDirectory, arguments, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await RunRemoteCommandAsync(workingDirectory, arguments, cancellationToken).ConfigureAwait(false);
+                }
+                catch (GitCommandException exception)
+                {
+                    throw MapTransportFailure("cloning from", "origin", remoteUrl, exception);
+                }
+
                 return await OpenAsync(destinationPath, cancellationToken).ConfigureAwait(false);
             }).ConfigureAwait(false);
     }
