@@ -53,6 +53,51 @@ public sealed partial class GitRepositoryService
             }).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Renames a registered secondary worktree by moving it to a clean
+    /// destination. Refuses the main and current worktrees, unregistered
+    /// paths, and existing destinations before Git moves anything.
+    /// </summary>
+    public async Task MoveWorktreeAsync(
+        string root,
+        string worktreePath,
+        string newPath,
+        CancellationToken cancellationToken)
+    {
+        var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
+        var sourcePath = NormalizeWorktreeArgument(repositoryRoot, worktreePath, nameof(worktreePath));
+        var destinationPath = NormalizeWorktreeArgument(repositoryRoot, newPath, nameof(newPath));
+        await ExecuteMutationAsync(
+            repositoryRoot,
+            cancellationToken,
+            async path =>
+            {
+                var worktrees = await ReadWorktreesAsync(path, cancellationToken).ConfigureAwait(false);
+                var mainWorktree = worktrees.FirstOrDefault();
+                if (mainWorktree is not null && IsSamePath(mainWorktree.Path, sourcePath))
+                {
+                    throw new InvalidOperationException("The main worktree cannot be renamed by this operation.");
+                }
+
+                if (IsSamePath(path, sourcePath))
+                {
+                    throw new InvalidOperationException("The current worktree cannot be renamed while it is active; switch to another worktree first.");
+                }
+
+                var registered = worktrees.FirstOrDefault(worktree => IsSamePath(worktree.Path, sourcePath));
+                if (registered is null)
+                {
+                    throw new InvalidOperationException("The selected path is not a registered secondary worktree.");
+                }
+
+                EnsureWorktreeDestinationAvailable(destinationPath);
+                await processRunner.RunAsync(
+                    path,
+                    ["worktree", "move", registered.Path, destinationPath],
+                    cancellationToken).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+    }
+
     /// <summary>Removes only a registered secondary worktree, without force.</summary>
     public async Task RemoveWorktreeAsync(
         string root,
