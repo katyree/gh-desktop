@@ -143,6 +143,9 @@ internal sealed class GitProcessRunner
 
         ConfigureContainedGitEnvironment(startInfo);
         startInfo.Environment["GIT_OPTIONAL_LOCKS"] = "0";
+        // Never interactively prompt for credentials, even as a fallback.
+        // Credential flows use the helper protocol or an explicit UI prompt.
+        startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
         if (environmentOverrides is not null)
         {
             foreach (var (key, value) in environmentOverrides)
