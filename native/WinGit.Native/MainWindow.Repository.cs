@@ -317,6 +317,7 @@ public sealed partial class MainWindow
             && currentStatus is not null
             && currentStatus.Changes.Count > 0;
         ApplyStashButton.IsEnabled = canInteract && worktreesView && selectedStash is not null;
+        PopStashButton.IsEnabled = canInteract && worktreesView && selectedStash is not null;
         DropStashButton.IsEnabled = canInteract && worktreesView && selectedStash is not null;
 
         AddRemoteButton.IsEnabled = canInteract && remotesView;
@@ -1241,6 +1242,44 @@ public sealed partial class MainWindow
             "Stash apply cancelled; refreshing repository…",
             "Unable to apply stash",
             (root, token) => repositoryService.ApplyStashAsync(root, stashSHA, restoreIndex.IsChecked == true, token),
+            refreshStashes: true);
+    }
+
+    private async void PopStashButton_Click(object sender, RoutedEventArgs e)
+    {
+        var stash = selectedStash;
+        if (!CanStartRepositoryWrite() || stash is null)
+        {
+            return;
+        }
+
+        var dialog = CreateDialog(
+            "Pop stash?",
+            "Pop",
+            new TextBlock
+            {
+                Text = $"Apply {stash.Reference} ({ShortObjectId(stash.CommitId)}) to the current worktree and drop the entry? When applying leaves conflicts, the entry is retained for recovery instead.",
+                TextWrapping = TextWrapping.Wrap,
+            });
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var stashSHA = stash.Stash.CommitId;
+        var stashReference = stash.Stash.Reference;
+        await RunRepositoryWriteAsync(
+            $"Popping {stashReference}…",
+            "Stash popped",
+            "Stash pop cancelled; refreshing repository…",
+            "Unable to pop stash",
+            async (root, token) =>
+            {
+                var popped = await repositoryService.PopStashAsync(root, stashSHA, token);
+                StatusText.Text = popped.Dropped
+                    ? $"Popped {popped.Reference}"
+                    : $"Applied {popped.Reference} with conflicts; the entry is retained";
+            },
             refreshStashes: true);
     }
 

@@ -196,6 +196,16 @@ public sealed record StashSummary(
     string Summary,
     DateTimeOffset Date);
 
+/// <summary>
+/// The outcome of popping a stash: applied and dropped on success, or
+/// applied with conflicts while the entry is retained for recovery.
+/// </summary>
+public sealed record StashPopResult(
+    string Reference,
+    string CommitId,
+    bool Dropped,
+    IReadOnlyList<FileChange> Conflicts);
+
 /// <summary>A configured remote with a presentation-safe fetch URL.</summary>
 public sealed record RemoteSummary(string Name, string Url);
 

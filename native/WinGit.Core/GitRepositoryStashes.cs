@@ -49,6 +49,56 @@ public sealed partial class GitRepositoryService
             path => ApplyStashInMutationAsync(path, stashSHA, restoreIndex, cancellationToken)).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Pops a stash by immutable commit ID: applies it and drops the entry on
+    /// success. When applying leaves conflicts, the entry is retained for
+    /// recovery and the conflict paths are reported instead of dropping it.
+    /// </summary>
+    public async Task<StashPopResult> PopStashAsync(
+        string root,
+        string stashSHA,
+        CancellationToken cancellationToken)
+    {
+        var repositoryRoot = ValidateDirectory(root, nameof(root));
+        ValidateCommitId(stashSHA);
+        return await ExecuteMutationAsync(
+            repositoryRoot,
+            cancellationToken,
+            async path =>
+            {
+                var entry = (await GetStashesAtRootAsync(path, cancellationToken).ConfigureAwait(false))
+                    .FirstOrDefault(candidate => string.Equals(candidate.CommitId, stashSHA, StringComparison.OrdinalIgnoreCase));
+                if (entry is null)
+                {
+                    throw new InvalidOperationException("The stash no longer exists; refresh the stash list and try again.");
+                }
+
+                try
+                {
+                    await ApplyStashInMutationAsync(path, stashSHA, restoreIndex: false, cancellationToken).ConfigureAwait(false);
+                }
+                catch (GitCommandException)
+                {
+                    var failed = await GetStatusAsync(path, cancellationToken).ConfigureAwait(false);
+                    var conflicts = failed.Changes
+                        .Where(change =>
+                            change.Kind == ChangeKind.Conflicted
+                            || change.IndexStatus.Contains('U')
+                            || change.WorkTreeStatus.Contains('U'))
+                        .ToArray();
+                    if (conflicts.Length > 0)
+                    {
+                        return new StashPopResult(entry.Reference, entry.CommitId, Dropped: false, conflicts);
+                    }
+
+                    throw;
+                }
+
+                await DropStashInMutationAsync(path, entry.Reference, entry.CommitId, cancellationToken).ConfigureAwait(false);
+                return new StashPopResult(entry.Reference, entry.CommitId, Dropped: true, []);
+            }).ConfigureAwait(false);
+    }
+
     /// <summary>Drops a stash only after its current reflog reference resolves to the expected SHA.</summary>
     public async Task DropStashAsync(
         string root,
