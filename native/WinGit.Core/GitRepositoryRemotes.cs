@@ -122,24 +122,125 @@ public sealed partial class GitRepositoryService
         return await ExecuteMutationAsync(
             repositoryRoot,
             cancellationToken,
-            async path =>
-            {
-                var result = await RunRemoteCommandAsync(
-                    path,
-                    ["remote", "set-head", "-a", name],
-                    cancellationToken,
-                    expectedExitCodes: [1, 128]).ConfigureAwait(false);
-                EnsureComplete(result, "remote HEAD update");
-                if (result.ExitCode != 0)
-                {
-                    return null;
-                }
-
-                return await ReadRemoteHeadTargetAsync(path, name, cancellationToken).ConfigureAwait(false);
-            }).ConfigureAwait(false);
+            path => UpdateRemoteHeadInMutationAsync(path, name, cancellationToken)).ConfigureAwait(false);
     }
 
-    /// <summary>Fetches an explicitly selected remote and prunes stale tracking refs.</summary>
+    private async Task<string?> UpdateRemoteHeadInMutationAsync(
+        string repositoryRoot,
+        string name,
+        CancellationToken cancellationToken)
+    {
+        var result = await RunRemoteCommandAsync(
+            repositoryRoot,
+            ["remote", "set-head", "-a", name],
+            cancellationToken,
+            expectedExitCodes: [1, 128]).ConfigureAwait(false);
+        EnsureComplete(result, "remote HEAD update");
+        if (result.ExitCode != 0)
+        {
+            return null;
+        }
+
+        return await ReadRemoteHeadTargetAsync(repositoryRoot, name, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Maps a failed fetch to the most specific transport explanation
+    /// available, always naming the remote. SAML, expired-credential,
+    /// HTTPS-auth, SSH, certificate, and unreachable signatures are tried
+    /// in order; anything else preserves the original failure.
+    /// </summary>
+    private static Exception MapFetchFailure(
+        string remoteName,
+        string? remoteUrl,
+        GitCommandException exception)
+    {
+        var host = TryGetRemoteHost(remoteUrl);
+        var identified =
+            TryParseSamlEnforcement(exception.StandardError) is string organization
+                ? $"The '{organization}' organization enforces SAML SSO. Sign in again and authorize the organization before fetching from '{remoteName}'."
+                : IdentifyExpiredCredential(exception.StandardError, host)
+                    ?? IdentifyAuthenticationFailure(exception.StandardError, host)
+                    ?? IdentifySshFailure(exception.StandardError, host)
+                    ?? IdentifyCertificateFailure(exception.StandardError, host)
+                    ?? IdentifyUnreachableRemote(exception.StandardError, host);
+        if (identified is not null)
+        {
+            return new InvalidOperationException(identified, exception);
+        }
+
+        return exception;
+    }
+
+    private static string? IdentifyUnreachableRemote(string standardError, string? host)
+    {
+        var target = string.IsNullOrWhiteSpace(host) ? "the remote" : $"'{host}'";
+        if (Regex.IsMatch(
+                standardError,
+                @"could not resolve host|failed to connect|connection timed out|network is unreachable|no route to host",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            return $"Could not reach {target} over the network. Check the connection and the remote URL without changing the repository.";
+        }
+
+        return null;
+    }
+
+    /// <summary>Extracts a display-safe host from an explicit remote URL.</summary>
+    private async Task<string?> ReadRemoteUrlAsync(
+        string repositoryRoot,
+        string name,
+        CancellationToken cancellationToken)
+    {
+        var result = await RunRemoteCommandAsync(
+            repositoryRoot,
+            ["remote", "get-url", name],
+            cancellationToken,
+            expectedExitCodes: [2, 128]).ConfigureAwait(false);
+        EnsureComplete(result, "remote URL lookup");
+        if (result.ExitCode != 0)
+        {
+            return null;
+        }
+
+        var url = DecodeUtf8(result.StandardOutput, "remote URL lookup").Trim();
+        return url.Length == 0 ? null : url;
+    }
+
+    private static string? TryGetRemoteHost(string? remoteUrl)
+    {
+        if (string.IsNullOrWhiteSpace(remoteUrl))
+        {
+            return null;
+        }
+
+        var url = remoteUrl.Trim();
+        if ((url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            && Uri.TryCreate(url, UriKind.Absolute, out var httpUri)
+            && httpUri.Host.Length != 0)
+        {
+            return httpUri.Host;
+        }
+
+        var scpSeparator = url.IndexOf(':');
+        if (scpSeparator > 0 && !url.Contains("://", StringComparison.Ordinal))
+        {
+            var authority = url[..scpSeparator];
+            var atSeparator = authority.LastIndexOf('@');
+            var host = atSeparator >= 0 ? authority[(atSeparator + 1)..] : authority;
+            return host.Length == 0 ? null : host;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Fetches an explicitly selected remote, prunes stale tracking refs, and
+    /// refreshes the remote's default-branch HEAD symref without failing the
+    /// fetch when that refresh is unavailable. Transport failures throw an
+    /// error naming the remote host.
+    /// </summary>
     public async Task FetchAsync(
         string root,
         string remoteName,
@@ -153,10 +254,29 @@ public sealed partial class GitRepositoryService
             async path =>
             {
                 var normalizedRemote = await EnsureRemoteExistsAsync(path, remoteName, cancellationToken).ConfigureAwait(false);
-                await RunRemoteCommandAsync(
-                    path,
-                    ["fetch", "--prune", "--recurse-submodules=on-demand", normalizedRemote],
-                    cancellationToken).ConfigureAwait(false);
+                var remoteUrl = await ReadRemoteUrlAsync(path, normalizedRemote, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await RunRemoteCommandAsync(
+                        path,
+                        ["fetch", "--prune", "--recurse-submodules=on-demand", normalizedRemote],
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (GitCommandException exception)
+                {
+                    throw MapFetchFailure(normalizedRemote, remoteUrl, exception);
+                }
+
+                try
+                {
+                    await UpdateRemoteHeadInMutationAsync(path, normalizedRemote, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    // Refreshing the default-branch symref is best-effort like
+                    // Electron's post-fetch update: a successful fetch stands
+                    // even when the remote HEAD cannot be resolved.
+                }
             }).ConfigureAwait(false);
     }
 
