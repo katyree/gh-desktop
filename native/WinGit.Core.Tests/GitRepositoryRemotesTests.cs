@@ -464,6 +464,66 @@ public sealed class GitRepositoryRemotesTests : IDisposable
             await service.GetRemoteBranchTipAsync(seedPath, "origin", "main", CancellationToken.None));
     }
 
+    [Fact]
+    public async Task PublishCreatesRemotePushesBranchAndSetsUpstream()
+    {
+        RunGit(fixtureRoot, "init", "--bare", bareRemotePath);
+        RunGit(bareRemotePath, "symbolic-ref", "HEAD", "refs/heads/main");
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+        var head = RunGit(seedPath, "rev-parse", "HEAD").Trim();
+
+        var service = new GitRepositoryService();
+        await service.PublishBranchAsync(seedPath, "origin", bareRemotePath, "main", CancellationToken.None);
+
+        Assert.Contains(
+            await service.GetRemotesAsync(seedPath, CancellationToken.None),
+            remote => remote.Name == "origin");
+        Assert.Equal(head, RunGit(bareRemotePath, "rev-parse", "refs/heads/main").Trim());
+        Assert.Equal(
+            "origin/main",
+            RunGit(seedPath, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").Trim());
+    }
+
+    [Fact]
+    public async Task PublishRefusesMismatchedRemoteUnbornBranchAndMissingUrl()
+    {
+        RunGit(fixtureRoot, "init", "--bare", bareRemotePath);
+        RunGit(fixtureRoot, "init", "--bare", editedRemotePath);
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+
+        var service = new GitRepositoryService();
+        await service.AddRemoteAsync(seedPath, "origin", bareRemotePath, CancellationToken.None);
+
+        var mismatched = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.PublishBranchAsync(seedPath, "origin", editedRemotePath, "main", CancellationToken.None));
+        Assert.Contains("already points elsewhere", mismatched.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Throws<InvalidOperationException>(
+            () => RunGit(editedRemotePath, "rev-parse", "--verify", "refs/heads/main"));
+
+        var missingUrl = await Assert.ThrowsAsync<ArgumentException>(
+            () => service.PublishBranchAsync(seedPath, "upstream", null, "main", CancellationToken.None));
+        Assert.Contains("URL is required", missingUrl.Message, StringComparison.OrdinalIgnoreCase);
+
+        var emptyPath = Path.Combine(fixtureRoot, "empty");
+        Directory.CreateDirectory(emptyPath);
+        RunGit(emptyPath, "init", "-b", "main");
+        var unborn = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.PublishBranchAsync(emptyPath, "origin", bareRemotePath, "main", CancellationToken.None));
+        Assert.Contains("no commits", unborn.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     public void Dispose()
     {
         DeleteDirectory(fixtureRoot);

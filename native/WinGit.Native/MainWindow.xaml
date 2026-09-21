@@ -1591,7 +1591,10 @@
                             </Grid.RowDefinitions>
                             <Grid Padding="8,0">
                                 <TextBlock Text="Remotes" Style="{StaticResource PanelTitleStyle}" VerticalAlignment="Center" />
-                                <Button x:Name="AddRemoteButton" Content="Add remote" Click="AddRemoteButton_Click" HorizontalAlignment="Right" VerticalAlignment="Center" AutomationProperties.Name="Add remote" />
+                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <Button x:Name="PublishBranchButton" Content="Publish branch" Click="PublishBranchButton_Click" AutomationProperties.Name="Publish current branch" />
+                                    <Button x:Name="AddRemoteButton" Content="Add remote" Click="AddRemoteButton_Click" AutomationProperties.Name="Add remote" />
+                                </StackPanel>
                             </Grid>
                             <Grid Grid.Row="1">
                                 <ListView x:Name="RemoteList" ItemTemplate="{StaticResource RemoteRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="RemoteList_SelectionChanged" SelectionMode="Single" AutomationProperties.Name="Git remotes" />
