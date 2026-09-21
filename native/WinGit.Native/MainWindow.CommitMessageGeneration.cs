@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WinGit.Core;
 using WinGit.Core.Codex;
+using WinGit.Core.GitHub;
 
 namespace WinGit.Native;
 
@@ -193,7 +194,7 @@ public sealed partial class MainWindow
                             },
                             new TextBlock
                             {
-                                Text = "Review and edit the result. WinGit never commits automatically. Repository-specific commit-message rules are not loaded by the native UI yet.",
+                                Text = "Review and edit the result. WinGit never commits automatically. When the current branch has GitHub commit-message rules, they are included as constraints for the draft.",
                                 TextWrapping = TextWrapping.Wrap,
                                 Style = (Style)RootGrid.Resources["SecondaryTextStyle"],
                             },
@@ -275,11 +276,31 @@ public sealed partial class MainWindow
                 return;
             }
 
+            IReadOnlyList<string> enforcedRules = Array.Empty<string>();
+            try
+            {
+                enforcedRules = await TryLoadCommitMessageRulesForBranchAsync(
+                    initialContext.Status.Branch,
+                    cancellation.Token);
+                if (!IsGenerationCurrent(generationId, operation.Generation, root, cancellation.Token))
+                {
+                    return;
+                }
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                enforcedRules = Array.Empty<string>();
+            }
+
             var generator = new CodexCommitMessageGenerator(client);
             var message = await generator.GenerateAsync(
                 new CodexCommitMessageGenerationRequest(
                     diff,
-                    EnforcedRuleDescriptions: [],
+                    EnforcedRuleDescriptions: enforcedRules,
                     ModelSelection: new CodexModelSelectionSnapshot(
                         initialContext.ModelSlug,
                         initialContext.ReasoningEffort)),
@@ -455,7 +476,7 @@ public sealed partial class MainWindow
                         : activeGitOperationKind != GitOperationKind.None
                             ? "Generation is unavailable during an active Git operation."
                             : hasStagedChanges || canAmend
-                                ? "Uses all staged changes. Review the generated title and description; nothing is committed automatically. Native repository commit-message rules are not loaded yet."
+                                ? "Uses all staged changes. Review the generated title and description; nothing is committed automatically. Branch commit-message rules are included when available."
                                 : "Stage changes first, or choose Amend previous commit.";
     }
 
@@ -530,6 +551,88 @@ public sealed partial class MainWindow
             .ToUpperInvariant();
         return Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
+    }
+
+    private async Task<IReadOnlyList<string>> TryLoadCommitMessageRulesForBranchAsync(
+        string? branch,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(branch) || repositoryRoot is null)
+        {
+            return Array.Empty<string>();
+        }
+
+        var store = GetGitHubAccountStore();
+        if (store is null || githubAccountRows.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        IReadOnlyList<RemoteSummary> remotes;
+        try
+        {
+            remotes = await repositoryService.GetRemotesAsync(repositoryRoot, cancellationToken);
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+
+        foreach (var remote in remotes)
+        {
+            if (!GitHubRemoteRepositoryIdentity.TryParse(remote.Url, out var identity) ||
+                identity is null)
+            {
+                continue;
+            }
+
+            var matchingRow = githubAccountRows.FirstOrDefault(r =>
+                string.Equals(r.Summary.ApiOrigin.AbsoluteUri, identity.ApiOrigin.AbsoluteUri, StringComparison.OrdinalIgnoreCase));
+            if (matchingRow is null)
+            {
+                continue;
+            }
+
+            GitHubStoredAccount? account;
+            try
+            {
+                account = await store.LoadAsync(identity.ApiOrigin, matchingRow.Summary.Id, cancellationToken);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (account is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                var options = identity.ApiOrigin.Host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase)
+                    ? GitHubRepositoryRulesClientOptions.ForGitHubCom()
+                    : GitHubRepositoryRulesClientOptions.ForEnterprise(identity.ApiOrigin);
+                using var client = new GitHubRepositoryRulesClient(options);
+                var result = await client.GetForBranchAsync(account.Session, identity.Owner, identity.Name, branch, cancellationToken);
+                if (result.Rules.Count == 0)
+                {
+                    return Array.Empty<string>();
+                }
+
+                return result.Rules.Select(r => r.Description).ToArray();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                return Array.Empty<string>();
+            }
+        }
+
+        return Array.Empty<string>();
     }
 
     private bool IsGenerationCurrentWithContext(
