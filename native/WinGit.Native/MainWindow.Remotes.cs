@@ -1104,6 +1104,11 @@ public sealed partial class MainWindow
             PlaceholderText = localBranch,
         };
         AutomationProperties.SetName(remoteBranchBox, "Remote branch to push");
+        var forcePushBox = new CheckBox
+        {
+            Content = "Force: replace the remote branch",
+        };
+        AutomationProperties.SetName(forcePushBox, "Force push the remote branch");
         var errorBar = CreateDialogErrorBar();
         var pushContent = new StackPanel
         {
@@ -1119,6 +1124,7 @@ public sealed partial class MainWindow
                 remoteBranchBox,
             },
         };
+        pushContent.Children.Add(forcePushBox);
         var forkNote = FormatForkContributionPushNote(remoteName);
         if (forkNote is not null)
         {
@@ -1149,12 +1155,29 @@ public sealed partial class MainWindow
                 continue;
             }
 
+            string? leaseTip = null;
+            if (forcePushBox.IsChecked == true)
+            {
+                leaseTip = await ConfirmForcePushAsync(remoteName, localBranch, remoteBranch);
+                if (leaseTip is null)
+                {
+                    return;
+                }
+            }
+
+            var forcePush = leaseTip is not null;
             var succeeded = await RunRepositoryWriteAsync(
-                $"Pushing {localBranch} to {remoteName}/{remoteBranch}…",
-                $"Pushed {localBranch} to {remoteName}/{remoteBranch}",
+                forcePush
+                    ? $"Force-pushing {localBranch} to {remoteName}/{remoteBranch}…"
+                    : $"Pushing {localBranch} to {remoteName}/{remoteBranch}…",
+                forcePush
+                    ? $"Force-pushed {localBranch} to {remoteName}/{remoteBranch}"
+                    : $"Pushed {localBranch} to {remoteName}/{remoteBranch}",
                 "Push cancelled; refreshing repository…",
                 "Unable to push remote",
-                (root, token) => repositoryService.PushAsync(root, remoteName, localBranch, remoteBranch, token),
+                (root, token) => forcePush
+                    ? repositoryService.ForcePushWithLeaseAsync(root, remoteName, localBranch, remoteBranch, leaseTip!, token)
+                    : repositoryService.PushAsync(root, remoteName, localBranch, remoteBranch, token),
                 refreshBranches: true,
                 refreshRemotes: true);
             if (succeeded)
@@ -1164,5 +1187,53 @@ public sealed partial class MainWindow
 
             MoveErrorToDialog(errorBar, "Push did not complete. Check the remote branch and authentication, then retry without force.");
         }
+    }
+
+    /// <summary>
+    /// Confirms a force push with a freshly captured lease tip, naming the
+    /// affected branch. A missing remote branch needs no force. Returns the
+    /// lease tip, or null when the user cancels or the tip cannot be read.
+    /// </summary>
+    private async Task<string?> ConfirmForcePushAsync(string remoteName, string localBranch, string remoteBranch)
+    {
+        if (repositoryRoot is null)
+        {
+            return null;
+        }
+
+        string? leaseTip;
+        try
+        {
+            leaseTip = await repositoryService.GetRemoteBranchTipAsync(
+                repositoryRoot,
+                remoteName,
+                remoteBranch,
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            ShowError("Unable to prepare force push", exception);
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(leaseTip))
+        {
+            ShowError(
+                "Force push is unnecessary",
+                new InvalidOperationException(
+                    $"The remote branch '{remoteName}/{remoteBranch}' does not exist; push normally instead."));
+            return null;
+        }
+
+        var dialog = CreateDialog(
+            "Force push?",
+            "Force push",
+            new TextBlock
+            {
+                Text = $"Replace '{remoteName}/{remoteBranch}' with '{localBranch}'? The remote history is rewritten, which can disrupt collaborators. The push proceeds only while the remote tip stays at {ShortObjectId(leaseTip)}; newer pushes stop it instead of being overwritten.",
+                TextWrapping = TextWrapping.Wrap,
+            });
+        dialog.DefaultButton = ContentDialogButton.Secondary;
+        return await dialog.ShowAsync() == ContentDialogResult.Primary ? leaseTip : null;
     }
 }
