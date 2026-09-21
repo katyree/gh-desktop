@@ -189,6 +189,16 @@ public sealed partial class GitRepositoryService
     {
         if (Regex.IsMatch(
                 exception.StandardError,
+                @"\[rejected\].*stale info",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            return new InvalidOperationException(
+                $"Force push stopped: '{remoteName}/{remoteBranch}' changed since the lease was captured. Refresh the remote state and confirm force push again instead of retrying blindly.",
+                exception);
+        }
+
+        if (Regex.IsMatch(
+                exception.StandardError,
                 @"\[rejected\].*fetch first|updates were rejected because the remote contains work",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
         {
@@ -400,6 +410,86 @@ public sealed partial class GitRepositoryService
                     // Refreshing the default-branch symref is best-effort: a
                     // successful pull stands even when the remote HEAD cannot
                     // be resolved.
+                }
+            }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads one remote-tracking branch tip, or null when the remote branch
+    /// does not exist locally. Used to capture force-push leases.
+    /// </summary>
+    public async Task<string?> GetRemoteBranchTipAsync(
+        string root,
+        string remoteName,
+        string remoteBranch,
+        CancellationToken cancellationToken)
+    {
+        var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
+        ValidateRemoteNameSyntax(remoteName);
+        var normalizedRemoteBranch = await ValidateBranchNameAsync(
+            repositoryRoot,
+            remoteBranch,
+            cancellationToken).ConfigureAwait(false);
+        return await ReadRefIdAsync(
+            repositoryRoot,
+            $"refs/remotes/{remoteName}/{normalizedRemoteBranch}",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Force-pushes one explicit local branch with a lease on the expected
+    /// remote tip, so the push fails instead of overwriting commits pushed
+    /// after the caller captured the tip. Plain --force is never used.
+    /// Transport failures name the remote host.
+    /// </summary>
+    public async Task ForcePushWithLeaseAsync(
+        string root,
+        string remoteName,
+        string localBranch,
+        string remoteBranch,
+        string expectedRemoteTip,
+        CancellationToken cancellationToken)
+    {
+        var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
+        ValidateRemoteNameSyntax(remoteName);
+        var normalizedLocalBranch = await ValidateBranchNameAsync(
+            repositoryRoot,
+            localBranch,
+            cancellationToken).ConfigureAwait(false);
+        var normalizedRemoteBranch = await ValidateBranchNameAsync(
+            repositoryRoot,
+            remoteBranch,
+            cancellationToken).ConfigureAwait(false);
+        ValidateCommitId(expectedRemoteTip);
+
+        await ExecuteMutationAsync(
+            repositoryRoot,
+            cancellationToken,
+            async path =>
+            {
+                var normalizedRemote = await EnsureRemoteExistsAsync(path, remoteName, cancellationToken).ConfigureAwait(false);
+                await EnsureLocalBranchExistsAsync(path, normalizedLocalBranch, cancellationToken).ConfigureAwait(false);
+                var remoteUrl = await ReadRemoteUrlAsync(path, normalizedRemote, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await RunRemoteCommandAsync(
+                        path,
+                        [
+                            "push",
+                            $"--force-with-lease=refs/heads/{normalizedRemoteBranch}:{expectedRemoteTip}",
+                            normalizedRemote,
+                            $"refs/heads/{normalizedLocalBranch}:refs/heads/{normalizedRemoteBranch}",
+                        ],
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (GitCommandException exception)
+                {
+                    throw MapPushFailure(
+                        normalizedRemote,
+                        normalizedLocalBranch,
+                        normalizedRemoteBranch,
+                        remoteUrl,
+                        exception);
                 }
             }).ConfigureAwait(false);
     }

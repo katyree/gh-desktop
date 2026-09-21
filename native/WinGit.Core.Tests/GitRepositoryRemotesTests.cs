@@ -393,6 +393,77 @@ public sealed class GitRepositoryRemotesTests : IDisposable
         Assert.Equal(headBefore, RunGit(seedPath, "rev-parse", "HEAD").Trim());
     }
 
+    [Fact]
+    public async Task ForcePushWithLeaseReplacesDivergedTipAndRefusesStaleLease()
+    {
+        RunGit(fixtureRoot, "init", "--bare", bareRemotePath);
+        RunGit(bareRemotePath, "symbolic-ref", "HEAD", "refs/heads/main");
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+
+        var service = new GitRepositoryService();
+        await service.AddRemoteAsync(seedPath, "origin", bareRemotePath, CancellationToken.None);
+        await service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+        RunGit(fixtureRoot, "clone", "--branch", "main", bareRemotePath, firstClonePath);
+        ConfigureClone(firstClonePath);
+
+        WriteFile(seedPath, "tracked.txt", "seed remote\n");
+        Commit(seedPath, "seed remote");
+        await service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+        var remoteTip = RunGit(bareRemotePath, "rev-parse", "refs/heads/main").Trim();
+        WriteFile(firstClonePath, "tracked.txt", "clone local\n");
+        Commit(firstClonePath, "clone local");
+        var cloneHead = RunGit(firstClonePath, "rev-parse", "HEAD").Trim();
+
+        var staleLease = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.ForcePushWithLeaseAsync(
+                firstClonePath,
+                "origin",
+                "main",
+                "main",
+                new string('0', 40),
+                CancellationToken.None));
+        Assert.Contains("lease", staleLease.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(remoteTip, RunGit(bareRemotePath, "rev-parse", "refs/heads/main").Trim());
+
+        await service.ForcePushWithLeaseAsync(
+            firstClonePath,
+            "origin",
+            "main",
+            "main",
+            remoteTip,
+            CancellationToken.None);
+        Assert.Equal(cloneHead, RunGit(bareRemotePath, "rev-parse", "refs/heads/main").Trim());
+    }
+
+    [Fact]
+    public async Task RemoteBranchTipReadsNullForMissingBranches()
+    {
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+
+        var service = new GitRepositoryService();
+        Assert.Null(await service.GetRemoteBranchTipAsync(seedPath, "origin", "main", CancellationToken.None));
+
+        RunGit(fixtureRoot, "init", "--bare", bareRemotePath);
+        RunGit(bareRemotePath, "symbolic-ref", "HEAD", "refs/heads/main");
+        await service.AddRemoteAsync(seedPath, "origin", bareRemotePath, CancellationToken.None);
+        await service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+        Assert.Equal(
+            RunGit(seedPath, "rev-parse", "HEAD").Trim(),
+            await service.GetRemoteBranchTipAsync(seedPath, "origin", "main", CancellationToken.None));
+    }
+
     public void Dispose()
     {
         DeleteDirectory(fixtureRoot);
