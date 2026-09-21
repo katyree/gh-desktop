@@ -52,4 +52,30 @@ public sealed partial class GitRepositoryService
 
         return null;
     }
+
+    /// <summary>
+    /// Explains TLS certificate failures with the affected host and the safe
+    /// recovery path. Native never disables certificate verification or
+    /// trusts a certificate automatically; trust decisions stay with the
+    /// user. Returns null when the output carries no certificate failure.
+    /// Credential values never appear in the message.
+    /// </summary>
+    public static string? IdentifyCertificateFailure(string standardError, string? remoteHost)
+    {
+        if (string.IsNullOrWhiteSpace(standardError))
+        {
+            return null;
+        }
+
+        var host = string.IsNullOrWhiteSpace(remoteHost) ? "the remote" : $"'{remoteHost.Trim()}'";
+        if (Regex.IsMatch(
+                standardError,
+                @"SSL certificate problem|self[- ]signed certificate|unable to get local issuer certificate|certificate verify failed|certificate has expired|certificate is not yet valid|self signed certificate in certificate chain",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            return $"Git could not verify the TLS certificate for {host}, so the connection was refused. Ask the server administrator to confirm the certificate; WinGit never disables verification or trusts certificates automatically.";
+        }
+
+        return null;
+    }
 }
