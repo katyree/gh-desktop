@@ -209,6 +209,28 @@ public sealed record StashPopResult(
 /// <summary>A configured remote with a presentation-safe fetch URL.</summary>
 public sealed record RemoteSummary(string Name, string Url);
 
+/// <summary>The direction of one Git LFS object transfer.</summary>
+public enum LfsTransferDirection
+{
+    Download,
+    Upload,
+    Checkout,
+}
+
+/// <summary>One parsed Git LFS progress update for a single file.</summary>
+public sealed record LfsTransferProgress(
+    LfsTransferDirection Direction,
+    string FileName,
+    long TransferredBytes,
+    long TotalBytes,
+    int FinishedFiles,
+    int EstimatedFileCount,
+    string Text);
+
+/// <summary>The observed outcome of a Git LFS fetch.</summary>
+public sealed record LfsFetchResult(
+    IReadOnlyList<LfsTransferProgress> ProgressUpdates);
+
 /// <summary>The Git operation marker currently present in a repository.</summary>
 public enum GitOperationKind
 {
