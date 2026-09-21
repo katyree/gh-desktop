@@ -495,6 +495,92 @@ public sealed partial class GitRepositoryService
     }
 
     /// <summary>
+    /// Publishes a local branch to a remote: creates the remote when it does
+    /// not exist (a URL is required then), refuses to retarget an existing
+    /// remote with a different URL, and pushes the branch with upstream
+    /// tracking. Transport failures name the remote host.
+    /// </summary>
+    public async Task PublishBranchAsync(
+        string root,
+        string remoteName,
+        string? remoteUrl,
+        string localBranch,
+        CancellationToken cancellationToken)
+    {
+        var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
+        ValidateRemoteNameSyntax(remoteName);
+        var normalizedLocalBranch = await ValidateBranchNameAsync(
+            repositoryRoot,
+            localBranch,
+            cancellationToken).ConfigureAwait(false);
+        string? normalizedUrl = null;
+        if (remoteUrl is not null)
+        {
+            normalizedUrl = ValidateRemoteUrl(remoteUrl);
+        }
+
+        await ExecuteMutationAsync(
+            repositoryRoot,
+            cancellationToken,
+            async path =>
+            {
+                var status = await GetStatusAsync(path, cancellationToken).ConfigureAwait(false);
+                if (status.IsUnborn || status.HeadId.Length == 0)
+                {
+                    throw new InvalidOperationException("There is nothing to publish because the repository has no commits.");
+                }
+
+                if (!string.Equals(status.Branch, normalizedLocalBranch, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("Publish requires the selected local branch to be checked out.");
+                }
+
+                var existingUrl = await ReadRemoteUrlAsync(path, remoteName, cancellationToken).ConfigureAwait(false);
+                string effectiveUrl;
+                if (existingUrl is null)
+                {
+                    if (normalizedUrl is null)
+                    {
+                        throw new ArgumentException("A remote URL is required to publish to a new remote.", nameof(remoteUrl));
+                    }
+
+                    await RunRemoteCommandAsync(
+                        path,
+                        ["remote", "add", remoteName, normalizedUrl],
+                        cancellationToken).ConfigureAwait(false);
+                    effectiveUrl = normalizedUrl;
+                }
+                else if (normalizedUrl is not null
+                    && !string.Equals(existingUrl, normalizedUrl, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"The remote '{remoteName}' already points elsewhere; edit or remove it before publishing.");
+                }
+                else
+                {
+                    effectiveUrl = existingUrl;
+                }
+
+                try
+                {
+                    await RunRemoteCommandAsync(
+                        path,
+                        [
+                            "push",
+                            "--set-upstream",
+                            remoteName,
+                            $"refs/heads/{normalizedLocalBranch}:refs/heads/{normalizedLocalBranch}",
+                        ],
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (GitCommandException exception)
+                {
+                    throw MapTransportFailure("pushing to", remoteName, effectiveUrl, exception);
+                }
+            }).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Pushes one explicit local branch to one explicit remote branch without
     /// force. A rejected ref reports the ref with pull-first guidance instead
     /// of raw Git output; transport failures name the remote host.

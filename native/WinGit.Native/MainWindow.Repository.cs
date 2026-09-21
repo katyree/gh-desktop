@@ -325,6 +325,13 @@ public sealed partial class MainWindow
         DropStashButton.IsEnabled = canInteract && worktreesView && selectedStash is not null;
 
         AddRemoteButton.IsEnabled = canInteract && remotesView;
+        PublishBranchButton.IsEnabled = canInteract
+            && remotesView
+            && currentStatus is not null
+            && !currentStatus.IsUnborn
+            && !currentStatus.IsDetached
+            && !string.IsNullOrWhiteSpace(currentStatus.Branch)
+            && !string.IsNullOrWhiteSpace(currentStatus.HeadId);
         EditRemoteButton.IsEnabled = transportReady;
         RemoveRemoteButton.IsEnabled = transportReady;
         FetchRemoteButton.IsEnabled = transportReady;

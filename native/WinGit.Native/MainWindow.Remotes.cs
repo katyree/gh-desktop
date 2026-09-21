@@ -810,6 +810,72 @@ public sealed partial class MainWindow
         }
     }
 
+    private async void PublishBranchButton_Click(object sender, RoutedEventArgs e)
+    {
+        var localBranch = currentStatus?.Branch;
+        if (!CanStartRepositoryWrite()
+            || currentStatus is null
+            || currentStatus.IsUnborn
+            || currentStatus.IsDetached
+            || string.IsNullOrWhiteSpace(localBranch)
+            || string.IsNullOrWhiteSpace(currentStatus.HeadId))
+        {
+            return;
+        }
+
+        var nameBox = new TextBox
+        {
+            Header = "Remote name",
+            Text = "origin",
+            PlaceholderText = "origin",
+        };
+        AutomationProperties.SetName(nameBox, "Publish remote name");
+        var urlBox = new TextBox
+        {
+            Header = "Remote URL",
+            PlaceholderText = "Required for a new remote. Must match an existing remote.",
+        };
+        AutomationProperties.SetName(urlBox, "Publish remote URL");
+        var dialog = CreateDialog(
+            "Publish branch",
+            "Publish",
+            new StackPanel
+            {
+                Spacing = 12,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = $"Publish the checked-out branch \"{localBranch}\" by pushing it with upstream tracking. This operation never forces the remote branch.",
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                    nameBox,
+                    urlBox,
+                },
+            });
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var remoteName = nameBox.Text.Trim();
+        if (remoteName.Length == 0)
+        {
+            ShowError("Remote name is required", new ArgumentException("Enter a remote name."));
+            return;
+        }
+
+        var remoteUrl = string.IsNullOrWhiteSpace(urlBox.Text) ? null : urlBox.Text.Trim();
+        await RunRepositoryWriteAsync(
+            $"Publishing {localBranch}…",
+            $"Published {localBranch} to {remoteName}",
+            "Publish cancelled; refreshing repository…",
+            "Unable to publish branch",
+            (root, token) => repositoryService.PublishBranchAsync(root, remoteName, remoteUrl, localBranch, token),
+            refreshBranches: true,
+            refreshRemotes: true);
+    }
+
     private async void AddRemoteButton_Click(object sender, RoutedEventArgs e)
     {
         if (!CanStartRepositoryWrite())
