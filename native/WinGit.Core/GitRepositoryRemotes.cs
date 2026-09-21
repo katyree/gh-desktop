@@ -145,31 +145,69 @@ public sealed partial class GitRepositoryService
     }
 
     /// <summary>
-    /// Maps a failed fetch to the most specific transport explanation
+    /// Maps a failed fetch or pull to the most specific transport explanation
     /// available, always naming the remote. SAML, expired-credential,
     /// HTTPS-auth, SSH, certificate, and unreachable signatures are tried
     /// in order; anything else preserves the original failure.
     /// </summary>
-    private static Exception MapFetchFailure(
+    private static Exception MapTransportFailure(
+        string operation,
         string remoteName,
         string? remoteUrl,
         GitCommandException exception)
     {
         var host = TryGetRemoteHost(remoteUrl);
-        var identified =
-            TryParseSamlEnforcement(exception.StandardError) is string organization
-                ? $"The '{organization}' organization enforces SAML SSO. Sign in again and authorize the organization before fetching from '{remoteName}'."
-                : IdentifyExpiredCredential(exception.StandardError, host)
-                    ?? IdentifyAuthenticationFailure(exception.StandardError, host)
-                    ?? IdentifySshFailure(exception.StandardError, host)
-                    ?? IdentifyCertificateFailure(exception.StandardError, host)
-                    ?? IdentifyUnreachableRemote(exception.StandardError, host);
+        string? identified = null;
+        if (TryParseSamlEnforcement(exception.StandardError) is string organization)
+        {
+            identified = $"The '{organization}' organization enforces SAML SSO. Sign in again and authorize the organization before {operation} '{remoteName}'.";
+        }
+
+        identified ??= IdentifyExpiredCredential(exception.StandardError, host)
+            ?? IdentifyAuthenticationFailure(exception.StandardError, host)
+            ?? IdentifySshFailure(exception.StandardError, host)
+            ?? IdentifyCertificateFailure(exception.StandardError, host)
+            ?? IdentifyUnreachableRemote(exception.StandardError, host);
         if (identified is not null)
         {
             return new InvalidOperationException(identified, exception);
         }
 
         return exception;
+    }
+
+    /// <summary>
+    /// Maps a failed fast-forward pull, reporting the merge-or-rebase path
+    /// for divergence and the preservation requirement for dirty worktrees
+    /// before falling back to shared transport explanations.
+    /// </summary>
+    private static Exception MapPullFailure(
+        string remoteName,
+        string? remoteUrl,
+        string localBranch,
+        GitCommandException exception)
+    {
+        if (Regex.IsMatch(
+                exception.StandardError,
+                @"not possible to fast-forward",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            return new InvalidOperationException(
+                $"Pull refused: '{localBranch}' and '{remoteName}' have diverged, so a fast-forward is impossible. Merge the remote branch into '{localBranch}' or rebase '{localBranch}' onto it; WinGit never moves the branch automatically.",
+                exception);
+        }
+
+        if (Regex.IsMatch(
+                exception.StandardError,
+                @"would be overwritten by merge|commit your changes or stash them",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            return new InvalidOperationException(
+                $"Pull refused to overwrite local changes in '{localBranch}'. Commit, stash, or discard them first; the worktree was left unchanged.",
+                exception);
+        }
+
+        return MapTransportFailure("pulling from", remoteName, remoteUrl, exception);
     }
 
     private static string? IdentifyUnreachableRemote(string standardError, string? host)
@@ -264,7 +302,7 @@ public sealed partial class GitRepositoryService
                 }
                 catch (GitCommandException exception)
                 {
-                    throw MapFetchFailure(normalizedRemote, remoteUrl, exception);
+                    throw MapTransportFailure("fetching from", normalizedRemote, remoteUrl, exception);
                 }
 
                 try
@@ -280,7 +318,12 @@ public sealed partial class GitRepositoryService
             }).ConfigureAwait(false);
     }
 
-    /// <summary>Pulls an explicit remote branch into the current local branch with fast-forward-only semantics.</summary>
+    /// <summary>
+    /// Pulls an explicit remote branch into the current local branch with
+    /// fast-forward-only semantics. Divergence and dirty-worktree refusals
+    /// report the merge-or-rebase path and preservation requirement instead
+    /// of raw Git output, and the remote HEAD symref refreshes on success.
+    /// </summary>
     public async Task PullFastForwardOnlyAsync(
         string root,
         string remoteName,
@@ -311,10 +354,29 @@ public sealed partial class GitRepositoryService
                     throw new InvalidOperationException("Pull requires the selected local branch to be checked out.");
                 }
 
-                await RunRemoteCommandAsync(
-                    path,
-                    ["pull", "--ff-only", "--no-rebase", "--no-autostash", normalizedRemote, normalizedRemoteBranch],
-                    cancellationToken).ConfigureAwait(false);
+                var remoteUrl = await ReadRemoteUrlAsync(path, normalizedRemote, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await RunRemoteCommandAsync(
+                        path,
+                        ["pull", "--ff-only", "--no-rebase", "--no-autostash", normalizedRemote, normalizedRemoteBranch],
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (GitCommandException exception)
+                {
+                    throw MapPullFailure(normalizedRemote, remoteUrl, normalizedLocalBranch, exception);
+                }
+
+                try
+                {
+                    await UpdateRemoteHeadInMutationAsync(path, normalizedRemote, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    // Refreshing the default-branch symref is best-effort: a
+                    // successful pull stands even when the remote HEAD cannot
+                    // be resolved.
+                }
             }).ConfigureAwait(false);
     }
 
