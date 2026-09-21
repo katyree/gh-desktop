@@ -89,12 +89,22 @@ public sealed class GitHubPullRequestChecksClientTests
         Assert.Equal(GitHubCheckRunStatusKind.Queued, queued.Status);
         Assert.Null(queued.Conclusion);
         Assert.Null(queued.UnknownConclusion);
+        Assert.Equal(
+            new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero),
+            queued.StartedAt);
+        Assert.Null(queued.CompletedAt);
         var success = Assert.Single(
             result.CheckRuns.CheckRuns,
             check => check.Id == 2);
         Assert.Equal(
             GitHubCheckRunConclusionKind.Success,
             success.Conclusion);
+        Assert.Equal(
+            new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero),
+            success.StartedAt);
+        Assert.Equal(
+            new DateTimeOffset(2026, 9, 1, 12, 5, 0, TimeSpan.Zero),
+            success.CompletedAt);
         var unknown = Assert.Single(
             result.CheckRuns.CheckRuns,
             check => check.Id == 3);
