@@ -150,6 +150,63 @@ public sealed class GitRepositoryRemotesTests : IDisposable
             () => service.UpdateRemoteHeadAsync(seedPath, "-bad", CancellationToken.None));
     }
 
+    [Fact]
+    public async Task FetchRefreshesRemoteHeadAndLeavesWorktreeUnchanged()
+    {
+        RunGit(fixtureRoot, "init", "--bare", bareRemotePath);
+        RunGit(bareRemotePath, "symbolic-ref", "HEAD", "refs/heads/main");
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+
+        var service = new GitRepositoryService();
+        await service.AddRemoteAsync(seedPath, "origin", bareRemotePath, CancellationToken.None);
+        await service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+        RunGit(seedPath, "remote", "set-head", "-d", "origin");
+        Assert.Null(await service.TryGetDefaultBranchNameAsync(seedPath, CancellationToken.None));
+
+        var headBefore = RunGit(seedPath, "rev-parse", "HEAD").Trim();
+        WriteFile(seedPath, "tracked.txt", "dirty local edit\n");
+
+        await service.FetchAsync(seedPath, "origin", CancellationToken.None);
+
+        Assert.Equal("main", await service.TryGetDefaultBranchNameAsync(seedPath, CancellationToken.None));
+        Assert.Equal(headBefore, RunGit(seedPath, "rev-parse", "HEAD").Trim());
+        Assert.Equal("dirty local edit\n", File.ReadAllText(Path.Combine(seedPath, "tracked.txt")));
+    }
+
+    [Fact]
+    public async Task FetchFailureNamesUnreachableHostAndPreservesState()
+    {
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+
+        var service = new GitRepositoryService();
+        await service.AddRemoteAsync(
+            seedPath,
+            "origin",
+            "https://nonexistent.invalid/owner/repository.git",
+            CancellationToken.None);
+        var headBefore = RunGit(seedPath, "rev-parse", "HEAD").Trim();
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.FetchAsync(seedPath, "origin", CancellationToken.None));
+        Assert.Contains("nonexistent.invalid", failure.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.IsType<GitCommandException>(failure.InnerException);
+
+        Assert.Equal(headBefore, RunGit(seedPath, "rev-parse", "HEAD").Trim());
+        Assert.Equal("seed\n", File.ReadAllText(Path.Combine(seedPath, "tracked.txt")));
+    }
+
     public void Dispose()
     {
         DeleteDirectory(fixtureRoot);
