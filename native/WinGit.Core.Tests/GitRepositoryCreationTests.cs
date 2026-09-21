@@ -94,6 +94,22 @@ public sealed class GitRepositoryCreationTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(occupiedPath, ".git")));
     }
 
+    [Fact]
+    public async Task CloneFailureNamesUnreachableHost()
+    {
+        var service = new GitRepositoryService();
+        var destinationPath = Path.Combine(fixtureRoot, "unreachable-clone");
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.CloneAsync(
+                "https://nonexistent.invalid/owner/repository.git",
+                destinationPath,
+                branch: null,
+                CancellationToken.None));
+        Assert.Contains("nonexistent.invalid", failure.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.IsType<GitCommandException>(failure.InnerException);
+    }
+
     public void Dispose()
     {
         DeleteDirectory(fixtureRoot);
