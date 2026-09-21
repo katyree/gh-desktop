@@ -620,6 +620,76 @@ public sealed partial class MainWindow
         valueText.Text = $"{usedPercent:0.#}%";
     }
 
+    /// <summary>
+    /// Resolves the single shared Codex model/reasoning selection that all
+    /// generation callers must consume. The persisted ids are validated
+    /// against the current catalog; when the catalog is unavailable the
+    /// persisted choice is preserved and the callers receive a server-default
+    /// (no model) rather than failing. This mirrors
+    /// app/src/lib/codex-model-selection.ts.
+    /// </summary>
+    private bool TryGetSharedCodexModelSelection(
+        out string? modelId,
+        out string? modelSlug,
+        out string? reasoningEffort)
+    {
+        modelId = null;
+        modelSlug = null;
+        reasoningEffort = null;
+
+        if (codexAccount.Status != CodexAccountStatus.SignedIn)
+        {
+            return false;
+        }
+
+        // Empty catalog: the persisted choice is preserved in settings
+        // (see ApplyCodexModels preserveSelectionWhenEmpty) but callers
+        // remain disabled until a catalog validates the selection, matching
+        // the current generation guards.
+        if (codexModelRows.Count == 0)
+        {
+            return false;
+        }
+
+        var row = codexModelRows.FirstOrDefault(r =>
+                string.Equals(r.Model.Id, settings.CodexModelId, StringComparison.Ordinal))
+            ?? codexModelRows.FirstOrDefault(r => r.Model.IsDefault)
+            ?? codexModelRows.FirstOrDefault();
+
+        if (row is null)
+        {
+            return false;
+        }
+
+        modelId = row.Model.Id;
+        modelSlug = row.Model.Model;
+
+        var desiredEffort = settings.CodexReasoningEffort;
+        var supported = row.Model.SupportedReasoningEfforts;
+        if (!string.IsNullOrEmpty(desiredEffort) &&
+            supported.Any(e => string.Equals(e.ReasoningEffort, desiredEffort, StringComparison.Ordinal)))
+        {
+            reasoningEffort = desiredEffort;
+        }
+        else if (!string.IsNullOrEmpty(row.Model.DefaultReasoningEffort) &&
+                 supported.Any(e => string.Equals(e.ReasoningEffort, row.Model.DefaultReasoningEffort, StringComparison.Ordinal)))
+        {
+            reasoningEffort = row.Model.DefaultReasoningEffort;
+        }
+        else
+        {
+            reasoningEffort = supported.FirstOrDefault()?.ReasoningEffort;
+        }
+
+        // Normalize empty reasoning to null (server default).
+        if (string.IsNullOrEmpty(reasoningEffort))
+        {
+            reasoningEffort = null;
+        }
+
+        return true;
+    }
+
     private void UpdateCodexControls()
     {
         if (codexDisposed)

@@ -169,7 +169,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (CodexModelComboBox.SelectedItem is not CodexModelRow modelRow)
+        if (!TryGetSharedCodexModelSelection(out var sharedModelId, out var sharedModelSlug, out var sharedReasoningEffort))
         {
             ShowError(
                 "Codex model unavailable",
@@ -180,10 +180,9 @@ public sealed partial class MainWindow
 
         CancelCommitMessageGeneration();
         var root = repositoryRoot;
-        var modelId = modelRow.Model.Id;
-        var modelSlug = modelRow.Model.Model;
-        var reasoningEffort =
-            (CodexReasoningComboBox.SelectedItem as CodexReasoningRow)?.ReasoningEffort;
+        var modelId = sharedModelId ?? string.Empty;
+        var modelSlug = sharedModelSlug ?? string.Empty;
+        var reasoningEffort = sharedReasoningEffort;
         var requestId = ++selectedChangesReviewRequestId;
         var cancellation = new CancellationTokenSource();
         selectedChangesReviewCancellation = cancellation;
