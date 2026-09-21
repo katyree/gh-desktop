@@ -210,6 +210,79 @@ public sealed class GitRepositoryWorktreeStashTests : IDisposable
             () => service.RemoveWorktreeAsync(repositoryRoot, repositoryRoot, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task PopStashAppliesAndDropsOnSuccess()
+    {
+        WriteFile(repositoryRoot, "tracked.txt", "base\n");
+        Commit(repositoryRoot, "initial");
+        WriteFile(repositoryRoot, "tracked.txt", "stashed\n");
+
+        var service = new GitRepositoryService();
+        var stashId = await service.CreateStashAsync(
+            repositoryRoot,
+            "pop success",
+            includeUntracked: false,
+            CancellationToken.None);
+        Assert.Empty((await service.GetStatusAsync(repositoryRoot, CancellationToken.None)).Changes);
+
+        var popped = await service.PopStashAsync(repositoryRoot, stashId, CancellationToken.None);
+
+        Assert.True(popped.Dropped);
+        Assert.Equal("stash@{0}", popped.Reference);
+        Assert.Equal(stashId, popped.CommitId);
+        Assert.Empty(popped.Conflicts);
+        Assert.Equal("stashed\n", File.ReadAllText(Path.Combine(repositoryRoot, "tracked.txt")));
+        Assert.Empty(await service.GetStashesAsync(repositoryRoot, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PopStashRetainsEntryAndReportsConflicts()
+    {
+        WriteFile(repositoryRoot, "tracked.txt", "base\n");
+        Commit(repositoryRoot, "initial");
+        WriteFile(repositoryRoot, "tracked.txt", "stashed\n");
+
+        var service = new GitRepositoryService();
+        var stashId = await service.CreateStashAsync(
+            repositoryRoot,
+            "pop conflict",
+            includeUntracked: false,
+            CancellationToken.None);
+
+        // Commit a conflicting change so the worktree is clean but the apply
+        // merges into a conflict instead of refusing on dirty files.
+        WriteFile(repositoryRoot, "tracked.txt", "committed\n");
+        RunGit(repositoryRoot, "add", "--", "tracked.txt");
+        Commit(repositoryRoot, "conflicting commit");
+
+        var popped = await service.PopStashAsync(repositoryRoot, stashId, CancellationToken.None);
+
+        Assert.False(popped.Dropped);
+        Assert.Equal(stashId, popped.CommitId);
+        var conflict = Assert.Single(popped.Conflicts);
+        Assert.Equal("tracked.txt", conflict.Path);
+        var retained = Assert.Single(await service.GetStashesAsync(repositoryRoot, CancellationToken.None));
+        Assert.Equal(stashId, retained.CommitId);
+        Assert.Contains("<<<<<<<", File.ReadAllText(Path.Combine(repositoryRoot, "tracked.txt")), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PopStashRefusesMissingEntryWithoutChangingState()
+    {
+        WriteFile(repositoryRoot, "tracked.txt", "base\n");
+        Commit(repositoryRoot, "initial");
+        var headBefore = RunGit(repositoryRoot, "rev-parse", "HEAD").Trim();
+
+        var service = new GitRepositoryService();
+        var missing = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.PopStashAsync(repositoryRoot, new string('0', 40), CancellationToken.None));
+
+        Assert.Contains("no longer exists", missing.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(headBefore, RunGit(repositoryRoot, "rev-parse", "HEAD").Trim());
+        Assert.Equal("base\n", File.ReadAllText(Path.Combine(repositoryRoot, "tracked.txt")));
+        Assert.Empty(await service.GetStashesAsync(repositoryRoot, CancellationToken.None));
+    }
+
     public void Dispose()
     {
         DeleteDirectory(secondaryWorktreePath);

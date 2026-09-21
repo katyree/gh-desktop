@@ -1483,6 +1483,7 @@
                             </Grid>
                             <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Padding="8,6">
                                 <Button x:Name="ApplyStashButton" Content="Apply selected" Click="ApplyStashButton_Click" AutomationProperties.Name="Apply selected stash" />
+                                <Button x:Name="PopStashButton" Content="Pop selected" Click="PopStashButton_Click" AutomationProperties.Name="Pop selected stash" />
                                 <Button x:Name="DropStashButton" Content="Drop selected" Click="DropStashButton_Click" AutomationProperties.Name="Drop selected stash" />
                             </StackPanel>
                         </Grid>
