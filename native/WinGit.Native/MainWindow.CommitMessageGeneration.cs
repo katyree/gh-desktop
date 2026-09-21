@@ -88,7 +88,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (CodexModelComboBox.SelectedItem is not CodexModelRow modelRow)
+        if (!TryGetSharedCodexModelSelection(out var sharedModelId, out var sharedModelSlug, out var sharedReasoningEffort))
         {
             ShowError(
                 "Codex model unavailable",
@@ -99,13 +99,16 @@ public sealed partial class MainWindow
 
         // Capture every mutable UI input before any dialog can yield. The Core
         // snapshot below also captures HEAD and the complete index fingerprint.
+        // The model/reasoning come from the single shared selector, not the
+        // ComboBox directly, so all callers (commit, review, conflict) stay
+        // consistent and the persisted choice survives an empty catalog.
         var root = repositoryRoot;
         var initialContext = new CommitMessageGenerationContext(
             root,
             currentStatus,
-            modelRow.Model.Id,
-            modelRow.Model.Model,
-            (CodexReasoningComboBox.SelectedItem as CodexReasoningRow)?.ReasoningEffort,
+            sharedModelId ?? string.Empty,
+            sharedModelSlug ?? string.Empty,
+            sharedReasoningEffort,
             AmendCheckBox.IsChecked == true,
             CommitSummaryBox.Text,
             CommitDescriptionBox.Text);
