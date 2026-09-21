@@ -120,6 +120,36 @@ public sealed class GitRepositoryRemotesTests : IDisposable
             File.ReadAllText(Path.Combine(secondClonePath, "keep-dirty.txt")));
     }
 
+    [Fact]
+    public async Task UpdateRemoteHeadRestoresDeletedSymrefAndToleratesUnknownRemotes()
+    {
+        RunGit(fixtureRoot, "init", "--bare", bareRemotePath);
+        RunGit(bareRemotePath, "symbolic-ref", "HEAD", "refs/heads/main");
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+
+        var service = new GitRepositoryService();
+        await service.AddRemoteAsync(seedPath, "origin", bareRemotePath, CancellationToken.None);
+        await service.PushAsync(seedPath, "origin", "main", "main", CancellationToken.None);
+        Assert.Null(await service.TryGetDefaultBranchNameAsync(seedPath, CancellationToken.None));
+
+        var resolved = await service.UpdateRemoteHeadAsync(seedPath, "origin", CancellationToken.None);
+        Assert.Equal("main", resolved);
+        Assert.Equal("main", await service.TryGetDefaultBranchNameAsync(seedPath, CancellationToken.None));
+        Assert.Equal(
+            "refs/remotes/origin/main",
+            RunGit(seedPath, "symbolic-ref", "refs/remotes/origin/HEAD").Trim());
+
+        Assert.Null(await service.UpdateRemoteHeadAsync(seedPath, "no-such-remote", CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => service.UpdateRemoteHeadAsync(seedPath, "-bad", CancellationToken.None));
+    }
+
     public void Dispose()
     {
         DeleteDirectory(fixtureRoot);
