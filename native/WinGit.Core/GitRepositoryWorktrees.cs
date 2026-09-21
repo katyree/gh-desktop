@@ -35,6 +35,11 @@ public sealed partial class GitRepositoryService
             async path =>
             {
                 EnsureWorktreeDestinationAvailable(destinationPath);
+                if (branchName is null)
+                {
+                    await EnsureBranchAvailableForWorktreeAsync(path, revision, cancellationToken).ConfigureAwait(false);
+                }
+
                 var arguments = new List<string> { "worktree", "add" };
                 if (branchName is not null)
                 {
@@ -244,6 +249,39 @@ public sealed partial class GitRepositoryService
             TrimDirectorySeparator(Path.GetFullPath(left)),
             TrimDirectorySeparator(Path.GetFullPath(right)),
             comparison);
+    }
+
+    /// <summary>
+    /// Refuses to create a worktree directly on a local branch that is already
+    /// checked out in another worktree. Callers creating a new branch with
+    /// <c>-b</c> skip this guard because the new worktree checks out the new
+    /// branch instead. Non-branch revisions resolve to no local branch and
+    /// pass through to Git's own validation.
+    /// </summary>
+    private async Task EnsureBranchAvailableForWorktreeAsync(
+        string repositoryRoot,
+        string revision,
+        CancellationToken cancellationToken)
+    {
+        var branchName = revision.StartsWith("refs/heads/", StringComparison.Ordinal)
+            ? revision["refs/heads/".Length..]
+            : revision;
+        var branchId = await ReadRefIdAsync(
+            repositoryRoot,
+            $"refs/heads/{branchName}",
+            cancellationToken).ConfigureAwait(false);
+        if (branchId is null)
+        {
+            return;
+        }
+
+        var worktreePath = await ReadBranchWorktreePathAsync(repositoryRoot, branchName, cancellationToken).ConfigureAwait(false);
+        if (worktreePath.Length == 0)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"The branch '{branchName}' is already checked out in the worktree at '{worktreePath}'; create the worktree from a different branch or remove that worktree first.");
     }
 
     private static string ValidateRevisionArgument(string revision, string parameterName)
