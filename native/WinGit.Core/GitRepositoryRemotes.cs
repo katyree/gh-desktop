@@ -106,6 +106,39 @@ public sealed partial class GitRepositoryService
             }).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Updates a remote's default-branch HEAD symref without failing the
+    /// caller when the remote is unreachable or unknown. Returns the resolved
+    /// default branch name, or null when it cannot be determined. Fetch and
+    /// pull wire this in as best-effort post-step work.
+    /// </summary>
+    public async Task<string?> UpdateRemoteHeadAsync(
+        string root,
+        string name,
+        CancellationToken cancellationToken)
+    {
+        var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
+        ValidateRemoteNameSyntax(name);
+        return await ExecuteMutationAsync(
+            repositoryRoot,
+            cancellationToken,
+            async path =>
+            {
+                var result = await RunRemoteCommandAsync(
+                    path,
+                    ["remote", "set-head", "-a", name],
+                    cancellationToken,
+                    expectedExitCodes: [1, 128]).ConfigureAwait(false);
+                EnsureComplete(result, "remote HEAD update");
+                if (result.ExitCode != 0)
+                {
+                    return null;
+                }
+
+                return await ReadRemoteHeadTargetAsync(path, name, cancellationToken).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+    }
+
     /// <summary>Fetches an explicitly selected remote and prunes stale tracking refs.</summary>
     public async Task FetchAsync(
         string root,
