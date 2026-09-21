@@ -137,6 +137,36 @@ public sealed class GitHubPullRequestClientTests
     }
 
     [Fact]
+    public async Task ReadPreservesMissingMergeableReportAsComputing()
+    {
+        var payload = BuildPullRequestObject("github.com", 9);
+        payload.Remove("mergeable");
+        payload.Remove("mergeable_state");
+        var computingHandler = new SequenceHandler(
+            (_, _, _) => Task.FromResult(
+                JsonResponse(JsonSerializer.Serialize(payload))));
+        using var httpClient = new HttpClient(computingHandler);
+        using var client = new GitHubPullRequestClient(
+            GitHubPullRequestClientOptions.ForGitHubCom(),
+            httpClient);
+        var session = CreateSession(
+            "synthetic-pr-token",
+            new Uri("https://github.com"));
+        Assert.True(
+            GitHubRemoteRepositoryIdentity.TryParse(
+                "https://github.com/org/repo.git",
+                out var repository));
+        Assert.NotNull(repository);
+
+        var read = await client.ReadAsync(session, repository!, 9);
+
+        Assert.NotNull(read);
+        Assert.Null(read!.Mergeable);
+        Assert.Null(read.MergeableState);
+        Assert.Equal(1, computingHandler.CallCount);
+    }
+
+    [Fact]
     public async Task PreservesDeletedHeadAndReportsSafeFailures()
     {
         var deletedHeadHandler = new SequenceHandler(

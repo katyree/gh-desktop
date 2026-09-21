@@ -1767,8 +1767,29 @@ public sealed partial class MainWindow
         return
             $"#{pullRequest.Number}  {pullRequest.Title}\n" +
             $"{state} · @{pullRequest.AuthorLogin}\n" +
-            $"Base {pullRequest.Base.Ref} · Head {pullRequest.Head.Ref}\n\n" +
+            $"Base {pullRequest.Base.Ref} · Head {pullRequest.Head.Ref}\n" +
+            $"{FormatPullRequestMergeStatus(pullRequest)}\n\n" +
             body;
+    }
+
+    /// <summary>
+    /// Names the pull request merge status from GitHub's mergeable report. A
+    /// missing report means GitHub is still computing mergeability, which is
+    /// normal right after pushing.
+    /// </summary>
+    private static string FormatPullRequestMergeStatus(GitHubPullRequest pullRequest)
+    {
+        var reportedState = string.IsNullOrWhiteSpace(pullRequest.MergeableState)
+            ? null
+            : pullRequest.MergeableState;
+        return (pullRequest.Mergeable, reportedState) switch
+        {
+            (true, null) => "Mergeable with the base branch.",
+            (true, var mergeState) => $"Mergeable with the base branch (GitHub reports '{mergeState}').",
+            (false, null) => "Not mergeable with the base branch.",
+            (false, var mergeState) => $"Not mergeable with the base branch (GitHub reports '{mergeState}').",
+            _ => "Merge status is being computed by GitHub; refresh to update.",
+        };
     }
 
     private static string FormatPullRequestDetailStatus(
