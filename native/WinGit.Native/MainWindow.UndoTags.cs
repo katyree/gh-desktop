@@ -210,6 +210,34 @@ public sealed partial class MainWindow
             return;
         }
 
+        // Electron's create-tag dialog refuses duplicate names before mutating.
+        // The Core create path stays authoritative: git itself rejects a
+        // duplicate, so a tag created after this read still fails safely.
+        var root = repositoryRoot;
+        if (root is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<TagSummary> existingTags;
+        try
+        {
+            existingTags = await repositoryService.GetTagsAsync(root, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            ShowError("Unable to read local tags", exception);
+            return;
+        }
+
+        if (existingTags.Any(tag => string.Equals(tag.Name, name, StringComparison.Ordinal)))
+        {
+            ShowError(
+                "Tag already exists",
+                new InvalidOperationException($"A tag named \"{name}\" already exists; choose a different name."));
+            return;
+        }
+
         var message = string.IsNullOrWhiteSpace(messageBox.Text)
             ? null
             : messageBox.Text.Trim();
