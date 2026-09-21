@@ -1041,6 +1041,37 @@ public sealed partial class MainWindow
                 return;
             }
 
+            // Re-running CI consumes real build resources, so the target
+            // scope needs an explicit confirmation like other costly actions.
+            var rerunsActionsJob = jobSteps.ActionsJobId is not null;
+            var confirmDialog = CreateDialog(
+                "Re-run check?",
+                "Re-run",
+                new TextBlock
+                {
+                    Text = rerunsActionsJob
+                        ? $"Request a re-run of Actions job '{row.CheckRun.Name}'? This consumes CI minutes."
+                        : $"Request a re-run of the check suite for '{row.CheckRun.Name}'? Every check in the suite runs again and consumes CI minutes.",
+                    TextWrapping = TextWrapping.Wrap,
+                });
+            confirmDialog.DefaultButton = ContentDialogButton.Secondary;
+            if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            if (!IsChecksActionCurrent(
+                    detailRow,
+                    accountChoice,
+                    generation,
+                    cancellation) ||
+                !ReferenceEquals(modernCheckList.SelectedItem, row))
+            {
+                rerunStatusText.Text =
+                    "The selected pull request changed; choose the check again.";
+                return;
+            }
+
             rerunCheckButton.IsEnabled = false;
             rerunStatusText.Text = "Requesting a rerun for the selected check…";
             var actionsJobId = jobSteps.ActionsJobId;
