@@ -1616,6 +1616,13 @@
                                     <Button x:Name="BrowsePullRequestsButton" Content="Browse pull requests" Click="BrowsePullRequestsButton_Click" AutomationProperties.Name="Browse pull requests for selected remote" />
                                 </StackPanel>
                                 <TextBlock Text="Fetch, pull, and push always name the selected remote and target branch. Pull refuses divergence instead of rebasing or forcing; push never uses force." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                                <StackPanel x:Name="ForkContributionPanel" Spacing="8" Visibility="Collapsed">
+                                    <TextBlock Text="Fork contribution" Style="{StaticResource PanelTitleStyle}" />
+                                    <TextBlock Text="This repository has an upstream remote. I'll be using this fork…" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                    <RadioButton x:Name="ForkContributeParentRadio" Content="To contribute to the parent repository" Checked="ForkContributionTargetRadio_Checked" AutomationProperties.Name="Contribute to the parent repository" />
+                                    <RadioButton x:Name="ForkContributeSelfRadio" Content="For my own purposes" Checked="ForkContributionTargetRadio_Checked" AutomationProperties.Name="Use the fork for my own purposes" />
+                                    <TextBlock x:Name="ForkContributionDescriptionText" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                </StackPanel>
                             </StackPanel>
                         </Grid>
                     </Grid>

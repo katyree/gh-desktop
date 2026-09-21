@@ -4,6 +4,16 @@ using System.Text.Json;
 
 namespace WinGit.Native;
 
+/// <summary>
+/// Where a fork contributes: the parent repository or the fork itself.
+/// Mirrors Electron's ForkContributionTarget; the default is Parent.
+/// </summary>
+internal enum ForkContributionTarget
+{
+    Parent,
+    Self,
+}
+
 internal sealed class NativeSettings
 {
     public const int MaximumRepositoryAliasLength = 100;
@@ -25,6 +35,13 @@ internal sealed class NativeSettings
     public List<string> RecentRepositories { get; set; } = [];
 
     public Dictionary<string, string> RepositoryAliases { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Per-repository fork contribution targets by normalized path. Only
+    /// non-default (Self) choices are stored; absence means Parent.
+    /// </summary>
+    public Dictionary<string, string> ForkContributionTargets { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -256,6 +273,49 @@ internal static class NativeSettingsStore
         }
     }
 
+    public static ForkContributionTarget GetForkContributionTarget(
+        NativeSettings settings,
+        string rootPath)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var normalized = NormalizeRepositoryPath(rootPath);
+        if (settings.ForkContributionTargets is not null
+            && settings.ForkContributionTargets.TryGetValue(normalized, out var stored)
+            && Enum.TryParse<ForkContributionTarget>(stored, ignoreCase: true, out var target)
+            && Enum.IsDefined(target))
+        {
+            return target;
+        }
+
+        return ForkContributionTarget.Parent;
+    }
+
+    public static void SetForkContributionTarget(
+        NativeSettings settings,
+        string rootPath,
+        ForkContributionTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var normalized = NormalizeRepositoryPath(rootPath);
+        settings.ForkContributionTargets ??= new(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in settings.ForkContributionTargets.Keys
+                     .Where(key => string.Equals(
+                         key,
+                         normalized,
+                         StringComparison.OrdinalIgnoreCase))
+                     .ToArray())
+        {
+            settings.ForkContributionTargets.Remove(key);
+        }
+
+        if (target != ForkContributionTarget.Parent)
+        {
+            settings.ForkContributionTargets[normalized] = target.ToString();
+        }
+    }
+
     public static bool RemoveRecentRepository(NativeSettings settings, string rootPath)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -264,6 +324,7 @@ internal static class NativeSettingsStore
         var removed = settings.RecentRepositories.RemoveAll(path =>
             string.Equals(path, normalized, StringComparison.OrdinalIgnoreCase));
         SetRepositoryAlias(settings, normalized, null);
+        SetForkContributionTarget(settings, normalized, ForkContributionTarget.Parent);
         return removed > 0;
     }
 
@@ -356,6 +417,30 @@ internal static class NativeSettingsStore
             .ToDictionary(
                 group => group.Key,
                 group => group.Last().Alias!,
+                StringComparer.OrdinalIgnoreCase);
+        settings.ForkContributionTargets ??= new(StringComparer.OrdinalIgnoreCase);
+        settings.ForkContributionTargets = settings.ForkContributionTargets
+            .Where(entry =>
+            {
+                try
+                {
+                    var normalizedPath = NormalizeRepositoryPath(entry.Key);
+                    return recentRepositoryPaths.Contains(normalizedPath)
+                        && Enum.TryParse<ForkContributionTarget>(entry.Value, ignoreCase: true, out var target)
+                        && Enum.IsDefined(target)
+                        && target != ForkContributionTarget.Parent;
+                }
+                catch (Exception)
+                {
+                    return false;
+                }
+            })
+            .GroupBy(
+                entry => NormalizeRepositoryPath(entry.Key),
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Last().Value,
                 StringComparer.OrdinalIgnoreCase);
         settings.CodexModelId = NormalizeSelectionValue(settings.CodexModelId);
         settings.CodexReasoningEffort = NormalizeSelectionValue(settings.CodexReasoningEffort);
