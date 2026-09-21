@@ -312,7 +312,10 @@ public sealed partial class MainWindow
             && worktreesView
             && selectedWorktree is not null
             && !selectedWorktree.IsCurrent;
-        CreateStashButton.IsEnabled = canInteract && worktreesView;
+        CreateStashButton.IsEnabled = canInteract
+            && worktreesView
+            && currentStatus is not null
+            && currentStatus.Changes.Count > 0;
         ApplyStashButton.IsEnabled = canInteract && worktreesView && selectedStash is not null;
         DropStashButton.IsEnabled = canInteract && worktreesView && selectedStash is not null;
 
