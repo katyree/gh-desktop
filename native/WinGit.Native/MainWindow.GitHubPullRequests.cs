@@ -213,6 +213,24 @@ public sealed partial class MainWindow
             openButton,
             "Open selected pull request on GitHub");
 
+        var rulesDetailText = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetName(
+            rulesDetailText,
+            "Selected pull request branch rules");
+
+        var openRulesButton = new Button
+        {
+            Content = "Open branch rules",
+            IsEnabled = false,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        AutomationProperties.SetName(
+            openRulesButton,
+            "Open branch rules on GitHub");
+
         var changedFileRows =
             new ObservableCollection<NativeGitHubPullRequestFileRow>();
         var changedFileList = new ListView
@@ -415,6 +433,8 @@ public sealed partial class MainWindow
                 pullRequestDetailText,
                 detailStatusText,
                 openButton,
+                rulesDetailText,
+                openRulesButton,
             },
         };
         var filesPanel = new StackPanel
@@ -555,6 +575,7 @@ public sealed partial class MainWindow
         var listLoading = false;
         NativeGitHubPullRequestRow? selectedPullRequest = null;
         Uri? selectedCheckLink = null;
+        Uri? selectedRulesUrl = null;
         GitHubRemoteRepositoryIdentity? selectedChecksRepository = null;
         GitHubAccountSession? selectedChecksSession = null;
         NativeGitHubAccountChoice? selectedChecksAccount = null;
@@ -600,12 +621,51 @@ public sealed partial class MainWindow
             RegisterGitHubPullRequestLoad(task);
         }
 
+        void ApplyBranchRulesResult(
+            GitHubRepositoryRulesResult result,
+            GitHubRemoteRepositoryIdentity repository,
+            string owner,
+            string name,
+            string baseRef)
+        {
+            selectedRulesUrl = BuildBranchRulesUrl(repository, owner, name, baseRef);
+            openRulesButton.IsEnabled = selectedRulesUrl is not null;
+            if (result.Availability == GitHubRepositoryRulesAvailability.Unavailable)
+            {
+                rulesDetailText.Text = result.ErrorKind is { } errorKind
+                    ? $"Branch rules unavailable. {FormatPullRequestRulesError(errorKind)}"
+                    : "Branch rules are unavailable for this branch.";
+                return;
+            }
+
+            if (result.Rules.Count == 0)
+            {
+                rulesDetailText.Text = result.Availability == GitHubRepositoryRulesAvailability.Partial
+                    ? "Branch rules partially loaded; no commit-message rules were reported."
+                    : "No commit-message rules for this branch.";
+                return;
+            }
+
+            var lines = result.Rules.Select(rule =>
+                $"• {rule.Description}" +
+                (rule.CanBypass ? " (bypass allowed)" : string.Empty));
+            rulesDetailText.Text =
+                $"Branch rules for {baseRef} ({result.Rules.Count}):\n" +
+                string.Join("\n", lines) +
+                (result.Availability == GitHubRepositoryRulesAvailability.Partial
+                    ? "\nSome rule metadata could not be loaded."
+                    : string.Empty);
+        }
+
         void ClearPullRequestDetailPresentation(string detailMessage)
         {
             selectedPullRequest = null;
             pullRequestDetailText.Text = detailMessage;
             detailStatusText.Text = string.Empty;
             openButton.IsEnabled = false;
+            rulesDetailText.Text = string.Empty;
+            selectedRulesUrl = null;
+            openRulesButton.IsEnabled = false;
             changedFileRows.Clear();
             changedFileList.SelectedIndex = -1;
             changedFileList.IsEnabled = false;
@@ -1414,6 +1474,9 @@ public sealed partial class MainWindow
                     detailStatusText.Text =
                         "GitHub returned not found for this pull request.";
                     openButton.IsEnabled = false;
+                    rulesDetailText.Text = string.Empty;
+                    selectedRulesUrl = null;
+                    openRulesButton.IsEnabled = false;
                     return;
                 }
 
@@ -1462,6 +1525,68 @@ public sealed partial class MainWindow
                 detailStatusText.Text = FormatPullRequestDetailStatus(
                     files,
                     reviews);
+
+                rulesDetailText.Text = "Loading branch rules…";
+                selectedRulesUrl = null;
+                openRulesButton.IsEnabled = false;
+                try
+                {
+                    using var rulesClient = new GitHubRepositoryRulesClient(
+                        CreateGitHubRepositoryRulesOptions(
+                            account.Summary.ApiOrigin));
+                    var rulesOwner = pullRequest.Base.Repository?.OwnerLogin ?? repository.Owner;
+                    var rulesName = pullRequest.Base.Repository?.Name ?? repository.Name;
+                    var rules = await rulesClient.GetForBranchAsync(
+                            account.Session,
+                            rulesOwner,
+                            rulesName,
+                            pullRequest.Base.Ref,
+                            cancellation.Token)
+                        .ConfigureAwait(true);
+                    if (!IsDetailLoadCurrent(row, generation, cancellation))
+                    {
+                        return;
+                    }
+
+                    ApplyBranchRulesResult(
+                        rules,
+                        repository,
+                        rulesOwner,
+                        rulesName,
+                        pullRequest.Base.Ref);
+                }
+                catch (GitHubRepositoryRulesCancelledException)
+                {
+                    if (IsDetailLoadCurrent(row, generation, cancellation))
+                    {
+                        rulesDetailText.Text =
+                            "Branch rules loading was cancelled.";
+                    }
+                }
+                catch (GitHubRepositoryRulesException exception)
+                {
+                    if (IsDetailLoadCurrent(row, generation, cancellation))
+                    {
+                        rulesDetailText.Text =
+                            $"Branch rules unavailable. {FormatPullRequestRulesError(exception.Kind)}";
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    if (IsDetailLoadCurrent(row, generation, cancellation))
+                    {
+                        rulesDetailText.Text =
+                            "Branch rules loading was cancelled.";
+                    }
+                }
+                catch (Exception)
+                {
+                    if (IsDetailLoadCurrent(row, generation, cancellation))
+                    {
+                        rulesDetailText.Text =
+                            "Branch rules could not be loaded.";
+                    }
+                }
 
                 var detailHeadSha = pullRequest.Head.Sha;
                 selectedChecksRepository = repository;
@@ -1697,6 +1822,30 @@ public sealed partial class MainWindow
             }
         }
 
+        async void OpenRulesButton_Click(object sender, RoutedEventArgs args)
+        {
+            var rulesUrl = selectedRulesUrl;
+            if (rulesUrl is null)
+            {
+                detailStatusText.Text =
+                    "The branch rules link is unavailable.";
+                return;
+            }
+
+            try
+            {
+                var launched = await Launcher.LaunchUriAsync(rulesUrl);
+                detailStatusText.Text = launched
+                    ? "The branch rules opened in your browser."
+                    : "Windows could not open the branch rules link.";
+            }
+            catch (Exception)
+            {
+                detailStatusText.Text =
+                    "Windows could not open the branch rules link.";
+            }
+        }
+
         RoutedEventHandler loadButtonClick = async (_, _) =>
         {
             var task = LoadPullRequestsAsync();
@@ -1717,6 +1866,7 @@ public sealed partial class MainWindow
             (_, args) => ModernCheckList_SelectionChanged(modernCheckList, args);
         RoutedEventHandler openButtonClick = OpenButton_Click;
         RoutedEventHandler openCheckLinkButtonClick = OpenCheckLinkButton_Click;
+        RoutedEventHandler openRulesButtonClick = OpenRulesButton_Click;
         RoutedEventHandler rerunCheckButtonClick = (_, _) =>
         {
             var task = RerunCheckAsync();
@@ -1739,6 +1889,7 @@ public sealed partial class MainWindow
         modernCheckList.SelectionChanged += modernCheckSelectionChanged;
         openButton.Click += openButtonClick;
         openCheckLinkButton.Click += openCheckLinkButtonClick;
+        openRulesButton.Click += openRulesButtonClick;
         rerunCheckButton.Click += rerunCheckButtonClick;
         dialog.Closing += dialogClosing;
 
@@ -1768,6 +1919,7 @@ public sealed partial class MainWindow
             dialog.Closing -= dialogClosing;
             rerunCheckButton.Click -= rerunCheckButtonClick;
             openCheckLinkButton.Click -= openCheckLinkButtonClick;
+            openRulesButton.Click -= openRulesButtonClick;
             openButton.Click -= openButtonClick;
             modernCheckList.SelectionChanged -= modernCheckSelectionChanged;
             legacyStatusList.SelectionChanged -= legacyStatusSelectionChanged;
@@ -1802,6 +1954,93 @@ public sealed partial class MainWindow
                 StringComparison.OrdinalIgnoreCase)
             ? GitHubPullRequestChecksClientOptions.ForGitHubCom()
             : GitHubPullRequestChecksClientOptions.ForEnterprise(apiOrigin);
+    }
+
+    private static GitHubRepositoryRulesClientOptions
+        CreateGitHubRepositoryRulesOptions(Uri apiOrigin)
+    {
+        ArgumentNullException.ThrowIfNull(apiOrigin);
+        return apiOrigin.Host.Equals(
+                "api.github.com",
+                StringComparison.OrdinalIgnoreCase)
+            ? GitHubRepositoryRulesClientOptions.ForGitHubCom()
+            : GitHubRepositoryRulesClientOptions.ForEnterprise(apiOrigin);
+    }
+
+    private static string FormatPullRequestRulesError(
+        GitHubRepositoryRulesErrorKind? errorKind) =>
+        errorKind switch
+        {
+            GitHubRepositoryRulesErrorKind.InvalidConfiguration =>
+                "Branch rules are not configured.",
+            GitHubRepositoryRulesErrorKind.SessionMismatch =>
+                "The account does not match this repository host.",
+            GitHubRepositoryRulesErrorKind.Network =>
+                "Branch rules could not be reached.",
+            GitHubRepositoryRulesErrorKind.Timeout =>
+                "Branch rules loading timed out.",
+            GitHubRepositoryRulesErrorKind.Unauthorized =>
+                "GitHub rejected this account.",
+            GitHubRepositoryRulesErrorKind.Forbidden =>
+                "GitHub refused branch rules access.",
+            GitHubRepositoryRulesErrorKind.RateLimited =>
+                "GitHub rate limited branch rules loading.",
+            GitHubRepositoryRulesErrorKind.SamlRequired =>
+                "GitHub requires organization sign-in.",
+            GitHubRepositoryRulesErrorKind.NotFound =>
+                "The repository or branch was not found.",
+            GitHubRepositoryRulesErrorKind.InvalidResponse =>
+                "GitHub returned an invalid branch rules response.",
+            GitHubRepositoryRulesErrorKind.PageLimitReached =>
+                "Branch rules loading reached its page limit.",
+            GitHubRepositoryRulesErrorKind.RulesetLimitReached =>
+                "Branch rules loading reached its ruleset limit.",
+            _ => "Branch rules could not be loaded.",
+        };
+
+    /// <summary>
+    /// Builds the hosted rules page URL for a base branch like Electron's
+    /// rulesets link. Owner, name, and ref segments are escaped, and the
+    /// result must stay on the bound repository host.
+    /// </summary>
+    private static Uri? BuildBranchRulesUrl(
+        GitHubRemoteRepositoryIdentity repository,
+        string owner,
+        string name,
+        string branchRef)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(owner) ||
+                string.IsNullOrWhiteSpace(name) ||
+                string.IsNullOrWhiteSpace(branchRef))
+            {
+                return null;
+            }
+
+            var url = new UriBuilder(Uri.UriSchemeHttps, repository.Hostname)
+            {
+                Path = $"{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(name)}/rules/",
+                Query = "ref=" + Uri.EscapeDataString("refs/heads/" + branchRef),
+            }.Uri;
+            return url.IsAbsoluteUri &&
+                string.Equals(
+                    url.Scheme,
+                    Uri.UriSchemeHttps,
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(
+                    url.Host,
+                    repository.Hostname,
+                    StringComparison.OrdinalIgnoreCase) &&
+                url.UserInfo.Length == 0 &&
+                string.IsNullOrEmpty(url.Fragment)
+                ? url
+                : null;
+        }
+        catch (Exception ex) when (ex is UriFormatException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     private static string FormatPullRequestListStatus(
