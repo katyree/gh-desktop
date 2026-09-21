@@ -65,6 +65,82 @@ public sealed class CodexProtocolTests
     }
 
     [Fact]
+    public void RateLimitResponseMapsAvailableExhaustedAndUnavailableStates()
+    {
+        var available = CodexAppServerProtocol.ParseRateLimitsResponse("""
+            {
+              "rateLimits": {
+                "primary": { "usedPercent": 12, "resetsAt": 2000 },
+                "secondary": null,
+                "spendControlReached": false,
+                "rateLimitReachedType": null
+              }
+            }
+            """);
+
+        Assert.Equal(CodexRateLimitStatus.Available, available.Status);
+        Assert.Equal(12, available.Primary?.UsedPercent);
+        Assert.Null(available.Secondary);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(2000), available.ResetsAt);
+
+        var saturated = CodexAppServerProtocol.ParseRateLimitsResponse("""
+            {
+              "rateLimits": {
+                "primary": { "usedPercent": 100, "resetsAt": 3000 },
+                "secondary": { "usedPercent": 20, "resetsAt": 1000 },
+                "spendControlReached": false,
+                "rateLimitReachedType": null
+              }
+            }
+            """);
+
+        Assert.Equal(CodexRateLimitStatus.Exhausted, saturated.Status);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1000), saturated.ResetsAt);
+
+        var spendControlled = CodexAppServerProtocol.ParseRateLimitsResponse("""
+            {
+              "rateLimits": {
+                "primary": { "usedPercent": 10, "resetsAt": 2000 },
+                "secondary": null,
+                "spendControlReached": true,
+                "rateLimitReachedType": null
+              }
+            }
+            """);
+
+        Assert.Equal(CodexRateLimitStatus.Exhausted, spendControlled.Status);
+
+        var limitReached = CodexAppServerProtocol.ParseRateLimitsResponse("""
+            {
+              "rateLimits": {
+                "primary": { "usedPercent": 10, "resetsAt": 2000 },
+                "secondary": null,
+                "spendControlReached": false,
+                "rateLimitReachedType": "daily"
+              }
+            }
+            """);
+
+        Assert.Equal(CodexRateLimitStatus.Exhausted, limitReached.Status);
+
+        var unavailable = CodexAppServerProtocol.ParseRateLimitsResponse("""
+            {
+              "rateLimits": {
+                "primary": null,
+                "secondary": null,
+                "spendControlReached": false,
+                "rateLimitReachedType": null
+              }
+            }
+            """);
+
+        Assert.Equal(CodexRateLimitStatus.Unavailable, unavailable.Status);
+        Assert.Null(unavailable.Primary);
+        Assert.Null(unavailable.Secondary);
+        Assert.Null(unavailable.ResetsAt);
+    }
+
+    [Fact]
     public void ModelCatalogFiltersHiddenEntriesAndKeepsVisibleMetadata()
     {
         var page = CodexAppServerProtocol.ParseModelListResponse("""
