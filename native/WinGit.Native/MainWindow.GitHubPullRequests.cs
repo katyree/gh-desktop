@@ -718,6 +718,40 @@ public sealed partial class MainWindow
             SetRerunButtonText("Re-run selected check");
             rerunStatusText.Text = string.Empty;
             checksStatusText.Text = FormatPullRequestChecksStatus(result);
+            AnnounceFailedChecks();
+        }
+
+        /// <summary>
+        /// Surfaces failed checks after a load like Electron's failed-checks
+        /// notification: a failure count plus the first failed modern run
+        /// selected so its steps load. Failure means completed with a
+        /// failure or action-required conclusion, or a failed/error legacy
+        /// status.
+        /// </summary>
+        void AnnounceFailedChecks()
+        {
+            var failedLegacy = legacyStatusRows.Count(row =>
+                GitHubCheckClassification.IsFailedCommitStatus(row.Status));
+            var failedModern = modernCheckRows
+                .Where(row => GitHubCheckClassification.IsFailedCheckRun(row.CheckRun))
+                .ToArray();
+            var failedTotal = failedLegacy + failedModern.Length;
+            if (failedTotal == 0)
+            {
+                return;
+            }
+
+            checksStatusText.Text +=
+                $" {failedTotal} check{(failedTotal == 1 ? string.Empty : "s")} failed.";
+            if (modernCheckList.SelectedItem is null)
+            {
+                var firstFailed = failedModern.FirstOrDefault();
+                if (firstFailed is not null)
+                {
+                    modernCheckList.SelectedIndex =
+                        modernCheckRows.IndexOf(firstFailed);
+                }
+            }
         }
 
         void LegacyStatusList_SelectionChanged(

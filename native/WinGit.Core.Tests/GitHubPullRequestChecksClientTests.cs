@@ -452,6 +452,116 @@ public sealed class GitHubPullRequestChecksClientTests
                 StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task FailedCheckClassificationMatchesElectronSemantics()
+    {
+        var headSha = new string('a', 40);
+        object StatusEntry(long id, string state) => new
+        {
+            id,
+            state,
+            context = $"ci/{id}",
+            description = $"{state} description",
+            target_url = $"https://ci.example.test/build/{id}",
+            created_at = "2026-09-01T12:00:00Z",
+            updated_at = "2026-09-01T12:05:00Z",
+        };
+        object CheckRunEntry(long id, string status, string? conclusion) => new
+        {
+            id,
+            head_sha = headSha,
+            name = $"check-{id}",
+            status,
+            conclusion,
+            html_url = $"https://github.com/org/repo/runs/{id}",
+            started_at = "2026-09-01T12:00:00Z",
+            completed_at = status == "completed" ? "2026-09-01T12:05:00Z" : null,
+            output = new { summary = $"summary {id}" },
+            app = new { name = "Synthetic CI" },
+            check_suite = new { id = 100L + id },
+        };
+        var handler = new RoutingHandler(
+            (request, _, _) =>
+            {
+                if (request.RequestUri!.AbsolutePath.EndsWith(
+                        "/status",
+                        StringComparison.Ordinal))
+                {
+                    return Task.FromResult(
+                        JsonResponse(
+                            JsonSerializer.Serialize(
+                                new
+                                {
+                                    state = "failure",
+                                    total_count = 4,
+                                    statuses = new[]
+                                    {
+                                        StatusEntry(1, "failure"),
+                                        StatusEntry(2, "error"),
+                                        StatusEntry(3, "success"),
+                                        StatusEntry(4, "pending"),
+                                    },
+                                    sha = headSha,
+                                })));
+                }
+
+                if (request.RequestUri.AbsolutePath.EndsWith(
+                        "/check-runs",
+                        StringComparison.Ordinal))
+                {
+                    return Task.FromResult(
+                        JsonResponse(
+                            JsonSerializer.Serialize(
+                                new
+                                {
+                                    total_count = 4,
+                                    check_runs = new[]
+                                    {
+                                        CheckRunEntry(1, "completed", "failure"),
+                                        CheckRunEntry(2, "completed", "action_required"),
+                                        CheckRunEntry(3, "completed", "success"),
+                                        CheckRunEntry(4, "in_progress", null),
+                                    },
+                                })));
+                }
+
+                throw new InvalidOperationException(
+                    "Unexpected synthetic classification request.");
+            });
+        using var httpClient = new HttpClient(handler);
+        using var client = new GitHubPullRequestChecksClient(
+            GitHubPullRequestChecksClientOptions.ForGitHubCom(),
+            httpClient);
+        var session = CreateSession(
+            "synthetic-checks-token",
+            new Uri("https://github.com"));
+        Assert.True(
+            GitHubRemoteRepositoryIdentity.TryParse(
+                "https://github.com/org/repo.git",
+                out var repository));
+        Assert.NotNull(repository);
+
+        var result = await client.LoadAsync(session, repository!, headSha);
+
+        Assert.True(result.IsComplete);
+        Assert.True(GitHubCheckClassification.IsFailedCommitStatus(
+            Assert.Single(result.Status.Statuses, status => status.Id == 1)));
+        Assert.True(GitHubCheckClassification.IsFailedCommitStatus(
+            Assert.Single(result.Status.Statuses, status => status.Id == 2)));
+        Assert.False(GitHubCheckClassification.IsFailedCommitStatus(
+            Assert.Single(result.Status.Statuses, status => status.Id == 3)));
+        Assert.False(GitHubCheckClassification.IsFailedCommitStatus(
+            Assert.Single(result.Status.Statuses, status => status.Id == 4)));
+        Assert.True(GitHubCheckClassification.IsFailedCheckRun(
+            Assert.Single(result.CheckRuns.CheckRuns, check => check.Id == 1)));
+        Assert.True(GitHubCheckClassification.IsFailedCheckRun(
+            Assert.Single(result.CheckRuns.CheckRuns, check => check.Id == 2)));
+        Assert.False(GitHubCheckClassification.IsFailedCheckRun(
+            Assert.Single(result.CheckRuns.CheckRuns, check => check.Id == 3)));
+        Assert.False(GitHubCheckClassification.IsFailedCheckRun(
+            Assert.Single(result.CheckRuns.CheckRuns, check => check.Id == 4)));
+    }
+
     private static GitHubAccountSession CreateSession(
         string accessToken,
         Uri issuerHost) =>
