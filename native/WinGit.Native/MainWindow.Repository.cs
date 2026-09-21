@@ -312,6 +312,10 @@ public sealed partial class MainWindow
             && worktreesView
             && selectedWorktree is not null
             && !selectedWorktree.IsCurrent;
+        RenameWorktreeButton.IsEnabled = canInteract
+            && worktreesView
+            && selectedWorktree is not null
+            && !selectedWorktree.IsCurrent;
         CreateStashButton.IsEnabled = canInteract
             && worktreesView
             && currentStatus is not null
@@ -1119,6 +1123,60 @@ public sealed partial class MainWindow
         }
 
         await OpenRepositoryAsync(worktree.Path);
+    }
+
+    private async void RenameWorktreeButton_Click(object sender, RoutedEventArgs e)
+    {
+        var worktree = selectedWorktree;
+        if (!CanStartRepositoryWrite() || worktree is null || worktree.IsCurrent)
+        {
+            return;
+        }
+
+        var pathBox = new TextBox
+        {
+            Header = "New folder",
+            Text = worktree.Path,
+        };
+        AutomationProperties.SetName(pathBox, "New worktree folder");
+        var dialog = CreateDialog("Rename worktree?", "Rename", new StackPanel
+        {
+            Spacing = 12,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = $"Move the worktree at \"{worktree.Path}\" to a new folder? The checked-out branch and files move with it. The destination must not already exist.",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                pathBox,
+            },
+        });
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var newPath = pathBox.Text.Trim();
+        if (newPath.Length == 0)
+        {
+            ShowError("Worktree folder is required", new ArgumentException("Enter a destination folder for the worktree."));
+            return;
+        }
+
+        var sourcePath = worktree.Path;
+        await RunRepositoryWriteAsync(
+            "Renaming worktree…",
+            "Worktree renamed",
+            "Worktree rename cancelled; refreshing repository…",
+            "Unable to rename worktree",
+            async (root, token) =>
+            {
+                await repositoryService.MoveWorktreeAsync(root, sourcePath, newPath, token);
+                StatusText.Text = $"Renamed worktree to {newPath}";
+            },
+            refreshBranches: true,
+            refreshWorktrees: true);
     }
 
     private async void RemoveWorktreeButton_Click(object sender, RoutedEventArgs e)

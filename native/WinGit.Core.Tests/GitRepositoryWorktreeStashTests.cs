@@ -340,6 +340,69 @@ public sealed class GitRepositoryWorktreeStashTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task MoveWorktreeRenamesSecondaryAndRefusesMainCurrentAndExistingDestination()
+    {
+        WriteFile(repositoryRoot, "tracked.txt", "base\n");
+        Commit(repositoryRoot, "initial");
+        RunGit(repositoryRoot, "branch", "feature/move");
+
+        var service = new GitRepositoryService();
+        secondaryWorktreePath = Path.Combine(FixtureParent, Guid.NewGuid().ToString("N"));
+        await service.AddWorktreeAsync(
+            repositoryRoot,
+            secondaryWorktreePath,
+            "feature/move",
+            newBranchName: null,
+            CancellationToken.None);
+        var movedPath = secondaryWorktreePath + "-renamed";
+        try
+        {
+            await service.MoveWorktreeAsync(repositoryRoot, secondaryWorktreePath, movedPath, CancellationToken.None);
+            Assert.True(Directory.Exists(movedPath));
+            Assert.False(Directory.Exists(secondaryWorktreePath));
+            var moved = Assert.Single(
+                await service.GetWorktreesAsync(repositoryRoot, CancellationToken.None),
+                worktree => PathsEqual(worktree.Path, movedPath));
+            Assert.Equal("feature/move", moved.Branch);
+            Assert.Equal("base\n", File.ReadAllText(Path.Combine(movedPath, "tracked.txt")));
+            secondaryWorktreePath = movedPath;
+
+            var existingDestination = await Assert.ThrowsAsync<IOException>(
+                () => service.MoveWorktreeAsync(repositoryRoot, movedPath, repositoryRoot, CancellationToken.None));
+            Assert.Contains("already exists", existingDestination.Message, StringComparison.OrdinalIgnoreCase);
+
+            var mainRefused = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.MoveWorktreeAsync(repositoryRoot, repositoryRoot, movedPath + "-main", CancellationToken.None));
+            Assert.Contains("main worktree", mainRefused.Message, StringComparison.OrdinalIgnoreCase);
+
+            var currentRefused = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.MoveWorktreeAsync(movedPath, movedPath, movedPath + "-current", CancellationToken.None));
+            Assert.Contains("current worktree", currentRefused.Message, StringComparison.OrdinalIgnoreCase);
+
+            var unregistered = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.MoveWorktreeAsync(
+                    repositoryRoot,
+                    Path.Combine(FixtureParent, Guid.NewGuid().ToString("N")),
+                    movedPath + "-missing",
+                    CancellationToken.None));
+            Assert.Contains("not a registered secondary worktree", unregistered.Message, StringComparison.OrdinalIgnoreCase);
+
+            Assert.True(Directory.Exists(movedPath));
+            Assert.Contains(
+                await service.GetWorktreesAsync(repositoryRoot, CancellationToken.None),
+                worktree => PathsEqual(worktree.Path, movedPath));
+        }
+        finally
+        {
+            if (secondaryWorktreePath is not null)
+            {
+                await service.RemoveWorktreeAsync(repositoryRoot, secondaryWorktreePath, CancellationToken.None);
+                secondaryWorktreePath = null;
+            }
+        }
+    }
+
     public void Dispose()
     {
         DeleteDirectory(secondaryWorktreePath);

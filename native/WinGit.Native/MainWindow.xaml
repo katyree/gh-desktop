@@ -1463,6 +1463,7 @@
                             <ListView x:Name="WorktreesList" Grid.Row="1" ItemTemplate="{StaticResource WorktreeRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="WorktreesList_SelectionChanged" SelectionMode="Single" AutomationProperties.Name="Git worktrees" />
                             <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Padding="8,6">
                                 <Button x:Name="OpenWorktreeButton" Content="Open selected" Click="OpenWorktreeButton_Click" AutomationProperties.Name="Open selected worktree" />
+                                <Button x:Name="RenameWorktreeButton" Content="Rename selected" Click="RenameWorktreeButton_Click" AutomationProperties.Name="Rename selected worktree" />
                                 <Button x:Name="RemoveWorktreeButton" Content="Remove selected" Click="RemoveWorktreeButton_Click" AutomationProperties.Name="Remove selected worktree" />
                             </StackPanel>
                         </Grid>
