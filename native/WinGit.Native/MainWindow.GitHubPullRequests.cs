@@ -2014,12 +2014,58 @@ public sealed partial class MainWindow
                 var description = string.IsNullOrWhiteSpace(CheckRun.Description)
                     ? "No check summary."
                     : CheckRun.Description;
+                var duration = FormatCheckRunDuration(CheckRun.StartedAt, CheckRun.CompletedAt);
                 return
                     $"Modern check run: {CheckRun.Name}\n" +
                     $"Status: {StatusLabel} · Result: {ConclusionLabel}\n" +
+                    (duration is null ? string.Empty : $"{duration}\n") +
                     $"{app}\n{description}\n" +
                     "A GitHub check details link is available.";
             }
+        }
+
+        /// <summary>
+        /// Formats a check run duration in short notation like Electron
+        /// ("1m 30s"). Returns null when no duration can be stated.
+        /// </summary>
+        private static string? FormatCheckRunDuration(
+            DateTimeOffset? startedAt,
+            DateTimeOffset? completedAt)
+        {
+            if (startedAt is null)
+            {
+                return null;
+            }
+
+            if (completedAt is null)
+            {
+                return $"Running since {startedAt.Value.ToLocalTime():MMM d, yyyy h:mm tt}.";
+            }
+
+            var duration = completedAt.Value - startedAt.Value;
+            if (duration < TimeSpan.Zero)
+            {
+                return null;
+            }
+
+            var parts = new List<string>(3);
+            if (duration.Days > 0)
+            {
+                parts.Add($"{duration.Days}d");
+            }
+
+            if (duration.Hours > 0 || parts.Count > 0)
+            {
+                parts.Add($"{duration.Hours}h");
+            }
+
+            if (duration.Minutes > 0 || parts.Count > 0)
+            {
+                parts.Add($"{duration.Minutes}m");
+            }
+
+            parts.Add($"{duration.Seconds}s");
+            return $"Ran for {string.Join(" ", parts)}.";
         }
 
         public override string ToString() => DisplayName;
