@@ -559,13 +559,13 @@ outside the copied tree at
 `C:\Users\kylea\AppData\Local\Temp\wingit-task80-capture-6d31d24ff9e34bf89ea94e9365502423.png`.
 This proves that a user can unpack the native directory and start the copied
 executable. No installer, MSI, install or uninstall flow, normal interactive
-launch, signing, or updater was produced or tested. Task 81 still owns native
-release notes, acknowledgements, and license work. The Electron package and
-`script/package.ts` were not changed.
+launch, signing, or updater was produced or tested. Task 81's native release
+notes, acknowledgements, and license evidence is recorded below. The Electron
+package and `script/package.ts` were not changed.
 
 | # | Work unit and source | Depends on | Native status | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| 64 | Package the native app (task 80) and publish release notes and acknowledgements (task 81); use `native/build.ps1`, `script/package.ts`, `app/src/ui/release-notes`, and `app/src/ui/acknowledgements`. | 1, 3 | Partial | Task 80 proves a clean `win-x64` output can be unpacked and launched without changing the Electron package. Task 81 still owns native release notes, acknowledgements, and license work. |
+| 64 | Package the native app (task 80) and publish release notes and acknowledgements (task 81); use `native/build.ps1`, `script/package.ts`, `app/src/ui/release-notes`, and `app/src/ui/acknowledgements`. | 1, 3 | Partial | Task 80 proves a clean `win-x64` output can be unpacked and launched without changing the Electron package. Task 81 adds root-level `ReleaseNotes.txt`, `Acknowledgements.txt`, and `LICENSE.txt` to the native output. The notes explicitly identify the WinUI 3 native preview and local Release win-x64 build. A Release build and publish passed with 0 warnings and 0 errors; an independent clean copy contained 915 files, including all three root documents and the bundled Git, Dugite, and Codex license files at the paths named in the acknowledgements. The Electron package was unchanged. No public release, signing, installer, or updater was produced or verified; task 65 and task 66 own those gates. |
 | 65 | Establish native signing and release gates; use `script/release-config.ts`, `README.md`, and `docs/process/win-git-preview-release-gate.md`. | 64 | Remaining | A release records signing status and fails closed when the required certificate or release evidence is absent. |
 | 66 | Provide an update channel and update progress; use `app/src/main-process/squirrel-updater.ts`, `app/src/ui/installing-update`, `app/src/ui/lib/update-store.ts`, and `app/src/lib/get-updater-guid.ts`. | 64, 65 | Remaining | An available update can be verified, downloaded, and installed with visible progress, and an unavailable or unsigned update is not applied silently. |
 

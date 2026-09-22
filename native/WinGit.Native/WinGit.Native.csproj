@@ -42,6 +42,9 @@
   <ItemGroup>
     <None Include="Assets\icon-logo.ico"
              CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="ReleaseNotes.txt" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="Acknowledgements.txt" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <Target Name="IncludeWinUiArtifactsInPublish" AfterTargets="ComputeFilesToPublish">

@@ -1,0 +1,15 @@
+WinGit Native preview - Release win-x64 build
+
+This is the separate WinUI 3 native application. These notes describe the
+local native package built from this source tree. They do not describe an
+Electron release or announce a public WinGit release.
+
+This package is an unpackaged, self-contained Windows x64 output. Launch
+WinGit.Native.exe from this directory. It includes the native app, its
+bundled Git runtime, and its bundled Codex runtime.
+
+The native migration is in progress. See native/MIGRATION.md in the source
+repository for the current feature inventory and verification limits.
+
+For license terms and third-party notices, read LICENSE.txt and
+Acknowledgements.txt beside this file.
