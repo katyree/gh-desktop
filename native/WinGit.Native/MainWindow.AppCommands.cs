@@ -31,6 +31,30 @@ public sealed partial class MainWindow
             });
     }
 
+    private void UpdateApplicationCommandStates()
+    {
+        if (CreateRepositoryMenuItem is null)
+        {
+            return;
+        }
+
+        var canStartRepositorySetup = CanStartRepositorySetup();
+        var canNavigate = MainNavigation.IsEnabled;
+        var hasRepository = repositoryRoot is not null;
+
+        CreateRepositoryMenuItem.IsEnabled = canStartRepositorySetup;
+        OpenRepositoryMenuItem.IsEnabled = OpenRepositoryButton.IsEnabled
+            && repositoryPickerTask is null;
+        CloneRepositoryMenuItem.IsEnabled = canStartRepositorySetup;
+        SettingsMenuItem.IsEnabled = canNavigate;
+        ChangesMenuItem.IsEnabled = canNavigate && hasRepository;
+        HistoryMenuItem.IsEnabled = canNavigate && hasRepository;
+        ChooseRepositoryMenuItem.IsEnabled = RepositoryChooserButton.IsEnabled
+            && repositoryPickerTask is null;
+        BranchesMenuItem.IsEnabled = canNavigate && hasRepository;
+        WorktreesMenuItem.IsEnabled = canNavigate && hasRepository;
+    }
+
     private async void AppCommandMenuItem_Click(
         object sender,
         RoutedEventArgs args)

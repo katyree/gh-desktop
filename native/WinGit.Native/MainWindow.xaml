@@ -504,21 +504,24 @@
 
         <MenuBar Grid.Row="1" AutomationProperties.Name="Application menu">
             <MenuBarItem Title="File">
-                <MenuFlyoutItem Text="Create repository…"
+                <MenuFlyoutItem x:Name="CreateRepositoryMenuItem"
+                                Text="Create repository…"
                                 Tag="CreateRepository"
                                 Click="AppCommandMenuItem_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="N" Modifiers="Control" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-                <MenuFlyoutItem Text="Open repository…"
+                <MenuFlyoutItem x:Name="OpenRepositoryMenuItem"
+                                Text="Open repository…"
                                 Tag="OpenRepository"
                                 Click="AppCommandMenuItem_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="O" Modifiers="Control" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-                <MenuFlyoutItem Text="Clone repository…"
+                <MenuFlyoutItem x:Name="CloneRepositoryMenuItem"
+                                Text="Clone repository…"
                                 Tag="CloneRepository"
                                 Click="AppCommandMenuItem_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
@@ -553,35 +556,40 @@
                                 Click="AppCommandMenuItem_Click" />
             </MenuBarItem>
             <MenuBarItem Title="View">
-                <MenuFlyoutItem Text="Changes"
+                <MenuFlyoutItem x:Name="ChangesMenuItem"
+                                Text="Changes"
                                 Tag="Changes"
                                 Click="AppCommandMenuItem_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="Number1" Modifiers="Control" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-                <MenuFlyoutItem Text="History"
+                <MenuFlyoutItem x:Name="HistoryMenuItem"
+                                Text="History"
                                 Tag="History"
                                 Click="AppCommandMenuItem_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="Number2" Modifiers="Control" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-                <MenuFlyoutItem Text="Repository chooser"
+                <MenuFlyoutItem x:Name="ChooseRepositoryMenuItem"
+                                Text="Repository chooser"
                                 Tag="ChooseRepository"
                                 Click="AppCommandMenuItem_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="T" Modifiers="Control" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-                <MenuFlyoutItem Text="Branches"
+                <MenuFlyoutItem x:Name="BranchesMenuItem"
+                                Text="Branches"
                                 Tag="Branches"
                                 Click="AppCommandMenuItem_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="B" Modifiers="Control" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-                <MenuFlyoutItem Text="Worktrees &amp; stashes"
+                <MenuFlyoutItem x:Name="WorktreesMenuItem"
+                                Text="Worktrees &amp; stashes"
                                 Tag="Worktrees"
                                 Click="AppCommandMenuItem_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
