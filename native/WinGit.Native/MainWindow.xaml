@@ -165,7 +165,13 @@
                 </Grid>
             </DataTemplate>
             <DataTemplate x:Key="PartialDiffRowTemplate">
-                <Grid MinWidth="900" MinHeight="24" Padding="0" AutomationProperties.Name="{Binding AutomationName}">
+                <Grid MinWidth="900" MinHeight="24" Padding="0" Background="Transparent" AutomationProperties.Name="{Binding AutomationName}"
+                      Loaded="PartialDiffRow_Loaded"
+                      Unloaded="PartialDiffRow_Unloaded"
+                      PointerEntered="PartialDiffRow_PointerEntered"
+                      PointerExited="PartialDiffRow_PointerExited"
+                      GotFocus="PartialDiffRow_GotFocus"
+                      LostFocus="PartialDiffRow_LostFocus">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="34" />
                         <ColumnDefinition Width="56" />
@@ -1716,6 +1722,32 @@
                                     <ComboBoxItem Content="Light" Tag="Light" />
                                     <ComboBoxItem Content="Dark" Tag="Dark" />
                                 </ComboBox>
+
+                                <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Accessibility" FontSize="16" FontWeight="SemiBold" />
+                                        <CheckBox x:Name="UnderlineLinksCheckBox"
+                                                  Content="Underline links"
+                                                  Click="UnderlineLinksCheckBox_Click"
+                                                  AutomationProperties.Name="Underline links" />
+                                        <TextBlock Text="Underline browser links in pull request details and check links so they are easier to distinguish."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap" />
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="Example:" Style="{StaticResource SecondaryTextStyle}" />
+                                            <TextBlock x:Name="AccessibilityExampleLinkText"
+                                                       Text="This is an example link"
+                                                       AutomationProperties.Name="Example browser link" />
+                                        </StackPanel>
+                                        <CheckBox x:Name="ShowDiffCheckMarksCheckBox"
+                                                  Content="Show check marks in the diff"
+                                                  Click="ShowDiffCheckMarksCheckBox_Click"
+                                                  AutomationProperties.Name="Show check marks in the diff" />
+                                        <TextBlock Text="Show check marks beside diff line numbers and line groups when committing."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
 
                                 <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                     <StackPanel Spacing="8">

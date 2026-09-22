@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using WinGit.Core.GitHub;
 using Windows.Foundation;
 using Windows.System;
+using Windows.UI.Text;
 
 namespace WinGit.Native;
 
@@ -195,6 +196,9 @@ public sealed partial class MainWindow
             pullRequestDetailText,
             "Selected GitHub pull request details");
 
+        var linkTextDecorations = settings.UnderlineLinks
+            ? TextDecorations.Underline
+            : TextDecorations.None;
         var detailStatusText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
@@ -205,7 +209,11 @@ public sealed partial class MainWindow
 
         var openButton = new Button
         {
-            Content = "Open on GitHub",
+            Content = new TextBlock
+            {
+                Text = "Open on GitHub",
+                TextDecorations = linkTextDecorations,
+            },
             IsEnabled = false,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
@@ -223,7 +231,11 @@ public sealed partial class MainWindow
 
         var openRulesButton = new Button
         {
-            Content = "Open branch rules",
+            Content = new TextBlock
+            {
+                Text = "Open branch rules",
+                TextDecorations = linkTextDecorations,
+            },
             IsEnabled = false,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
@@ -357,7 +369,11 @@ public sealed partial class MainWindow
 
         var openCheckLinkButton = new Button
         {
-            Content = "Open selected check link",
+            Content = new TextBlock
+            {
+                Text = "Open selected check link",
+                TextDecorations = linkTextDecorations,
+            },
             IsEnabled = false,
             HorizontalAlignment = HorizontalAlignment.Left,
         };

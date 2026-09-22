@@ -147,6 +147,7 @@ public sealed partial class MainWindow : Window
         InitializeIntegrationControls();
         InitializeGitConfigControls();
         InitializePromptControls();
+        InitializeAccessibilityControls();
         ApplyGitProcessOptions();
 
         if (captureOptions is not null)
