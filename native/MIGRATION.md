@@ -150,6 +150,30 @@ palette, one Dark palette, and System. Electron's additional fixed themes,
 including Nord, Monokai Pro, One Dark, Dracula, Tokyo Night, Catppuccin Mocha,
 Gruvbox Dark, Graphite, and AMOLED, remain outside this slice.
 
+Task 78 accessibility evidence uses the current source and a copied Release
+publish. Native persists `UnderlineLinks` and `ShowDiffCheckMarks`, both
+defaulting to `true`, and the Accessibility Settings view exposes both
+controls with a dynamic example. The three browser-link buttons in the pull
+request dialog read the underline preference when the dialog is created.
+Selectable partial-diff checkboxes hide their markers when the setting is off
+unless a user hovers or focuses them. The checkboxes remain selectable and
+automation-named, and the setting updates the view immediately. The Release
+`win-x64` build and publish completed with zero warnings and errors. The source
+publish is `native/artifacts/task78-accessibility-win-x64`; the copied run
+contains the required XBF, PRI, and icon resources. Isolated captures
+`native/artifacts/task78-settings-on.png` and
+`native/artifacts/task78-settings-off.png` show the controls and preview.
+Synthetic `partial-staging-check` captures at
+`native/artifacts/task78-diff-on.png` and
+`native/artifacts/task78-diff-off.png` show markers and hidden markers. Both
+handler reports record 38 PASS and 0 FAIL, including stale-guard preservation.
+The full Core suite passed 226/226 with 0 failed and 0 skipped in 1 minute 44
+seconds after a fresh test-project restore.
+Physical selector, keyboard, and screen-reader click-through, live pull-request
+link-dialog proof, and an actual High Contrast switch remain unverified. Zoom
+is deferred to task 79. Native still lacks inline clickable links in commit or
+comment plain text. This evidence does not establish full Electron parity.
+
 Rows 21 and 33 now have native UI and Core API coverage. `MainWindow.UndoTags.cs`
 uses `UndoCommitAsync` with the expected HEAD guard and uses `GetTagsAsync`,
 `CreateTagAsync`, and `DeleteTagAsync` with the tag object ID guard. The History
@@ -492,7 +516,7 @@ unverified. The post-await workspace guard passed its later build check (Release
 | 54 | Persist native settings and recent repositories; use `native/WinGit.Native/NativeSettings.cs` and `app/src/lib/databases/repositories-database.ts` as references. | 4, 53 | Partial | Native settings are stored under the `WinGit.Native` data boundary, recover from malformed data, and never import Electron or GitHub auth state. |
 | 55 | Provide Git identity, editor, and integration settings; use `app/src/ui/preferences/git.tsx`, `app/src/ui/editor`, and `app/src/ui/preferences/integrations.tsx`. | 3 | Partial | A setting change is visible to the next matching Git or editor action and reports invalid configuration before execution. Core reads and writes scoped Git identity and default-branch values while preserving unrelated configuration, covered by `GitRepositoryConfigurationTests`; Native discovers and persists stable editor and built-in shell selections, validates the selected executable and repository containment before launch, and reports a saved selection that is no longer available before launch. Electron preferences replace an unavailable saved editor with the first discovered option; native requires a new selection. Native does not expose Electron custom-editor or custom-shell paths and arguments, including `%TARGET_PATH%`. Full Settings UI coverage, next-action desktop proof, and invalid-configuration interaction remain unverified. |
 | 56 | Provide notification, prompt, and advanced settings; use `app/src/ui/preferences/notifications.tsx`, `prompts.tsx`, and `advanced.tsx`. | 53 | Partial | Native implements persisted GitHub notifications with an enabled-by-default setting, a Settings control with Windows availability status, bounded current-repository monitoring for pull-request comments, reviews, and failed checks, and safe pull-request browser targets. It persists the supported prompt controls and defaults, wires their confirmation actions, persists the dirty-branch strategy, and shows an advisory warning for summaries longer than 50 characters. Advanced settings expose nonselected-repository indicators, system OpenSSH, and opt-in Git Credential Manager use for Core-classified generic HTTPS remotes. The indicator scheduler waits 2 minutes plus 15 minutes before its first cycle, runs every 15 minutes after that, gates fetches to once per 30 minutes, and selects one remote. Background Git operations are noninteractive. The evidence section records the 226/226 Core suite, the zero-warning Release `win-x64` build, the source publish, and isolated default and disabled settings captures. Physical checkbox click-through, Windows notification settings, toast delivery and activation, live background network behavior, live GCM sign-in, and live GitHub event delivery remain unverified. Native has no selected-repository periodic fetch path, so the row stays `Partial`. |
-| 57 | Provide accessibility, keyboard, and zoom settings; use `app/src/ui/preferences/accessibility.tsx`, `app/src/ui/keyboard-shortcut`, and `app/src/ui/window/zoom-info.tsx`. | 3 | Remaining | Keyboard navigation reaches every action, controls expose accessible names, and zoom changes are visible without layout loss. |
+| 57 | Provide accessibility, keyboard, and zoom settings; use `app/src/ui/preferences/accessibility.tsx`, `app/src/ui/keyboard-shortcut`, and `app/src/ui/window/zoom-info.tsx`. | 3 | Partial | Native persists `UnderlineLinks` and `ShowDiffCheckMarks` with `true` defaults and exposes accessible Settings controls with a dynamic example. Pull-request browser-link buttons read the underline setting when their dialog is created. Partial-diff checkboxes hide markers when the setting is off unless hovered or focused, remain selectable and automation-named, and update immediately. The Release `win-x64` build and publish completed with zero warnings and errors, and the isolated Settings and `partial-staging-check` captures show both states with 38 PASS and 0 FAIL handler reports. Physical selector, keyboard, and screen-reader click-through, live pull-request link-dialog proof, and an actual High Contrast switch remain unverified. Zoom is deferred to task 79, and native still lacks inline clickable links in commit or comment plain text, so the row stays `Partial`. |
 
 ## 9. Codex account and review features
 

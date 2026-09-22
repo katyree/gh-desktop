@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using WinGit.Core;
 
 namespace WinGit.Native;
@@ -8,6 +9,9 @@ public sealed partial class MainWindow
 {
     private readonly DiffRowCollection<PartialDiffRow> partialDiffRows = [];
     private readonly HashSet<PartialDiffSelection> partialSelections = [];
+    private readonly HashSet<Grid> partialDiffRowContainers = [];
+    private readonly HashSet<Grid> partialDiffRowsPointerOver = [];
+    private readonly HashSet<Grid> partialDiffRowsFocused = [];
     private PartialFileDiff? selectedPartialDiff;
     private string? partialSelectionMessage;
 
@@ -99,6 +103,96 @@ public sealed partial class MainWindow
         }
 
         ApplyPartialSelection(row, checkBox.IsChecked == true);
+    }
+
+    private void PartialDiffRow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Grid row)
+        {
+            return;
+        }
+
+        partialDiffRowContainers.Add(row);
+        UpdatePartialDiffRowCheckBoxVisibility(row);
+    }
+
+    private void PartialDiffRow_Unloaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Grid row)
+        {
+            return;
+        }
+
+        partialDiffRowContainers.Remove(row);
+        partialDiffRowsPointerOver.Remove(row);
+        partialDiffRowsFocused.Remove(row);
+    }
+
+    private void PartialDiffRow_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is not Grid row)
+        {
+            return;
+        }
+
+        partialDiffRowsPointerOver.Add(row);
+        UpdatePartialDiffRowCheckBoxVisibility(row);
+    }
+
+    private void PartialDiffRow_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is not Grid row)
+        {
+            return;
+        }
+
+        partialDiffRowsPointerOver.Remove(row);
+        UpdatePartialDiffRowCheckBoxVisibility(row);
+    }
+
+    private void PartialDiffRow_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Grid row)
+        {
+            return;
+        }
+
+        partialDiffRowsFocused.Add(row);
+        UpdatePartialDiffRowCheckBoxVisibility(row);
+    }
+
+    private void PartialDiffRow_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Grid row)
+        {
+            return;
+        }
+
+        partialDiffRowsFocused.Remove(row);
+        UpdatePartialDiffRowCheckBoxVisibility(row);
+    }
+
+    internal void RefreshPartialDiffRowCheckBoxVisibility()
+    {
+        foreach (var row in partialDiffRowContainers.ToArray())
+        {
+            UpdatePartialDiffRowCheckBoxVisibility(row);
+        }
+    }
+
+    private void UpdatePartialDiffRowCheckBoxVisibility(Grid row)
+    {
+        var checkBox = row.Children.OfType<CheckBox>().FirstOrDefault();
+        if (checkBox is null)
+        {
+            return;
+        }
+
+        checkBox.Opacity = settings.ShowDiffCheckMarks
+            || partialDiffRowsPointerOver.Contains(row)
+            || partialDiffRowsFocused.Contains(row)
+            ? 1
+            : 0;
     }
 
     private void ApplyPartialSelection(PartialDiffRow row, bool selected)

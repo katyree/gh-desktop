@@ -66,6 +66,10 @@ internal sealed class NativeSettings
 
     public bool HideWhitespaceChanges { get; set; }
 
+    public bool UnderlineLinks { get; set; } = true;
+
+    public bool ShowDiffCheckMarks { get; set; } = true;
+
     public bool NotificationsEnabled { get; set; } = true;
 
     public bool RepositoryIndicatorsEnabled { get; set; } = true;
@@ -242,6 +246,8 @@ internal static class NativeSettingsStore
                 ImageDiffMode = settings.ImageDiffMode,
                 TextDiffMode = settings.TextDiffMode,
                 HideWhitespaceChanges = settings.HideWhitespaceChanges,
+                UnderlineLinks = settings.UnderlineLinks,
+                ShowDiffCheckMarks = settings.ShowDiffCheckMarks,
                 NotificationsEnabled = settings.NotificationsEnabled,
                 RepositoryIndicatorsEnabled = settings.RepositoryIndicatorsEnabled,
                 UseWindowsOpenSSH = settings.UseWindowsOpenSSH,
