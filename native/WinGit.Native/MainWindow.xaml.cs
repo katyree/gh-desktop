@@ -76,6 +76,7 @@ public sealed partial class MainWindow : Window
         repositoryService = new GitRepositoryService(gitExecutablePath);
         InitializeComponent();
         InitializeApplicationCommandAccelerators();
+        InitializeZoomCommands();
         InitializeThemeSynchronization();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
@@ -148,6 +149,7 @@ public sealed partial class MainWindow : Window
         InitializeGitConfigControls();
         InitializePromptControls();
         InitializeAccessibilityControls();
+        InitializeZoomControls();
         ApplyGitProcessOptions();
 
         if (captureOptions is not null)
@@ -312,6 +314,7 @@ public sealed partial class MainWindow : Window
         }
 
         DisposeThemeSynchronization();
+        DisposeZoomControls();
         Activated -= MainWindow_Activated;
         RepositoryIndicatorUpdated -= MainWindow_RepositoryIndicatorUpdated;
 

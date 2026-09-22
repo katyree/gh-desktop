@@ -620,10 +620,32 @@
                         <KeyboardAccelerator Key="W" Modifiers="Control,Menu" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem x:Name="ResetZoomMenuItem"
+                                Text="Reset zoom"
+                                Tag="Reset"
+                                Click="ZoomMenuItem_Click" />
+                <MenuFlyoutItem x:Name="ZoomInMenuItem"
+                                Text="Zoom in"
+                                Tag="In"
+                                Click="ZoomMenuItem_Click" />
+                <MenuFlyoutItem x:Name="ZoomOutMenuItem"
+                                Text="Zoom out"
+                                Tag="Out"
+                                Click="ZoomMenuItem_Click" />
             </MenuBarItem>
         </MenuBar>
 
-        <NavigationView x:Name="MainNavigation" Grid.Row="2" IsBackButtonVisible="Collapsed" IsSettingsVisible="True" IsPaneToggleButtonVisible="True" OpenPaneLength="200" PaneDisplayMode="LeftCompact" SelectionChanged="MainNavigation_SelectionChanged" AutomationProperties.Name="WinGit navigation">
+        <ScrollViewer x:Name="WorkspaceZoomViewer"
+                      Grid.Row="2"
+                      ZoomMode="Enabled"
+                      MinZoomFactor="0.67"
+                      MaxZoomFactor="2"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto"
+                      Loaded="WorkspaceZoomViewer_Loaded"
+                      SizeChanged="WorkspaceZoomViewer_SizeChanged">
+            <NavigationView x:Name="MainNavigation" IsBackButtonVisible="Collapsed" IsSettingsVisible="True" IsPaneToggleButtonVisible="True" OpenPaneLength="200" PaneDisplayMode="LeftCompact" SelectionChanged="MainNavigation_SelectionChanged" AutomationProperties.Name="WinGit navigation">
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="Changes" Tag="changes">
                     <NavigationViewItem.Icon>
@@ -2151,6 +2173,22 @@
                     </Grid>
                 </Grid>
             </NavigationView.Content>
-        </NavigationView>
+            </NavigationView>
+        </ScrollViewer>
+        <Border x:Name="ZoomInfoBorder"
+                Grid.Row="2"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Margin="0,0,0,44"
+                Padding="10,6"
+                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                CornerRadius="6"
+                Visibility="Collapsed"
+                IsHitTestVisible="False">
+            <TextBlock x:Name="ZoomPercentText"
+                       AutomationProperties.Name="Workspace zoom"
+                       AutomationProperties.LiveSetting="Polite"
+                       Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+        </Border>
     </Grid>
 </Window>
