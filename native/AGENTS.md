@@ -18,6 +18,11 @@ Microsoft.Windows.SDK.BuildTools `10.0.26100.4654`. Restore may report `NU1900`
 when the NuGet vulnerability service is unavailable. Keep package auditing
 enabled.
 
+Keep `Platform`, `Configuration`, and `Runtime` consistent across a build and
+the matching `--no-build` publish. With `-p:Platform=x64`, outputs land under
+`bin\x64`; omitting that property can publish a stale `bin\Release` tree.
+Compare output paths and hashes before launching a copied publish.
+
 Copy the published tree to a temporary directory before launching a capture.
 Write the PNG outside that copy. See `README.md` for the capture command and
 the accepted `--view` values.

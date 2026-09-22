@@ -154,8 +154,60 @@ public sealed partial class MainWindow : Window
             : string.Empty;
         if (!string.IsNullOrWhiteSpace(commandLineRepository))
         {
-            await OpenRepositoryAsync(commandLineRepository);
+            if (RepositoryUrlParser.TryParse(commandLineRepository, out var repositoryAction)
+                && repositoryAction is not null)
+            {
+                await RouteStartupRepositoryUrlAsync(repositoryAction);
+            }
+            else if (commandLineRepository.StartsWith("wingit:", StringComparison.OrdinalIgnoreCase))
+            {
+                ShowError(
+                    "Unable to open application link",
+                    new InvalidOperationException("The application link is invalid or unsupported."));
+            }
+            else if (IsUnsupportedStartupUri(commandLineRepository))
+            {
+                ShowError(
+                    "Unable to open application link",
+                    new InvalidOperationException("The application link is invalid or unsupported."));
+            }
+            else
+            {
+                var repositoryPath = TryGetFileUriPath(commandLineRepository) ?? commandLineRepository;
+                await OpenRepositoryAsync(repositoryPath);
+            }
         }
+    }
+
+    private static bool IsUnsupportedStartupUri(string value)
+    {
+        if (Path.IsPathFullyQualified(value))
+        {
+            return false;
+        }
+
+        if (Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        {
+            return !uri.IsFile;
+        }
+
+        var schemeSeparator = value.IndexOf(':');
+        return schemeSeparator > 0
+            && char.IsLetter(value[0])
+            && value[1..schemeSeparator].All(character =>
+                char.IsLetterOrDigit(character) || character is '+' or '-' or '.');
+    }
+
+    private static string? TryGetFileUriPath(string value)
+    {
+        if (Path.IsPathFullyQualified(value)
+            || !Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || !uri.IsFile)
+        {
+            return null;
+        }
+
+        return uri.LocalPath;
     }
 
     private void ConfigureWindow()
@@ -1574,8 +1626,7 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            UpdateMutationButtons();
-            UpdateRepositoryCommandStates();
+            SetBusy(BusyRing.IsActive, StatusText.Text);
         }
     }
 

@@ -445,11 +445,13 @@ public sealed partial class MainWindow
         await ShowCloneRepositoryDialogAsync();
     }
 
-    private async Task ShowCloneRepositoryDialogAsync()
+    private async Task<string?> ShowCloneRepositoryDialogAsync(
+        string? initialRepositoryUrl = null,
+        string? initialBranch = null)
     {
         if (!CanStartRepositorySetup())
         {
-            return;
+            return null;
         }
 
         try
@@ -466,6 +468,7 @@ public sealed partial class MainWindow
         {
             Header = "Repository URL",
             PlaceholderText = "https://github.com/owner/repository.git",
+            Text = initialRepositoryUrl ?? string.Empty,
         };
         AutomationProperties.SetName(urlBox, "Clone repository URL");
         var destinationBox = new TextBox
@@ -481,6 +484,7 @@ public sealed partial class MainWindow
         {
             Header = "Branch (optional)",
             PlaceholderText = "Clone the remote default branch",
+            Text = initialBranch ?? string.Empty,
         };
         AutomationProperties.SetName(branchBox, "Clone branch");
 
@@ -745,7 +749,7 @@ public sealed partial class MainWindow
             {
                 if (await dialog.ShowAsync() != ContentDialogResult.Primary)
                 {
-                    return;
+                    return null;
                 }
 
                 try
@@ -767,7 +771,7 @@ public sealed partial class MainWindow
                         "Cloning repository…",
                         token => repositoryService.CloneAsync(url, destination, branch, token));
                     await OpenRepositoryAsync(status.RootPath);
-                    return;
+                    return status.RootPath;
                 }
                 catch (OperationCanceledException)
                 {
