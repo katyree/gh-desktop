@@ -1301,6 +1301,11 @@ public sealed partial class MainWindow
             return null;
         }
 
+        if (!settings.ConfirmForcePush)
+        {
+            return leaseTip;
+        }
+
         var dialog = CreateDialog(
             "Force push?",
             "Force push",

@@ -106,6 +106,32 @@ activation, and live GitHub event delivery remain unverified. The adapter
 targets a safe GitHub pull-request URL in the standard browser; cold-launch
 activation is not handled. Prompt and advanced settings remain in work unit 76.
 
+Task 76 evidence includes a Release `win-x64` build with zero warnings and
+errors, the source publish at
+`native/artifacts/task76-advanced-prompts-win-x64`, and a full Core suite run
+with 226/226 tests passing. A copied app with isolated settings profiles
+rendered the default settings capture at
+`native/artifacts/task76-settings.png` and the capture with a setting disabled
+at `native/artifacts/task76-settings-off.png`. Native persists the supported
+prompt controls with their defaults and wires repository removal, full-file
+discard, permanent partial discard, stash discard, force push, undo, generated
+commit-message override, worktree removal, filtered-change commit confirmation,
+and the advisory summary-length warning. The dirty-branch strategy persists
+`AskForConfirmation`, `BringChanges`, or `StashAndLeave`, and malformed values
+normalize to `AskForConfirmation`.
+
+Advanced settings include status indicators for recent repositories other than
+the selected repository. The scheduler waits 2 minutes plus the 15-minute
+refresh interval before its first cycle, then runs every 15 minutes. It gates
+each background fetch to once per 30 minutes and selects one remote. System
+OpenSSH applies to later Git actions. Opt-in Git Credential Manager use is
+limited to HTTPS remotes that the Core classifier identifies as generic.
+Background Git operations clear inherited credential helpers and set
+`GIT_TERMINAL_PROMPT=0`. Physical checkbox click-through, live background
+network behavior, GCM sign-in, and Windows toast delivery remain unverified.
+Native has no selected-repository periodic fetch path. This evidence keeps the
+task `Partial` and does not establish full Electron parity.
+
 Rows 21 and 33 now have native UI and Core API coverage. `MainWindow.UndoTags.cs`
 uses `UndoCommitAsync` with the expected HEAD guard and uses `GetTagsAsync`,
 `CreateTagAsync`, and `DeleteTagAsync` with the tag object ID guard. The History
@@ -447,7 +473,7 @@ unverified. The post-await workspace guard passed its later build check (Release
 | 53 | Provide one light palette, one dark palette, and a `System` choice between them; use `app/src/ui/preferences/appearance.tsx` and `app/src/ui/lib/application-theme.ts`. | 3 | Partial | Changing the theme updates the whole native window and persists across restart. The `9B98` artifact retained Light after restart, but its caption buttons and History dialog exposed theme mismatches. Current source adds effective-theme, system-color, high-contrast, inactive-titlebar, and dialog or popup synchronization; the DC114 dark Settings capture is recorded at `native/artifacts/screenshots/native-dc114-settings-dark-20260905.jpg`, while an actual High Contrast switch and the next current-source visual pass remain unverified. |
 | 54 | Persist native settings and recent repositories; use `native/WinGit.Native/NativeSettings.cs` and `app/src/lib/databases/repositories-database.ts` as references. | 4, 53 | Partial | Native settings are stored under the `WinGit.Native` data boundary, recover from malformed data, and never import Electron or GitHub auth state. |
 | 55 | Provide Git identity, editor, and integration settings; use `app/src/ui/preferences/git.tsx`, `app/src/ui/editor`, and `app/src/ui/preferences/integrations.tsx`. | 3 | Partial | A setting change is visible to the next matching Git or editor action and reports invalid configuration before execution. Core reads and writes scoped Git identity and default-branch values while preserving unrelated configuration, covered by `GitRepositoryConfigurationTests`; Native discovers and persists stable editor and built-in shell selections, validates the selected executable and repository containment before launch, and reports a saved selection that is no longer available before launch. Electron preferences replace an unavailable saved editor with the first discovered option; native requires a new selection. Native does not expose Electron custom-editor or custom-shell paths and arguments, including `%TARGET_PATH%`. Full Settings UI coverage, next-action desktop proof, and invalid-configuration interaction remain unverified. |
-| 56 | Provide notification, prompt, and advanced settings; use `app/src/ui/preferences/notifications.tsx`, `prompts.tsx`, and `advanced.tsx`. | 53 | Partial | Native implements persisted GitHub notifications with an enabled-by-default setting, a Settings control with Windows availability status, bounded current-repository monitoring for pull-request comments, reviews, and failed checks, and safe pull-request browser targets. The evidence section records the final build and Core suite, focused notification tests, the source publish, and isolated settings captures. Interactive checkbox clicks, Windows notification settings, Windows toast delivery and activation, and live GitHub event delivery remain unverified. Cold-launch activation is not handled, and prompt and advanced settings remain in work unit 76. |
+| 56 | Provide notification, prompt, and advanced settings; use `app/src/ui/preferences/notifications.tsx`, `prompts.tsx`, and `advanced.tsx`. | 53 | Partial | Native implements persisted GitHub notifications with an enabled-by-default setting, a Settings control with Windows availability status, bounded current-repository monitoring for pull-request comments, reviews, and failed checks, and safe pull-request browser targets. It persists the supported prompt controls and defaults, wires their confirmation actions, persists the dirty-branch strategy, and shows an advisory warning for summaries longer than 50 characters. Advanced settings expose nonselected-repository indicators, system OpenSSH, and opt-in Git Credential Manager use for Core-classified generic HTTPS remotes. The indicator scheduler waits 2 minutes plus 15 minutes before its first cycle, runs every 15 minutes after that, gates fetches to once per 30 minutes, and selects one remote. Background Git operations are noninteractive. The evidence section records the 226/226 Core suite, the zero-warning Release `win-x64` build, the source publish, and isolated default and disabled settings captures. Physical checkbox click-through, Windows notification settings, toast delivery and activation, live background network behavior, live GCM sign-in, and live GitHub event delivery remain unverified. Native has no selected-repository periodic fetch path, so the row stays `Partial`. |
 | 57 | Provide accessibility, keyboard, and zoom settings; use `app/src/ui/preferences/accessibility.tsx`, `app/src/ui/keyboard-shortcut`, and `app/src/ui/window/zoom-info.tsx`. | 3 | Remaining | Keyboard navigation reaches every action, controls expose accessible names, and zoom changes are visible without layout loss. |
 
 ## 9. Codex account and review features

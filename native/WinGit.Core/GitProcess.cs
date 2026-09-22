@@ -4,6 +4,27 @@ using System.Text.RegularExpressions;
 
 namespace WinGit.Core;
 
+public enum GitSshMode
+{
+    Bundled,
+    SystemOpenSsh,
+}
+
+public sealed record GitProcessOptions
+{
+    public GitSshMode SshMode { get; init; } = GitSshMode.Bundled;
+
+    public string? SshExecutablePath { get; init; }
+
+    /// <summary>
+    /// Selects Git Credential Manager for generic HTTPS remote operations.
+    /// GitHub hosts remain on the native account boundary.
+    /// </summary>
+    public bool UseExternalCredentialHelper { get; init; }
+
+    public static GitProcessOptions Default { get; } = new();
+}
+
 internal sealed class GitProcessRunner
 {
     internal const int MaxOutputBytes = 16 * 1024 * 1024;
@@ -22,13 +43,54 @@ internal sealed class GitProcessRunner
         "GIT_TRACE2_EVENT",
         "GIT_TRACE2_PERF",
         "GIT_CURL_VERBOSE",
+        "GIT_CONFIG_PARAMETERS",
+        "GIT_CONFIG_COUNT",
+        "GIT_SSH",
+        "GIT_SSH_COMMAND",
+        "GIT_ASKPASS",
+        "SSH_ASKPASS",
+        "DISPLAY",
+        "GCM_INTERACTIVE",
+        "GCM_GUI_SOFTWARE_RENDERING",
+    ];
+
+    private static readonly string[] ProtectedEnvironmentKeys =
+    [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_CEILING_DIRECTORIES",
+        "GIT_TRACE",
+        "GIT_TRACE2",
+        "GIT_TRACE2_EVENT",
+        "GIT_TRACE2_PERF",
+        "GIT_CURL_VERBOSE",
+        "GIT_CONFIG_PARAMETERS",
+        "GIT_CONFIG_COUNT",
+        "GIT_SSH",
+        "GIT_SSH_COMMAND",
+        "GIT_TERMINAL_PROMPT",
     ];
 
     private readonly string gitExecutable;
+    private GitProcessOptions processOptions;
 
-    internal GitProcessRunner(string gitExecutable)
+    internal GitProcessRunner(
+        string gitExecutable,
+        GitProcessOptions? processOptions = null)
     {
         this.gitExecutable = gitExecutable;
+        this.processOptions = processOptions ?? GitProcessOptions.Default;
+        ValidateProcessOptions(this.processOptions);
+    }
+
+    internal void UpdateProcessOptions(GitProcessOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ValidateProcessOptions(options);
+        Interlocked.Exchange(ref processOptions, options);
     }
 
     internal async Task<GitProcessResult> RunAsync(
@@ -37,7 +99,9 @@ internal sealed class GitProcessRunner
         CancellationToken cancellationToken,
         IReadOnlyCollection<int>? expectedExitCodes = null,
         string? standardInput = null,
-        IReadOnlyDictionary<string, string?>? environmentOverrides = null)
+        IReadOnlyDictionary<string, string?>? environmentOverrides = null,
+        bool isBackgroundTask = false,
+        GitProcessOptions? processOptionsOverride = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
         ArgumentNullException.ThrowIfNull(arguments);
@@ -49,7 +113,9 @@ internal sealed class GitProcessRunner
                 workingDirectory,
                 arguments,
                 standardInput is not null,
-                environmentOverrides),
+                environmentOverrides,
+                isBackgroundTask,
+                processOptionsOverride ?? Volatile.Read(ref processOptions)),
         };
 
         if (!process.Start())
@@ -114,7 +180,9 @@ internal sealed class GitProcessRunner
         string workingDirectory,
         IReadOnlyList<string> arguments,
         bool redirectStandardInput,
-        IReadOnlyDictionary<string, string?>? environmentOverrides)
+        IReadOnlyDictionary<string, string?>? environmentOverrides,
+        bool isBackgroundTask,
+        GitProcessOptions processOptions)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -134,8 +202,7 @@ internal sealed class GitProcessRunner
 
         foreach (var key in startInfo.Environment.Keys.ToArray())
         {
-            if (EnvironmentKeysToRemove.Any(environmentKey =>
-                    string.Equals(environmentKey, key, StringComparison.OrdinalIgnoreCase)))
+            if (ShouldRemoveEnvironmentKey(key))
             {
                 startInfo.Environment.Remove(key);
             }
@@ -143,28 +210,13 @@ internal sealed class GitProcessRunner
 
         ConfigureContainedGitEnvironment(startInfo);
         startInfo.Environment["GIT_OPTIONAL_LOCKS"] = "0";
+        ApplyEnvironmentOverrides(startInfo, environmentOverrides, nameof(environmentOverrides));
+        ConfigureSshEnvironment(startInfo, processOptions, isBackgroundTask);
+        ConfigureCredentialManagerEnvironment(startInfo, arguments, isBackgroundTask);
+
         // Never interactively prompt for credentials, even as a fallback.
         // Credential flows use the helper protocol or an explicit UI prompt.
         startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
-        if (environmentOverrides is not null)
-        {
-            foreach (var (key, value) in environmentOverrides)
-            {
-                if (string.IsNullOrEmpty(key))
-                {
-                    throw new ArgumentException("Environment variable names cannot be empty.", nameof(environmentOverrides));
-                }
-
-                if (value is null)
-                {
-                    startInfo.Environment.Remove(key);
-                }
-                else
-                {
-                    startInfo.Environment[key] = value;
-                }
-            }
-        }
 
         // Keep this option in the process boundary so every read-only command avoids
         // an external fsmonitor hook, even when the repository config enables one.
@@ -177,6 +229,140 @@ internal sealed class GitProcessRunner
 
         return startInfo;
     }
+
+    private static void ConfigureSshEnvironment(
+        ProcessStartInfo startInfo,
+        GitProcessOptions options,
+        bool isBackgroundTask)
+    {
+        if (options.SshMode != GitSshMode.SystemOpenSsh)
+        {
+            if (isBackgroundTask)
+            {
+                startInfo.Environment["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes";
+            }
+
+            return;
+        }
+
+        var executable = options.SshExecutablePath;
+        if (string.IsNullOrWhiteSpace(executable)
+            || !Path.IsPathRooted(executable)
+            || executable.IndexOfAny(['\0', '\r', '\n', '"']) >= 0)
+        {
+            throw new ArgumentException(
+                "System OpenSSH requires an absolute executable path without control characters or quotes.",
+                nameof(options));
+        }
+
+        var command = executable.Contains(' ')
+            ? $"\"{executable}\""
+            : executable;
+        startInfo.Environment["GIT_SSH_COMMAND"] = isBackgroundTask
+            ? $"{command} -o BatchMode=yes"
+            : command;
+    }
+
+    private static void ConfigureCredentialManagerEnvironment(
+        ProcessStartInfo startInfo,
+        IReadOnlyList<string> arguments,
+        bool isBackgroundTask)
+    {
+        if (!IsGitCredentialManagerCommand(arguments))
+        {
+            return;
+        }
+
+        // Match Electron's explicit credential.ts environment. This branch is
+        // reached only when the caller already selected manager for one
+        // command; commands without the explicit manager config never inherit GCM.
+        startInfo.Environment["GIT_ASKPASS"] = string.Empty;
+        startInfo.Environment["TERM"] = "dumb";
+        startInfo.Environment["GCM_INTERACTIVE"] = isBackgroundTask ? "0" : "1";
+    }
+
+    private static bool IsGitCredentialManagerCommand(IReadOnlyList<string> arguments)
+    {
+        return arguments.Any(argument =>
+            string.Equals(argument, "credential.helper=manager", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void ApplyEnvironmentOverrides(
+        ProcessStartInfo startInfo,
+        IReadOnlyDictionary<string, string?>? overrides,
+        string parameterName)
+    {
+        if (overrides is null)
+        {
+            return;
+        }
+
+        foreach (var (key, value) in overrides)
+        {
+            ValidateEnvironmentEntry(key, value, parameterName);
+            if (value is null)
+            {
+                startInfo.Environment.Remove(key);
+            }
+            else
+            {
+                startInfo.Environment[key] = value;
+            }
+        }
+    }
+
+    private static void ValidateEnvironmentEntry(
+        string key,
+        string? value,
+        string parameterName)
+    {
+        if (string.IsNullOrEmpty(key)
+            || key.IndexOfAny(['\0', '\r', '\n']) >= 0
+            || ProtectedEnvironmentKeys.Any(protectedKey =>
+                string.Equals(protectedKey, key, StringComparison.OrdinalIgnoreCase))
+            || key.StartsWith("GIT_CONFIG_KEY_", StringComparison.OrdinalIgnoreCase)
+            || key.StartsWith("GIT_CONFIG_VALUE_", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"The environment override '{key}' is not permitted.",
+                parameterName);
+        }
+
+        if (value?.IndexOfAny(['\0', '\r', '\n']) >= 0)
+        {
+            throw new ArgumentException(
+                $"The environment override '{key}' contains a control character.",
+                parameterName);
+        }
+    }
+
+    private static void ValidateProcessOptions(GitProcessOptions options)
+    {
+        if (!Enum.IsDefined(options.SshMode))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                options.SshMode,
+                "The Git SSH mode is not supported.");
+        }
+
+        if (options.SshMode == GitSshMode.SystemOpenSsh
+            && (string.IsNullOrWhiteSpace(options.SshExecutablePath)
+                || !Path.IsPathRooted(options.SshExecutablePath)
+                || options.SshExecutablePath.IndexOfAny(['\0', '\r', '\n', '"']) >= 0
+                || !File.Exists(options.SshExecutablePath)))
+        {
+            throw new ArgumentException(
+                "System OpenSSH requires an existing absolute executable path without control characters or quotes.",
+                nameof(options));
+        }
+    }
+
+    private static bool ShouldRemoveEnvironmentKey(string key) =>
+        EnvironmentKeysToRemove.Any(environmentKey =>
+            string.Equals(environmentKey, key, StringComparison.OrdinalIgnoreCase))
+        || key.StartsWith("GIT_CONFIG_KEY_", StringComparison.OrdinalIgnoreCase)
+        || key.StartsWith("GIT_CONFIG_VALUE_", StringComparison.OrdinalIgnoreCase);
 
     private void ConfigureContainedGitEnvironment(ProcessStartInfo startInfo)
     {

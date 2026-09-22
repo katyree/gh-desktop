@@ -21,26 +21,71 @@ public sealed partial class GitRepositoryService
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private readonly GitProcessRunner processRunner;
+    private GitProcessOptions processOptions;
     private readonly IReadOnlyDictionary<string, string?>? gitEnvironmentOverrides;
     private readonly SemaphoreSlim mutationGate = new(1, 1);
 
     public GitRepositoryService(string? gitExecutable = null)
-        : this(gitExecutable, environmentOverrides: null)
+        : this(gitExecutable, processOptions: null, environmentOverrides: null)
+    {
+    }
+
+    public GitRepositoryService(
+        string? gitExecutable,
+        GitProcessOptions? processOptions)
+        : this(gitExecutable, processOptions, environmentOverrides: null)
     {
     }
 
     internal GitRepositoryService(
         string? gitExecutable,
         IReadOnlyDictionary<string, string?>? environmentOverrides)
+        : this(gitExecutable, processOptions: null, environmentOverrides)
     {
+    }
+
+    private GitRepositoryService(
+        string? gitExecutable,
+        GitProcessOptions? processOptions,
+        IReadOnlyDictionary<string, string?>? environmentOverrides)
+    {
+        this.processOptions = NormalizeProcessOptions(processOptions ?? GitProcessOptions.Default);
         processRunner = new GitProcessRunner(
-            string.IsNullOrWhiteSpace(gitExecutable) ? "git" : gitExecutable);
+            string.IsNullOrWhiteSpace(gitExecutable) ? "git" : gitExecutable,
+            this.processOptions);
         gitEnvironmentOverrides = environmentOverrides is null
             ? null
             : new Dictionary<string, string?>(
                 environmentOverrides,
                 StringComparer.OrdinalIgnoreCase);
     }
+
+    private static GitProcessOptions NormalizeProcessOptions(GitProcessOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return options;
+    }
+
+    /// <summary>
+    /// Replaces transport options for future Git commands while retaining the
+    /// service instance and its serialized mutation gate.
+    /// </summary>
+    public void UpdateProcessOptions(GitProcessOptions options)
+    {
+        var snapshot = NormalizeProcessOptions(options);
+        processRunner.UpdateProcessOptions(snapshot);
+        Interlocked.Exchange(ref processOptions, snapshot);
+    }
+
+    internal GitProcessOptions GetProcessOptionsSnapshot() =>
+        Volatile.Read(ref processOptions);
+
+    /// <summary>
+    /// The explicit helper name used by Git Credential Manager for generic
+    /// HTTPS credential protocol operations. Callers must classify the remote
+    /// as generic before passing it to the credential methods.
+    /// </summary>
+    public const string GitCredentialManagerHelper = "manager";
 
     /// <summary>Opens a repository or a directory below one and returns its status.</summary>
     public async Task<RepositoryStatus> OpenAsync(string path, CancellationToken cancellationToken)

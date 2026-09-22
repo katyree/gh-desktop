@@ -322,7 +322,8 @@ public sealed partial class GitRepositoryService
     public async Task FetchAsync(
         string root,
         string remoteName,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool isBackgroundTask = false)
     {
         var repositoryRoot = await ResolveRepositoryRootAsync(root, cancellationToken).ConfigureAwait(false);
         ValidateRemoteNameSyntax(remoteName);
@@ -338,7 +339,9 @@ public sealed partial class GitRepositoryService
                     await RunRemoteCommandAsync(
                         path,
                         ["fetch", "--prune", "--recurse-submodules=on-demand", normalizedRemote],
-                        cancellationToken).ConfigureAwait(false);
+                        cancellationToken,
+                        remoteUrl: remoteUrl,
+                        isBackgroundTask: isBackgroundTask).ConfigureAwait(false);
                 }
                 catch (GitCommandException exception)
                 {
@@ -400,7 +403,8 @@ public sealed partial class GitRepositoryService
                     await RunRemoteCommandAsync(
                         path,
                         ["pull", "--ff-only", "--no-rebase", "--no-autostash", normalizedRemote, normalizedRemoteBranch],
-                        cancellationToken).ConfigureAwait(false);
+                        cancellationToken,
+                        remoteUrl: remoteUrl).ConfigureAwait(false);
                 }
                 catch (GitCommandException exception)
                 {
@@ -486,7 +490,8 @@ public sealed partial class GitRepositoryService
                             normalizedRemote,
                             $"refs/heads/{normalizedLocalBranch}:refs/heads/{normalizedRemoteBranch}",
                         ],
-                        cancellationToken).ConfigureAwait(false);
+                        cancellationToken,
+                        remoteUrl: remoteUrl).ConfigureAwait(false);
                 }
                 catch (GitCommandException exception)
                 {
@@ -577,7 +582,8 @@ public sealed partial class GitRepositoryService
                             remoteName,
                             $"refs/heads/{normalizedLocalBranch}:refs/heads/{normalizedLocalBranch}",
                         ],
-                        cancellationToken).ConfigureAwait(false);
+                        cancellationToken,
+                        remoteUrl: effectiveUrl).ConfigureAwait(false);
                 }
                 catch (GitCommandException exception)
                 {
@@ -626,7 +632,8 @@ public sealed partial class GitRepositoryService
                             normalizedRemote,
                             $"refs/heads/{normalizedLocalBranch}:refs/heads/{normalizedRemoteBranch}",
                         ],
-                        cancellationToken).ConfigureAwait(false);
+                        cancellationToken,
+                        remoteUrl: remoteUrl).ConfigureAwait(false);
                 }
                 catch (GitCommandException exception)
                 {
@@ -721,15 +728,26 @@ public sealed partial class GitRepositoryService
         string repositoryRoot,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken,
-        IReadOnlyCollection<int>? expectedExitCodes = null)
+        IReadOnlyCollection<int>? expectedExitCodes = null,
+        string? remoteUrl = null,
+        bool isBackgroundTask = false)
     {
         try
         {
+            var options = GetProcessOptionsSnapshot();
+            var preparedArguments = await PrepareRemoteArgumentsAsync(
+                arguments,
+                remoteUrl,
+                options,
+                isBackgroundTask,
+                cancellationToken).ConfigureAwait(false);
             return await processRunner.RunAsync(
                 repositoryRoot,
-                arguments,
+                preparedArguments,
                 cancellationToken,
-                expectedExitCodes).ConfigureAwait(false);
+                expectedExitCodes,
+                isBackgroundTask: isBackgroundTask,
+                processOptionsOverride: options).ConfigureAwait(false);
         }
         catch (GitCommandException exception)
         {
@@ -740,6 +758,56 @@ public sealed partial class GitRepositoryService
                 exception.ExitCode,
                 error);
         }
+    }
+
+    private async Task<IReadOnlyList<string>> PrepareRemoteArgumentsAsync(
+        IReadOnlyList<string> arguments,
+        string? remoteUrl,
+        GitProcessOptions options,
+        bool isBackgroundTask,
+        CancellationToken cancellationToken)
+    {
+        var useCredentialManager = options.UseExternalCredentialHelper
+            && await IsGenericHttpsRemoteAsync(remoteUrl, cancellationToken).ConfigureAwait(false);
+        if (!isBackgroundTask && !useCredentialManager)
+        {
+            return arguments;
+        }
+
+        var prepared = new List<string>(arguments.Count + (useCredentialManager ? 4 : 2));
+        if (isBackgroundTask || useCredentialManager)
+        {
+            prepared.Add("-c");
+            prepared.Add("credential.helper=");
+        }
+
+        if (useCredentialManager)
+        {
+            prepared.Add("-c");
+            prepared.Add($"credential.helper={GitCredentialManagerHelper}");
+        }
+
+        prepared.AddRange(arguments);
+        return prepared;
+    }
+
+    private static async Task<bool> IsGenericHttpsRemoteAsync(
+        string? remoteUrl,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(remoteUrl)
+            || !Uri.TryCreate(remoteUrl.Trim(), UriKind.Absolute, out var uri)
+            || !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            || uri.Host.Length == 0
+            || uri.UserInfo.Length != 0)
+        {
+            return false;
+        }
+
+        var kind = await GitCredentialHostClassifier.ClassifyAsync(
+            remoteUrl,
+            cancellationToken).ConfigureAwait(false);
+        return kind == GitCredentialHostKind.Generic;
     }
 
     private static IReadOnlyList<RemoteSummary> ParseRemotes(byte[] output)

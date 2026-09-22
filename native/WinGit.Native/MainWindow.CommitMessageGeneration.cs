@@ -149,8 +149,9 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(initialContext.Summary) ||
-                !string.IsNullOrWhiteSpace(initialContext.Description))
+            if (settings.ConfirmCommitMessageOverride
+                && (!string.IsNullOrWhiteSpace(initialContext.Summary) ||
+                    !string.IsNullOrWhiteSpace(initialContext.Description)))
             {
                 var replaceDialog = CreateDialog(
                     "Replace the current commit message?",
@@ -164,16 +165,16 @@ public sealed partial class MainWindow
                 {
                     return;
                 }
+            }
 
-                if (!IsGenerationCurrentWithContext(
-                        generationId,
-                        operation.Generation,
-                        root,
-                        cancellation.Token,
-                        initialContext))
-                {
-                    return;
-                }
+            if (!IsGenerationCurrentWithContext(
+                    generationId,
+                    operation.Generation,
+                    root,
+                    cancellation.Token,
+                    initialContext))
+            {
+                return;
             }
 
             var consentRequired = !HasCodexCommitMessageConsent(root);

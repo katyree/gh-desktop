@@ -10,6 +10,8 @@ public sealed partial class MainWindow
 {
     private readonly ObservableCollection<RepositoryChooserRow>
         repositoryChooserRows = [];
+    private readonly Dictionary<string, NativeRepositoryIndicatorSnapshot>
+        repositoryIndicatorSnapshots = new(StringComparer.OrdinalIgnoreCase);
     private AutoSuggestBox? repositoryChooserSearchBox;
     private ListView? repositoryChooserList;
     private TextBlock? repositoryChooserEmptyText;
@@ -202,7 +204,36 @@ public sealed partial class MainWindow
         await OpenRepositoryAsync(row.Path);
     }
 
-    private void RepositoryChooserRemoveButton_Click(object sender, RoutedEventArgs args)
+    private void MainWindow_RepositoryIndicatorUpdated(
+        object? sender,
+        NativeRepositoryIndicatorUpdatedEventArgs args)
+    {
+        string normalizedPath;
+        try
+        {
+            normalizedPath = NativeSettingsStore.NormalizeRepositoryPath(args.RepositoryPath);
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        if (args.Cleared
+            || args.Missing
+            || args.Snapshot is null
+            || !IsIndicatorRepositoryPathCurrent(normalizedPath))
+        {
+            repositoryIndicatorSnapshots.Remove(normalizedPath);
+        }
+        else
+        {
+            repositoryIndicatorSnapshots[normalizedPath] = args.Snapshot;
+        }
+
+        RefreshRecentRepositories();
+    }
+
+    private async void RepositoryChooserRemoveButton_Click(object sender, RoutedEventArgs args)
     {
         if (sender is not Button { Tag: RepositoryChooserRow row }
             || !row.IsMissing)
@@ -210,9 +241,107 @@ public sealed partial class MainWindow
             return;
         }
 
+        if (!await ConfirmRepositoryRemovalAsync(row))
+        {
+            return;
+        }
+
+        if (!IsRecentRepositoryRowCurrent(row))
+        {
+            return;
+        }
+
         NativeSettingsStore.RemoveRecentRepository(settings, row.Path);
         RefreshRecentRepositories();
         _ = SaveSettingsAsync();
+    }
+
+    private async Task<bool> ConfirmRepositoryRemovalAsync(RepositoryChooserRow row)
+    {
+        if (!settings.ConfirmRepositoryRemoval)
+        {
+            return true;
+        }
+
+        var dialog = CreateDialog(
+            "Remove recent repository?",
+            "Remove from recents",
+            new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = $"Remove \"{row.DisplayName}\" from the recent repositories list?",
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                    new TextBlock
+                    {
+                        Text = $"This only removes the saved entry. Files at {row.Path} are not deleted.",
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                },
+            });
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
+    private bool IsRecentRepositoryRowCurrent(RepositoryChooserRow row)
+    {
+        if (!settings.RecentRepositories.Any(path =>
+                string.Equals(path, row.Path, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var chooserRowIsCurrent = repositoryChooserRows.Any(
+            currentRow => ReferenceEquals(currentRow, row));
+        var recentRowIsCurrent = RecentRepositoriesList.ItemsSource
+            is IEnumerable<RepositoryChooserRow> recentRows
+            && recentRows.Any(currentRow => ReferenceEquals(currentRow, row));
+        return chooserRowIsCurrent || recentRowIsCurrent;
+    }
+
+    private bool IsIndicatorRepositoryPathCurrent(string path) =>
+        !string.Equals(repositoryRoot, path, StringComparison.OrdinalIgnoreCase)
+        && (settings.RecentRepositories ?? [])
+            .Any(candidate => string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase));
+
+    private NativeRepositoryIndicatorSnapshot? GetRepositoryIndicatorSnapshot(string path)
+    {
+        try
+        {
+            var normalizedPath = NativeSettingsStore.NormalizeRepositoryPath(path);
+            return repositoryIndicatorSnapshots.TryGetValue(normalizedPath, out var snapshot)
+                ? snapshot
+                : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private void ClearStaleRepositoryIndicatorSnapshots()
+    {
+        foreach (var path in repositoryIndicatorSnapshots.Keys.ToArray())
+        {
+            if (!IsIndicatorRepositoryPathCurrent(path) || !Directory.Exists(path))
+            {
+                repositoryIndicatorSnapshots.Remove(path);
+            }
+        }
+    }
+
+    private void ClearRepositoryIndicatorSnapshots()
+    {
+        if (repositoryIndicatorSnapshots.Count == 0)
+        {
+            return;
+        }
+
+        repositoryIndicatorSnapshots.Clear();
+        RefreshRecentRepositories();
     }
 
     private void RefreshRepositoryChooserRows()
@@ -226,11 +355,13 @@ public sealed partial class MainWindow
         }
 
         var query = repositoryChooserSearchBox.Text.Trim();
+        ClearStaleRepositoryIndicatorSnapshots();
         var rows = settings.RecentRepositories
             .Select(path => new RepositoryChooserRow(
                 path,
                 repositoryRoot,
-                NativeSettingsStore.GetRepositoryAlias(settings, path)))
+                NativeSettingsStore.GetRepositoryAlias(settings, path),
+                GetRepositoryIndicatorSnapshot(path)))
             .Where(row => string.IsNullOrWhiteSpace(query)
                 || row.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase)
                 || row.Path.Contains(query, StringComparison.OrdinalIgnoreCase))

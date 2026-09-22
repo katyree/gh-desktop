@@ -46,6 +46,15 @@
                                    ToolTipService.ToolTip="{Binding Path}" />
                         <TextBlock Text="{Binding StatusText}"
                                    Style="{StaticResource SecondaryTextStyle}" />
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="8"
+                                    Visibility="{Binding IndicatorVisibility}"
+                                    ToolTipService.ToolTip="{Binding IndicatorAutomationText}">
+                            <TextBlock Text="{Binding ChangedFilesIndicatorText}"
+                                       Style="{StaticResource SecondaryTextStyle}" />
+                            <TextBlock Text="{Binding AheadBehindIndicatorText}"
+                                       Style="{StaticResource SecondaryTextStyle}" />
+                        </StackPanel>
                     </StackPanel>
                     <Button Grid.Column="1"
                             Content="Remove"
@@ -72,6 +81,15 @@
                                    ToolTipService.ToolTip="{Binding Path}" />
                         <TextBlock Text="{Binding StatusText}"
                                    Style="{StaticResource SecondaryTextStyle}" />
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="8"
+                                    Visibility="{Binding IndicatorVisibility}"
+                                    ToolTipService.ToolTip="{Binding IndicatorAutomationText}">
+                            <TextBlock Text="{Binding ChangedFilesIndicatorText}"
+                                       Style="{StaticResource SecondaryTextStyle}" />
+                            <TextBlock Text="{Binding AheadBehindIndicatorText}"
+                                       Style="{StaticResource SecondaryTextStyle}" />
+                        </StackPanel>
                     </StackPanel>
                     <Button Grid.Column="1"
                             Content="Rename"
@@ -1162,7 +1180,16 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="CommitSummaryBox" PlaceholderText="Commit summary" MaxLength="200" TextChanged="CommitSummaryBox_TextChanged" AutomationProperties.Name="Commit summary" />
+                                        <StackPanel Spacing="4">
+                                            <TextBox x:Name="CommitSummaryBox" PlaceholderText="Commit summary" MaxLength="200" TextChanged="CommitSummaryBox_TextChanged" AutomationProperties.Name="Commit summary" />
+                                            <TextBlock x:Name="CommitLengthWarningText"
+                                                       Text="Great commit summaries contain fewer than 50 characters. Place extra information in the description field."
+                                                       Style="{StaticResource SecondaryTextStyle}"
+                                                       TextWrapping="Wrap"
+                                                       Visibility="Collapsed"
+                                                       AutomationProperties.Name="Commit summary length warning"
+                                                       AutomationProperties.LiveSetting="Polite" />
+                                        </StackPanel>
                                         <Button x:Name="GenerateCommitMessageButton" Grid.Column="1" Content="Generate with Codex" Click="GenerateCommitMessageButton_Click" AutomationProperties.Name="Generate commit message with Codex" />
                                     </Grid>
                                     <TextBox x:Name="CommitDescriptionBox" Grid.Row="1" Margin="0,8,0,0" PlaceholderText="Description (optional)" AcceptsReturn="True" TextWrapping="Wrap" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Commit description" />
@@ -1689,6 +1716,109 @@
                                     <ComboBoxItem Content="Light" Tag="Light" />
                                     <ComboBoxItem Content="Dark" Tag="Dark" />
                                 </ComboBox>
+
+                                <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Prompts" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock Text="Choose which actions need confirmation before they run." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                        <TextBlock Text="Show a confirmation dialog before..." FontWeight="SemiBold" Margin="0,4,0,0" />
+                                        <CheckBox x:Name="ConfirmRepositoryRemovalCheckBox"
+                                                  Content="Removing repositories"
+                                                  Click="ConfirmRepositoryRemovalCheckBox_Click"
+                                                  AutomationProperties.Name="Confirm removing repositories" />
+                                        <CheckBox x:Name="ConfirmDiscardChangesCheckBox"
+                                                  Content="Discarding changes"
+                                                  Click="ConfirmDiscardChangesCheckBox_Click"
+                                                  AutomationProperties.Name="Confirm discarding changes" />
+                                        <CheckBox x:Name="ConfirmDiscardChangesPermanentlyCheckBox"
+                                                  Content="Discarding changes permanently"
+                                                  Click="ConfirmDiscardChangesPermanentlyCheckBox_Click"
+                                                  AutomationProperties.Name="Confirm discarding changes permanently" />
+                                        <CheckBox x:Name="ConfirmDiscardStashCheckBox"
+                                                  Content="Discarding stash"
+                                                  Click="ConfirmDiscardStashCheckBox_Click"
+                                                  AutomationProperties.Name="Confirm discarding stash" />
+                                        <CheckBox x:Name="ConfirmForcePushCheckBox"
+                                                  Content="Force pushing"
+                                                  Click="ConfirmForcePushCheckBox_Click"
+                                                  AutomationProperties.Name="Confirm force pushing" />
+                                        <CheckBox x:Name="ConfirmUndoCommitCheckBox"
+                                                  Content="Undoing a commit"
+                                                  Click="ConfirmUndoCommitCheckBox_Click"
+                                                  AutomationProperties.Name="Confirm undoing a commit" />
+                                        <CheckBox x:Name="ConfirmCommitMessageOverrideCheckBox"
+                                                  Content="Overriding a commit message with a generated message"
+                                                  Click="ConfirmCommitMessageOverrideCheckBox_Click"
+                                                  AutomationProperties.Name="Confirm overriding a commit message with a generated message" />
+                                        <CheckBox x:Name="ConfirmWorktreeRemovalCheckBox"
+                                                  Content="Removing worktrees"
+                                                  Click="ConfirmWorktreeRemovalCheckBox_Click"
+                                                  AutomationProperties.Name="Confirm removing worktrees" />
+                                        <CheckBox x:Name="ConfirmCommitFilteredChangesCheckBox"
+                                                  Content="Committing changes hidden by filter"
+                                                  Click="ConfirmCommitFilteredChangesCheckBox_Click"
+                                                  AutomationProperties.Name="Confirm committing changes hidden by filter" />
+                                        <TextBlock Text="When I switch branches with local changes..." FontWeight="SemiBold" Margin="0,6,0,0" />
+                                        <ComboBox x:Name="UncommittedChangesStrategyComboBox"
+                                                  Width="420"
+                                                  SelectedValuePath="Tag"
+                                                  SelectionChanged="UncommittedChangesStrategyComboBox_SelectionChanged"
+                                                  AutomationProperties.Name="Uncommitted changes branch switch strategy">
+                                            <ComboBoxItem Content="Ask me where I want the changes to go" Tag="AskForConfirmation" />
+                                            <ComboBoxItem Content="Always bring my changes to my new branch" Tag="BringChanges" />
+                                            <ComboBoxItem Content="Always stash and leave my changes on the current branch" Tag="StashAndLeave" />
+                                        </ComboBox>
+                                        <TextBlock Text="Commit length" FontWeight="SemiBold" Margin="0,6,0,0" />
+                                        <CheckBox x:Name="ShowCommitLengthWarningCheckBox"
+                                                  Content="Show commit length warning"
+                                                  Click="ShowCommitLengthWarningCheckBox_Click"
+                                                  AutomationProperties.Name="Show commit length warning" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Background updates" FontSize="16" FontWeight="SemiBold" />
+                                        <CheckBox x:Name="RepositoryIndicatorsEnabledCheckBox"
+                                                  Content="Show status icons in the repository list"
+                                                  Click="RepositoryIndicatorsEnabledCheckBox_Click"
+                                                  AutomationProperties.Name="Show status icons in the repository list" />
+                                        <TextBlock Text="These icons are refreshed for recent repositories other than the selected repository. The selected repository does not use this background indicator fetch."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Usage" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock Text="WinGit usage reporting is disabled."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="WinGit usage reporting status" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Network and credentials" FontSize="16" FontWeight="SemiBold" />
+                                        <CheckBox x:Name="UseWindowsOpenSSHCheckBox"
+                                                  Content="Use system OpenSSH (recommended)"
+                                                  Click="UseWindowsOpenSSHCheckBox_Click"
+                                                  Visibility="Collapsed"
+                                                  AutomationProperties.Name="Use system OpenSSH" />
+                                        <TextBlock Text="Use the Windows OpenSSH client when it is installed."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap" />
+                                        <CheckBox x:Name="UseExternalCredentialHelperCheckBox"
+                                                  Content="Use Git Credential Manager"
+                                                  Click="UseExternalCredentialHelperCheckBox_Click"
+                                                  AutomationProperties.Name="Use Git Credential Manager" />
+                                        <TextBlock Text="Use Git Credential Manager for private repositories outside GitHub.com. This feature is experimental."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
 
                                 <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                     <StackPanel Spacing="8">

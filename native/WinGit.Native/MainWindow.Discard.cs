@@ -296,24 +296,27 @@ public sealed partial class MainWindow
             return;
         }
 
-        ContentDialogResult result;
-        try
+        if (settings.ConfirmDiscardChanges)
         {
-            var dialog = CreateDialog(
-                $"Discard {snapshot.Files.Count} selected file{(snapshot.Files.Count == 1 ? string.Empty : "s")}?",
-                "Discard changes",
-                BuildFullDiscardConfirmationContent(snapshot));
-            result = await dialog.ShowAsync();
-        }
-        catch (Exception exception)
-        {
-            ShowError("Unable to show discard confirmation", exception);
-            return;
-        }
+            ContentDialogResult result;
+            try
+            {
+                var dialog = CreateDialog(
+                    $"Discard {snapshot.Files.Count} selected file{(snapshot.Files.Count == 1 ? string.Empty : "s")}?",
+                    "Discard changes",
+                    BuildFullDiscardConfirmationContent(snapshot));
+                result = await dialog.ShowAsync();
+            }
+            catch (Exception exception)
+            {
+                ShowError("Unable to show discard confirmation", exception);
+                return;
+            }
 
-        if (result != ContentDialogResult.Primary)
-        {
-            return;
+            if (result != ContentDialogResult.Primary)
+            {
+                return;
+            }
         }
 
         if (!IsDiscardSessionCurrent(operation.Generation, operation.Token, root))
@@ -474,29 +477,32 @@ public sealed partial class MainWindow
             return;
         }
 
-        ContentDialogResult result;
-        try
+        if (settings.ConfirmDiscardChangesPermanently)
         {
-            var lineCount = GetSelectedPartialLineCount(freshDiff, selection);
-            var hunkCount = selection.Count(item => item.LineIndex is null);
-            var dialog = CreateDialog(
-                $"Discard {lineCount} selected line{(lineCount == 1 ? string.Empty : "s")}?",
-                "Discard lines",
-                BuildPartialDiscardConfirmationContent(
-                    row,
-                    lineCount,
-                    hunkCount));
-            result = await dialog.ShowAsync();
-        }
-        catch (Exception exception)
-        {
-            ShowError("Unable to show partial discard confirmation", exception);
-            return;
-        }
+            ContentDialogResult result;
+            try
+            {
+                var lineCount = GetSelectedPartialLineCount(freshDiff, selection);
+                var hunkCount = selection.Count(item => item.LineIndex is null);
+                var dialog = CreateDialog(
+                    $"Discard {lineCount} selected line{(lineCount == 1 ? string.Empty : "s")}?",
+                    "Discard lines",
+                    BuildPartialDiscardConfirmationContent(
+                        row,
+                        lineCount,
+                        hunkCount));
+                result = await dialog.ShowAsync();
+            }
+            catch (Exception exception)
+            {
+                ShowError("Unable to show partial discard confirmation", exception);
+                return;
+            }
 
-        if (result != ContentDialogResult.Primary)
-        {
-            return;
+            if (result != ContentDialogResult.Primary)
+            {
+                return;
+            }
         }
 
         if (!IsPartialDiscardSessionCurrent(
