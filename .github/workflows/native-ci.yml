@@ -31,6 +31,10 @@ jobs:
         shell: pwsh
         run: |
           .\native\build.ps1 -Configuration Release -Runtime win-x64 -OutputPath .\native\artifacts\win-x64
+      - name: Record native signing status
+        shell: pwsh
+        run: |
+          .\native\release-gate.ps1 -PublishPath .\native\artifacts\win-x64
       - name: Upload native package
         uses: actions/upload-artifact@v7
         with:

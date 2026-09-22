@@ -9,6 +9,33 @@ unresolved third-party ChatGPT authentication permission, unsigned installers,
 native redistribution-notice review, and clean-machine verification. This is a
 release-engineering record, not legal advice.
 
+## Native release candidate gate
+
+The native `win-x64` CI build is an unsigned verification artifact. Its
+`SigningStatus.json` records the SHA-256 and Authenticode status of
+`WinGit.Native.exe`; `releaseGate` is `Blocked`. The upload step does not
+publish a release.
+
+For a native release candidate, run `native/release-gate.ps1` in `Release` mode
+against the exact published directory. Supply a private evidence directory
+containing nonempty `clean-machine-install.md`,
+`native-redistribution-notices.md`, `authentication-permission.md`, and
+`product-identity-review.md`. Review those records before running the gate.
+Set `WINGIT_AZURE_SIGNING_ENDPOINT`, `WINGIT_AZURE_SIGNING_ACCOUNT`, and
+`WINGIT_AZURE_SIGNING_PROFILE` to the WinGit-owned Artifact Signing profile.
+Pass the expected certificate subject through `-ExpectedSignerSubject`.
+`-Sign` additionally requires paths to SignTool and the Azure signing client
+DLL; it signs only `WinGit.Native.exe`. Without `-Sign`, the gate checks an
+already signed executable. The gate requires a valid Authenticode signature
+whose subject matches the expected subject. It writes `SigningStatus.json`
+with `releaseGate: Blocked` before checking release prerequisites and changes
+the result to `Passed` only after every check succeeds.
+
+This is a local candidate gate, not proof that the evidence is accurate or
+that a hosted runner signed an artifact. The owner must review the evidence,
+the published file hash, and the certificate before distribution. No release
+workflow is configured to publish native output.
+
 ## Verification matrix
 
 | Gate | Result | Evidence or remaining action |
