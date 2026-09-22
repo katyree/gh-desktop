@@ -132,6 +132,24 @@ network behavior, GCM sign-in, and Windows toast delivery remain unverified.
 Native has no selected-repository periodic fetch path. This evidence keeps the
 task `Partial` and does not establish full Electron parity.
 
+Task 77 theme evidence uses the current source and a copied Release publish.
+The Release `win-x64` build completed with zero warnings and errors. The source
+publish is `native/artifacts/task77-themes-win-x64`. The copied run root
+`wingit-task77-run-470ca40411b1478a80e477fcafab96d4` contains the required
+`App.xbf`, `MainWindow.xbf`, `WinGit.Native.pri`, and
+`Assets\icon-logo.ico` files. Fresh captures at
+`native/artifacts/task77-settings-light.png`,
+`native/artifacts/task77-settings-dark.png`, and
+`native/artifacts/task77-settings-system.png` show consistent light and dark
+Settings windows and title bars. The System capture loaded from an isolated
+profile, followed the current OS dark palette, and showed `Use system setting`.
+Current source synchronizes the effective theme with title-bar buttons, popups,
+and dialogs. Physical selector interaction, persistence through the UI, and an
+actual High Contrast switch remain unverified. The M53 scope remains one Light
+palette, one Dark palette, and System. Electron's additional fixed themes,
+including Nord, Monokai Pro, One Dark, Dracula, Tokyo Night, Catppuccin Mocha,
+Gruvbox Dark, Graphite, and AMOLED, remain outside this slice.
+
 Rows 21 and 33 now have native UI and Core API coverage. `MainWindow.UndoTags.cs`
 uses `UndoCommitAsync` with the expected HEAD guard and uses `GetTagsAsync`,
 `CreateTagAsync`, and `DeleteTagAsync` with the tag object ID guard. The History
@@ -470,7 +488,7 @@ unverified. The post-await workspace guard passed its later build check (Release
 
 | # | Work unit and source | Depends on | Native status | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| 53 | Provide one light palette, one dark palette, and a `System` choice between them; use `app/src/ui/preferences/appearance.tsx` and `app/src/ui/lib/application-theme.ts`. | 3 | Partial | Changing the theme updates the whole native window and persists across restart. The `9B98` artifact retained Light after restart, but its caption buttons and History dialog exposed theme mismatches. Current source adds effective-theme, system-color, high-contrast, inactive-titlebar, and dialog or popup synchronization; the DC114 dark Settings capture is recorded at `native/artifacts/screenshots/native-dc114-settings-dark-20260905.jpg`, while an actual High Contrast switch and the next current-source visual pass remain unverified. |
+| 53 | Provide one light palette, one dark palette, and a `System` choice between them; use `app/src/ui/preferences/appearance.tsx` and `app/src/ui/lib/application-theme.ts`. | 3 | Partial | M53 covers one Light palette, one Dark palette, and a `System` setting. Current source synchronizes the effective theme with the Settings window, title-bar buttons, popups, and dialogs. Fresh copied-publish captures at `native/artifacts/task77-settings-light.png`, `native/artifacts/task77-settings-dark.png`, and `native/artifacts/task77-settings-system.png` show consistent Light and Dark Settings windows and title bars; the System capture follows the current OS dark palette and shows `Use system setting`. The Release `win-x64` build has zero warnings and errors, and the copied run root contains the required XBF, PRI, and icon files. Physical selector interaction, persistence through the UI, and an actual High Contrast switch remain unverified. Electron's additional fixed themes, including Nord, Monokai Pro, One Dark, Dracula, Tokyo Night, Catppuccin Mocha, Gruvbox Dark, Graphite, and AMOLED, remain outside this slice, so the row stays `Partial`. |
 | 54 | Persist native settings and recent repositories; use `native/WinGit.Native/NativeSettings.cs` and `app/src/lib/databases/repositories-database.ts` as references. | 4, 53 | Partial | Native settings are stored under the `WinGit.Native` data boundary, recover from malformed data, and never import Electron or GitHub auth state. |
 | 55 | Provide Git identity, editor, and integration settings; use `app/src/ui/preferences/git.tsx`, `app/src/ui/editor`, and `app/src/ui/preferences/integrations.tsx`. | 3 | Partial | A setting change is visible to the next matching Git or editor action and reports invalid configuration before execution. Core reads and writes scoped Git identity and default-branch values while preserving unrelated configuration, covered by `GitRepositoryConfigurationTests`; Native discovers and persists stable editor and built-in shell selections, validates the selected executable and repository containment before launch, and reports a saved selection that is no longer available before launch. Electron preferences replace an unavailable saved editor with the first discovered option; native requires a new selection. Native does not expose Electron custom-editor or custom-shell paths and arguments, including `%TARGET_PATH%`. Full Settings UI coverage, next-action desktop proof, and invalid-configuration interaction remain unverified. |
 | 56 | Provide notification, prompt, and advanced settings; use `app/src/ui/preferences/notifications.tsx`, `prompts.tsx`, and `advanced.tsx`. | 53 | Partial | Native implements persisted GitHub notifications with an enabled-by-default setting, a Settings control with Windows availability status, bounded current-repository monitoring for pull-request comments, reviews, and failed checks, and safe pull-request browser targets. It persists the supported prompt controls and defaults, wires their confirmation actions, persists the dirty-branch strategy, and shows an advisory warning for summaries longer than 50 characters. Advanced settings expose nonselected-repository indicators, system OpenSSH, and opt-in Git Credential Manager use for Core-classified generic HTTPS remotes. The indicator scheduler waits 2 minutes plus 15 minutes before its first cycle, runs every 15 minutes after that, gates fetches to once per 30 minutes, and selects one remote. Background Git operations are noninteractive. The evidence section records the 226/226 Core suite, the zero-warning Release `win-x64` build, the source publish, and isolated default and disabled settings captures. Physical checkbox click-through, Windows notification settings, toast delivery and activation, live background network behavior, live GCM sign-in, and live GitHub event delivery remain unverified. Native has no selected-repository periodic fetch path, so the row stays `Partial`. |
