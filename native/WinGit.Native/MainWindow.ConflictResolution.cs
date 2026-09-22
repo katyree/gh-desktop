@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WinGit.Core;
+using WinGit.Core.Codex;
 
 namespace WinGit.Native;
 
@@ -350,6 +351,10 @@ public sealed partial class MainWindow
         DeleteConflictRadio.IsEnabled = canEdit && isDeleteModify;
         ApplyConflictButton.IsEnabled = canEdit && isReady;
         ApplyAndStageConflictButton.IsEnabled = canEdit && isReady;
+        SuggestCodexButton.IsEnabled = canEdit
+            && supported
+            && codexAccount.Status == CodexAccountStatus.SignedIn
+            && TryGetSharedCodexModelSelection(out _, out _, out _);
     }
 
     private void ApplyConflictEditorListVisibility()
@@ -446,6 +451,95 @@ public sealed partial class MainWindow
     private async void ApplyAndStageConflictButton_Click(object sender, RoutedEventArgs e)
     {
         await ConfirmAndApplyConflictAsync(stage: true);
+    }
+
+    private async void SuggestCodexButton_Click(object sender, RoutedEventArgs e)
+    {
+        var snapshot = selectedConflictSnapshot;
+        if (snapshot is null || !snapshot.IsSupported || selectedConflictPath is null)
+        {
+            return;
+        }
+
+        if (codexAccount.Status != CodexAccountStatus.SignedIn)
+        {
+            ShowError(
+                "Codex sign-in required",
+                new InvalidOperationException("Sign in to Codex in Settings before requesting conflict suggestions."));
+            return;
+        }
+
+        if (!TryGetSharedCodexModelSelection(out var modelId, out var modelSlug, out var reasoningEffort))
+        {
+            ShowError(
+                "Codex model unavailable",
+                new InvalidOperationException("Refresh the Codex model list in Settings before requesting suggestions."));
+            return;
+        }
+
+        // Review-only: suggestions are shown per file and require an explicit
+        // checkbox per file before any repository write. No file is modified
+        // until the user confirms the per-file choice.
+        var suggestionText = $"[Review-only Codex suggestion for {snapshot.Path}]\n"
+            + $"(Model: {modelSlug ?? modelId ?? "server default"}"
+            + (reasoningEffort is null ? "" : $", reasoning: {reasoningEffort}") + ")\n\n"
+            + "This is a placeholder for the live Codex suggestion. In the full flow, "
+            + "the orchestrator would send the conflict hunks, Ours/Theirs/Base, and "
+            + "repository context to Codex using the shared model selector. The result "
+            + "is never applied automatically — you must check the box below for this "
+            + "specific file before any write.";
+
+        var fileHeader = new TextBlock
+        {
+            Text = $"File: {snapshot.Path}",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var suggestionBox = new TextBox
+        {
+            Text = suggestionText,
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 180,
+        };
+        var explicitChoice = new CheckBox
+        {
+            Content = $"I have reviewed the suggestion for {snapshot.Path} and want to apply it explicitly for this file",
+        };
+        var panel = new StackPanel
+        {
+            Spacing = 12,
+            Children = { fileHeader, suggestionBox, explicitChoice },
+        };
+        var dialog = CreateDialog("Codex suggestion — review only", "Apply suggestion", panel);
+        dialog.IsPrimaryButtonEnabled = false;
+        explicitChoice.Checked += (_, _) => dialog.IsPrimaryButtonEnabled = true;
+        explicitChoice.Unchecked += (_, _) => dialog.IsPrimaryButtonEnabled = false;
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        // Explicit per-file choice satisfied; apply to the editor's draft
+        // rather than writing directly, so the user still reviews via the
+        // normal Apply/Apply and stage path.
+        if (snapshot.Kind == ConflictFileKind.Text)
+        {
+            foreach (var row in conflictHunkRows)
+            {
+                row.SetResolvedContent(suggestionText);
+            }
+
+            ConflictEditorValidationText.Text = "Codex suggestion applied to the per-hunk editors as a review-only draft. Review each hunk, then choose Apply or Apply and stage.";
+            UpdateConflictEditorControls();
+        }
+        else if (snapshot.Kind == ConflictFileKind.DeleteModify)
+        {
+            ConflictEditorValidationText.Text = "Codex suggestion reviewed for this delete-versus-modify file. Choose Keep or Delete explicitly, then apply.";
+            UpdateConflictEditorControls();
+        }
     }
 
     private async Task ConfirmAndApplyConflictAsync(bool stage)

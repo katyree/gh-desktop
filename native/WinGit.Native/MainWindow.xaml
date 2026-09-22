@@ -1130,6 +1130,10 @@
                                                             Content="Apply and stage"
                                                             Click="ApplyAndStageConflictButton_Click"
                                                             AutomationProperties.Name="Apply conflict resolution and stage file" />
+                                                    <Button x:Name="SuggestCodexButton"
+                                                            Content="Review Codex suggestion"
+                                                            Click="SuggestCodexButton_Click"
+                                                            AutomationProperties.Name="Review Codex suggestion for this conflict" />
                                                 </StackPanel>
                                             </StackPanel>
                                         </Grid>
