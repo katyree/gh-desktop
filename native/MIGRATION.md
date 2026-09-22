@@ -540,9 +540,32 @@ signed-in verification. |
 
 ## 10. Packaging, release, and updates
 
+Task 80 packaging evidence uses `native/build.ps1` with `Configuration=Release`,
+`Runtime=win-x64`, and `Platform=x64`. The command passed the matching Codex and
+Git runtime package roots from
+`E:\WinGit\gh-desktop\app\node_modules`, restored the native project, built it
+with 0 warnings and 0 errors, and published a clean tree at
+`native/artifacts/task80-packaging-win-x64`. The tree contains 912 files,
+including `App.xbf`, `MainWindow.xbf`, `NativeImageDiffView.xbf`,
+`NativeSubmoduleDiffView.xbf`, `WinGit.Native.pri`, `Assets/icon-logo.ico`,
+`WinGit.Native.exe`, the Codex runtime entry points, and the Git runtime entry
+points. A complete copy at
+`C:\Users\kylea\AppData\Local\Temp\wingit-task80-run-17a6b130737841bb8423f4f4d0f94b6c`
+also contains 912 files, and the required source and copy hashes match.
+
+The copied executable launched in capture mode with an isolated settings
+directory, returned exit code 0, and wrote a 55,476-byte settings capture
+outside the copied tree at
+`C:\Users\kylea\AppData\Local\Temp\wingit-task80-capture-6d31d24ff9e34bf89ea94e9365502423.png`.
+This proves that a user can unpack the native directory and start the copied
+executable. No installer, MSI, install or uninstall flow, normal interactive
+launch, signing, or updater was produced or tested. Task 81 still owns native
+release notes, acknowledgements, and license work. The Electron package and
+`script/package.ts` were not changed.
+
 | # | Work unit and source | Depends on | Native status | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| 64 | Package the native app and publish release notes and acknowledgements; use `native/build.ps1`, `script/package.ts`, `app/src/ui/release-notes`, and `app/src/ui/acknowledgements`. | 1, 3 | Remaining | A clean `win-x64` output can be installed or unpacked by a user, and release notes identify the native build without changing the Electron package. |
+| 64 | Package the native app (task 80) and publish release notes and acknowledgements (task 81); use `native/build.ps1`, `script/package.ts`, `app/src/ui/release-notes`, and `app/src/ui/acknowledgements`. | 1, 3 | Partial | Task 80 proves a clean `win-x64` output can be unpacked and launched without changing the Electron package. Task 81 still owns native release notes, acknowledgements, and license work. |
 | 65 | Establish native signing and release gates; use `script/release-config.ts`, `README.md`, and `docs/process/win-git-preview-release-gate.md`. | 64 | Remaining | A release records signing status and fails closed when the required certificate or release evidence is absent. |
 | 66 | Provide an update channel and update progress; use `app/src/main-process/squirrel-updater.ts`, `app/src/ui/installing-update`, `app/src/ui/lib/update-store.ts`, and `app/src/lib/get-updater-guid.ts`. | 64, 65 | Remaining | An available update can be verified, downloaded, and installed with visible progress, and an unavailable or unsigned update is not applied silently. |
 
