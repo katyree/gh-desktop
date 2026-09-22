@@ -108,6 +108,7 @@ public sealed partial class MainWindow : Window
         MainNavigation.SelectedItem = MainNavigation.MenuItems[0];
         UpdateSubmoduleControls();
         UpdateIntegrationCommandStates();
+        UpdateApplicationCommandStates();
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -309,6 +310,7 @@ public sealed partial class MainWindow : Window
 
         var pickerTask = OpenRepositoryPickerCoreAsync();
         repositoryPickerTask = pickerTask;
+        UpdateApplicationCommandStates();
         try
         {
             await pickerTask;
@@ -318,6 +320,7 @@ public sealed partial class MainWindow : Window
             if (ReferenceEquals(repositoryPickerTask, pickerTask))
             {
                 repositoryPickerTask = null;
+                UpdateApplicationCommandStates();
             }
         }
     }
@@ -513,6 +516,7 @@ public sealed partial class MainWindow : Window
         UpdateSubmoduleDiffInteraction();
         UpdateSubmoduleControls();
         UpdateIntegrationCommandStates();
+        UpdateApplicationCommandStates();
         UpdateTextDiffControls();
     }
 
@@ -1675,6 +1679,7 @@ public sealed partial class MainWindow : Window
         UpdateCodexControls();
         UpdateGitHubAccountControls();
         UpdateIntegrationCommandStates();
+        UpdateApplicationCommandStates();
         UpdateGitConfigControls();
         UpdateTextDiffControls();
     }
