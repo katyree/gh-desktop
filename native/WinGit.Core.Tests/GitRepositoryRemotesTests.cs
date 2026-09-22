@@ -184,6 +184,106 @@ public sealed class GitRepositoryRemotesTests : IDisposable
     }
 
     [Fact]
+    public async Task FetchPullRequestHeadReturnsShaWithoutChangingRepositoryState()
+    {
+        var expectedCommit = PreparePullRequestClone(includePullRequestRef: true);
+        WriteFile(firstClonePath, "tracked.txt", "staged\n");
+        RunGit(firstClonePath, "add", "--", "tracked.txt");
+        var headBefore = RunGit(firstClonePath, "rev-parse", "HEAD").Trim();
+        var branchBefore = RunGit(firstClonePath, "symbolic-ref", "--short", "HEAD").Trim();
+        var indexBefore = RunGit(firstClonePath, "rev-parse", ":tracked.txt").Trim();
+        WriteFile(firstClonePath, "tracked.txt", "working\n");
+        var statusBefore = RunGit(firstClonePath, "status", "--porcelain=v1");
+        RunGit(firstClonePath, "branch", "preserved");
+        var preservedBefore = RunGit(firstClonePath, "rev-parse", "refs/heads/preserved").Trim();
+        var fetchHeadPath = Path.Combine(firstClonePath, ".git", "FETCH_HEAD");
+        var fetchHeadBefore = File.Exists(fetchHeadPath) ? File.ReadAllText(fetchHeadPath) : null;
+
+        var service = new GitRepositoryService();
+        var fetchedCommit = await service.FetchPullRequestHeadAsync(
+            firstClonePath,
+            "origin",
+            42,
+            CancellationToken.None);
+
+        Assert.Equal(expectedCommit, fetchedCommit);
+        Assert.Equal(headBefore, RunGit(firstClonePath, "rev-parse", "HEAD").Trim());
+        Assert.Equal(branchBefore, RunGit(firstClonePath, "symbolic-ref", "--short", "HEAD").Trim());
+        Assert.Equal(indexBefore, RunGit(firstClonePath, "rev-parse", ":tracked.txt").Trim());
+        Assert.Equal("working\n", File.ReadAllText(Path.Combine(firstClonePath, "tracked.txt")));
+        Assert.Equal(statusBefore, RunGit(firstClonePath, "status", "--porcelain=v1"));
+        Assert.Equal(preservedBefore, RunGit(firstClonePath, "rev-parse", "refs/heads/preserved").Trim());
+        Assert.Equal(
+            fetchHeadBefore,
+            File.Exists(fetchHeadPath) ? File.ReadAllText(fetchHeadPath) : null);
+        Assert.DoesNotContain(
+            "refs/wingit/pull-request-fetch/",
+            RunGit(firstClonePath, "for-each-ref", "--format=%(refname)"),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InvalidPullRequestNumberIsRejectedBeforeRepositoryMutation()
+    {
+        PreparePullRequestClone(includePullRequestRef: true);
+        WriteFile(firstClonePath, "tracked.txt", "dirty\n");
+        var headBefore = RunGit(firstClonePath, "rev-parse", "HEAD").Trim();
+        var statusBefore = RunGit(firstClonePath, "status", "--porcelain=v1");
+        var workTreeBefore = File.ReadAllText(Path.Combine(firstClonePath, "tracked.txt"));
+
+        var service = new GitRepositoryService();
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => service.FetchPullRequestHeadAsync(
+                firstClonePath,
+                "origin",
+                0,
+                CancellationToken.None));
+
+        Assert.Equal(headBefore, RunGit(firstClonePath, "rev-parse", "HEAD").Trim());
+        Assert.Equal(statusBefore, RunGit(firstClonePath, "status", "--porcelain=v1"));
+        Assert.Equal(workTreeBefore, File.ReadAllText(Path.Combine(firstClonePath, "tracked.txt")));
+    }
+
+    [Fact]
+    public async Task FailedPullRequestFetchPreservesBranchAndWorkTree()
+    {
+        PreparePullRequestClone(includePullRequestRef: false);
+        WriteFile(firstClonePath, "tracked.txt", "staged\n");
+        RunGit(firstClonePath, "add", "--", "tracked.txt");
+        var headBefore = RunGit(firstClonePath, "rev-parse", "HEAD").Trim();
+        var indexBefore = RunGit(firstClonePath, "rev-parse", ":tracked.txt").Trim();
+        WriteFile(firstClonePath, "tracked.txt", "working\n");
+        var statusBefore = RunGit(firstClonePath, "status", "--porcelain=v1");
+        var branchBefore = RunGit(firstClonePath, "symbolic-ref", "--short", "HEAD").Trim();
+        RunGit(firstClonePath, "branch", "preserved");
+        var preservedBefore = RunGit(firstClonePath, "rev-parse", "refs/heads/preserved").Trim();
+        var fetchHeadPath = Path.Combine(firstClonePath, ".git", "FETCH_HEAD");
+        var fetchHeadBefore = File.Exists(fetchHeadPath) ? File.ReadAllText(fetchHeadPath) : null;
+
+        var service = new GitRepositoryService();
+        await Assert.ThrowsAsync<GitCommandException>(
+            () => service.FetchPullRequestHeadAsync(
+                firstClonePath,
+                "origin",
+                42,
+                CancellationToken.None));
+
+        Assert.Equal(headBefore, RunGit(firstClonePath, "rev-parse", "HEAD").Trim());
+        Assert.Equal(indexBefore, RunGit(firstClonePath, "rev-parse", ":tracked.txt").Trim());
+        Assert.Equal(statusBefore, RunGit(firstClonePath, "status", "--porcelain=v1"));
+        Assert.Equal(branchBefore, RunGit(firstClonePath, "symbolic-ref", "--short", "HEAD").Trim());
+        Assert.Equal(preservedBefore, RunGit(firstClonePath, "rev-parse", "refs/heads/preserved").Trim());
+        Assert.Equal("working\n", File.ReadAllText(Path.Combine(firstClonePath, "tracked.txt")));
+        Assert.Equal(
+            fetchHeadBefore,
+            File.Exists(fetchHeadPath) ? File.ReadAllText(fetchHeadPath) : null);
+        Assert.DoesNotContain(
+            "refs/wingit/pull-request-fetch/",
+            RunGit(firstClonePath, "for-each-ref", "--format=%(refname)"),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task FetchFailureNamesUnreachableHostAndPreservesState()
     {
         Directory.CreateDirectory(seedPath);
@@ -527,6 +627,34 @@ public sealed class GitRepositoryRemotesTests : IDisposable
     public void Dispose()
     {
         DeleteDirectory(fixtureRoot);
+    }
+
+    private string PreparePullRequestClone(bool includePullRequestRef)
+    {
+        RunGit(fixtureRoot, "init", "--bare", bareRemotePath);
+        RunGit(bareRemotePath, "symbolic-ref", "HEAD", "refs/heads/main");
+        Directory.CreateDirectory(seedPath);
+        RunGit(seedPath, "init", "-b", "main");
+        ConfigureLocalCommitSafety(seedPath);
+        RunGit(seedPath, "config", "user.name", "Test User");
+        RunGit(seedPath, "config", "user.email", "test-user@example.invalid");
+        WriteFile(seedPath, "tracked.txt", "seed\n");
+        Commit(seedPath, "seed");
+        RunGit(seedPath, "remote", "add", "origin", bareRemotePath);
+        RunGit(seedPath, "push", "origin", "main");
+
+        var pullRequestTip = RunGit(seedPath, "rev-parse", "HEAD").Trim();
+        if (includePullRequestRef)
+        {
+            WriteFile(seedPath, "tracked.txt", "pull request\n");
+            Commit(seedPath, "pull request");
+            pullRequestTip = RunGit(seedPath, "rev-parse", "HEAD").Trim();
+            RunGit(seedPath, "push", "origin", $"HEAD:refs/pull/42/head");
+        }
+
+        RunGit(fixtureRoot, "clone", "--branch", "main", bareRemotePath, firstClonePath);
+        ConfigureClone(firstClonePath);
+        return pullRequestTip;
     }
 
     private static void ConfigureClone(string path)

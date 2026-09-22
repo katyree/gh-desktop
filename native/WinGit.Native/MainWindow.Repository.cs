@@ -621,9 +621,19 @@ public sealed partial class MainWindow
     private async void SwitchBranchButton_Click(object sender, RoutedEventArgs e)
     {
         var branch = selectedBranch;
-        if (!CanStartRepositoryWrite() || branch is null || branch.Branch.IsCurrent)
+        if (branch is null)
         {
             return;
+        }
+
+        await SwitchBranchAsync(branch);
+    }
+
+    private async Task<bool> SwitchBranchAsync(BranchRow branch)
+    {
+        if (!CanStartRepositoryWrite() || branch.Branch.IsCurrent)
+        {
+            return false;
         }
 
         var sourceRoot = repositoryRoot;
@@ -633,7 +643,7 @@ public sealed partial class MainWindow
             ShowError(
                 "Unable to prepare branch switch",
                 new InvalidOperationException("Refresh the repository before switching branches."));
-            return;
+            return false;
         }
 
         var targetBranchName = branch.Name;
@@ -648,7 +658,7 @@ public sealed partial class MainWindow
         catch (Exception exception)
         {
             ShowError("Unable to prepare branch switch", exception);
-            return;
+            return false;
         }
 
         if (!string.IsNullOrWhiteSpace(branch.Branch.WorktreePath)
@@ -658,7 +668,7 @@ public sealed partial class MainWindow
                 "Unable to switch branch",
                 new InvalidOperationException($"The branch '{targetBranchName}' is already checked out in the worktree at '{branch.Branch.WorktreePath}'; switch to that worktree or check out a different branch."));
             await LoadBranchesAsync();
-            return;
+            return false;
         }
 
         var checkoutContext = new BranchCheckoutContext(
@@ -676,7 +686,7 @@ public sealed partial class MainWindow
                 sourceStatus.Changes.Count);
             if (selectedStrategy is null)
             {
-                return;
+                return false;
             }
 
             strategy = selectedStrategy.Value;
@@ -687,12 +697,12 @@ public sealed partial class MainWindow
             ShowError(
                 "Branch switch context changed",
                 new InvalidOperationException("The repository or selected branch changed while waiting for confirmation; refresh and try again."));
-            return;
+            return false;
         }
 
         if (!hasChanges)
         {
-            await RunRepositoryWriteAsync(
+            return await RunRepositoryWriteAsync(
                 $"Switching to {targetBranchName}…",
                 $"Switched to {targetBranchName}",
                 "Branch switch cancelled; refreshing repository…",
@@ -701,11 +711,10 @@ public sealed partial class MainWindow
                 refreshBranches: true,
                 refreshWorktrees: true,
                 expectedRoot: sourceRoot);
-            return;
         }
 
         var bringChanges = strategy == BranchCheckoutStrategy.BringChanges;
-        await RunRepositoryWriteAsync(
+        return await RunRepositoryWriteAsync(
             bringChanges
                 ? $"Switching to {targetBranchName} with local changes…"
                 : $"Saving changes and switching to {targetBranchName}…",
