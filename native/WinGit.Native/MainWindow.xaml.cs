@@ -120,6 +120,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        diagnosticCaptureMode = captureOptions is not null;
+
         if (captureOptions is { View: "repository-open-check" or "repository-picker-check" or "history-selection-check" or "whole-file-staging-check" or "partial-staging-check" or "partial-discard-check" or "commit-composer-check" or "hook-failure-check" }
             && TryGetHandlerCheckSettingsError() is { } settingsError)
         {
@@ -137,13 +139,14 @@ public sealed partial class MainWindow : Window
         }
 
         ApplyTheme();
+        InitializeNotificationControls();
+        SetNotificationDeliverySuppressed(diagnosticCaptureMode);
         RefreshRecentRepositories();
         InitializeIntegrationControls();
         InitializeGitConfigControls();
 
         if (captureOptions is not null)
         {
-            diagnosticCaptureMode = true;
             await RunCaptureAsync(captureOptions);
             return;
         }
@@ -264,6 +267,7 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
+            DisposeNotificationDelivery();
             allowAppWindowClose = true;
             Close();
         }
@@ -294,6 +298,8 @@ public sealed partial class MainWindow : Window
             // Both cleanup tasks have been awaited; shutdown is already in
             // progress and must not surface a late child-process exception.
         }
+
+        DisposeNotificationDelivery();
     }
 
     private async void OpenRepositoryButton_Click(object sender, RoutedEventArgs e)
@@ -577,6 +583,8 @@ public sealed partial class MainWindow : Window
             ShowWorkspace("changes");
             ErrorBar.IsOpen = false;
             StatusText.Text = "Repository loaded";
+            ClearNotificationPullRequestCache();
+            _ = RestartGitHubNotificationMonitorAsync();
         }
         catch (OperationCanceledException) when (operation.Token.IsCancellationRequested)
         {
@@ -1366,6 +1374,8 @@ public sealed partial class MainWindow : Window
         CaptureCurrentGitConfigDraft();
         repositoryRoot = null;
         currentStatus = null;
+        ClearNotificationPullRequestCache();
+        _ = RestartGitHubNotificationMonitorAsync();
         ClearRepositoryScopedState();
         ApplyChangeFilter();
         RefreshRepositoryChooserRows();
@@ -1411,6 +1421,7 @@ public sealed partial class MainWindow : Window
         submoduleRows.Clear();
         remoteRows.Clear();
         tagRows.Clear();
+        ClearNotificationPullRequestCache();
         historyCacheRoot = null;
         historyCacheHeadId = null;
         ClearPartialDiffState();

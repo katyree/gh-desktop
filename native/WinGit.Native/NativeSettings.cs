@@ -28,6 +28,8 @@ internal sealed class NativeSettings
 
     public bool HideWhitespaceChanges { get; set; }
 
+    public bool NotificationsEnabled { get; set; } = true;
+
     public string? EditorId { get; set; }
 
     public string? ShellId { get; set; }
@@ -161,6 +163,7 @@ internal static class NativeSettingsStore
                 ImageDiffMode = settings.ImageDiffMode,
                 TextDiffMode = settings.TextDiffMode,
                 HideWhitespaceChanges = settings.HideWhitespaceChanges,
+                NotificationsEnabled = settings.NotificationsEnabled,
                 EditorId = settings.EditorId,
                 ShellId = settings.ShellId,
                 RecentRepositories = settings.RecentRepositories is null

@@ -145,6 +145,7 @@ public sealed partial class MainWindow
         var previousAccount = selectedGitHubAccount;
         GitHubAccountRow? selected;
         var reloadSelectedAccount = false;
+        githubNotificationAccount = null;
         suppressGitHubSelectionLoad = true;
         try
         {
@@ -204,7 +205,9 @@ public sealed partial class MainWindow
             1 => "1 account connected",
             _ => $"{githubAccountRows.Count} accounts connected",
         };
+        githubNotificationAccount = selectedGitHubAccount;
         UpdateGitHubAccountControls();
+        _ = RestartGitHubNotificationMonitorAsync();
     }
 
     private async void GitHubAccountsList_SelectionChanged(
@@ -219,8 +222,10 @@ public sealed partial class MainWindow
         CancelGitHubSelectionLoad();
         selectedGitHubAccountRow = e.AddedItems.OfType<GitHubAccountRow>().FirstOrDefault();
         selectedGitHubAccount = null;
+        githubNotificationAccount = null;
         GitHubSelectedAccountText.Text = string.Empty;
         UpdateGitHubAccountControls();
+        _ = RestartGitHubNotificationMonitorAsync();
 
         if (selectedGitHubAccountRow is null ||
             githubAccountStore is null ||
@@ -306,9 +311,11 @@ public sealed partial class MainWindow
             }
 
             selectedGitHubAccount = account;
+            githubNotificationAccount = account;
             GitHubSelectedAccountText.Text = account is null
                 ? "This account was removed. Refresh the list."
                 : $"Selected @{account.Profile.Login}.";
+            _ = RestartGitHubNotificationMonitorAsync();
         }
         catch (OperationCanceledException)
         {
@@ -319,7 +326,9 @@ public sealed partial class MainWindow
             if (IsGitHubSelectionCurrent(row, selectionGeneration, cancellation))
             {
                 selectedGitHubAccount = null;
+                githubNotificationAccount = null;
                 ShowGitHubError("Unable to load the GitHub account", exception);
+                _ = RestartGitHubNotificationMonitorAsync();
             }
         }
         finally
@@ -685,6 +694,7 @@ public sealed partial class MainWindow
             {
                 selectedGitHubAccountRow = null;
                 selectedGitHubAccount = null;
+                githubNotificationAccount = null;
                 GitHubSelectedAccountText.Text = string.Empty;
                 var summaries = await store.ListAsync(operation.Cancellation.Token);
                 if (IsGitHubOperationCurrent(operation))
@@ -1007,6 +1017,7 @@ public sealed partial class MainWindow
         }
 
         githubDisposed = true;
+        await StopGitHubNotificationMonitorAsync();
         githubOperationCancellation?.Cancel();
         githubSelectionCancellation?.Cancel();
         var cloneLoads = CancelAndSnapshotGitHubCloneLoads();
@@ -1051,6 +1062,7 @@ public sealed partial class MainWindow
         githubOperationTask = null;
         githubSelectionTask = null;
         githubSelectionTasks.Clear();
+        githubNotificationAccount = null;
         activeGitHubAuthorization = null;
         githubDeviceVerificationUri = null;
         githubDeviceUserCode = null;

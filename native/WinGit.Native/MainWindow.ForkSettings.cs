@@ -70,6 +70,7 @@ public sealed partial class MainWindow
         NativeSettingsStore.SetForkContributionTarget(settings, root, target);
         UpdateForkContributionSection();
         _ = SaveSettingsAsync();
+        _ = RestartGitHubNotificationMonitorAsync();
     }
 
     /// <summary>

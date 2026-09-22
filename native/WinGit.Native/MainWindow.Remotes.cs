@@ -951,6 +951,7 @@ public sealed partial class MainWindow
                 refreshRemotes: true);
             if (succeeded)
             {
+                _ = RestartGitHubNotificationMonitorAsync();
                 return;
             }
 
@@ -1022,6 +1023,7 @@ public sealed partial class MainWindow
                 refreshRemotes: true);
             if (succeeded)
             {
+                _ = RestartGitHubNotificationMonitorAsync();
                 return;
             }
 
@@ -1051,7 +1053,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        await RunRepositoryWriteAsync(
+        var succeeded = await RunRepositoryWriteAsync(
             $"Removing {remoteName}…",
             $"Remote {remoteName} removed",
             "Remote removal cancelled; refreshing repository…",
@@ -1059,6 +1061,10 @@ public sealed partial class MainWindow
             (root, token) => repositoryService.RemoveRemoteAsync(root, remoteName, token),
             refreshBranches: true,
             refreshRemotes: true);
+        if (succeeded)
+        {
+            _ = RestartGitHubNotificationMonitorAsync();
+        }
     }
 
     private async void FetchRemoteButton_Click(object sender, RoutedEventArgs e)

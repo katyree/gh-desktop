@@ -1690,6 +1690,30 @@
                                     <ComboBoxItem Content="Dark" Tag="Dark" />
                                 </ComboBox>
 
+                                <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Notifications" FontSize="16" FontWeight="SemiBold" />
+                                        <CheckBox x:Name="NotificationsEnabledCheckBox"
+                                                  Content="Enable notifications"
+                                                  Click="NotificationsEnabledCheckBox_Click"
+                                                  AutomationProperties.Name="Enable notifications" />
+                                        <TextBlock Text="Shows alerts for pull request comments, reviews, and failed checks in the current repository."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock x:Name="NotificationStatusText"
+                                                   Text="Notifications are disabled in WinGit settings."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Desktop notification status"
+                                                   AutomationProperties.LiveSetting="Polite" />
+                                        <Button x:Name="OpenNotificationSettingsButton"
+                                                Content="Open Windows notification settings"
+                                                Click="OpenNotificationSettingsButton_Click"
+                                                HorizontalAlignment="Left"
+                                                AutomationProperties.Name="Open Windows notification settings" />
+                                    </StackPanel>
+                                </Border>
+
                                 <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                     <StackPanel Spacing="8">
                                         <Grid>
