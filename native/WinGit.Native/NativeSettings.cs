@@ -64,6 +64,8 @@ internal sealed class NativeSettings
 
     public string TextDiffMode { get; set; } = DefaultTextDiffMode;
 
+    public double ZoomFactor { get; set; } = NativeZoomLevels.Default;
+
     public bool HideWhitespaceChanges { get; set; }
 
     public bool UnderlineLinks { get; set; } = true;
@@ -245,6 +247,7 @@ internal static class NativeSettingsStore
                 Theme = settings.Theme,
                 ImageDiffMode = settings.ImageDiffMode,
                 TextDiffMode = settings.TextDiffMode,
+                ZoomFactor = settings.ZoomFactor,
                 HideWhitespaceChanges = settings.HideWhitespaceChanges,
                 UnderlineLinks = settings.UnderlineLinks,
                 ShowDiffCheckMarks = settings.ShowDiffCheckMarks,
@@ -490,6 +493,7 @@ internal static class NativeSettingsStore
         settings.Theme = settings.Theme is "System" or "Light" or "Dark" ? settings.Theme : "System";
         settings.ImageDiffMode = NormalizeImageDiffMode(settings.ImageDiffMode);
         settings.TextDiffMode = NormalizeTextDiffMode(settings.TextDiffMode);
+        settings.ZoomFactor = NativeZoomLevels.Normalize(settings.ZoomFactor);
         settings.UseWindowsOpenSSH = settings.UseWindowsOpenSSH
             && NativeSettings.IsWindowsOpenSSHAvailable();
         settings.UncommittedChangesStrategy = NormalizeUncommittedChangesStrategy(
