@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace WinGit.Native;
 
@@ -12,6 +13,43 @@ internal enum ForkContributionTarget
 {
     Parent,
     Self,
+}
+
+internal enum NativeUncommittedChangesStrategy
+{
+    AskForConfirmation,
+    BringChanges,
+    StashAndLeave,
+}
+
+internal sealed class NativeUncommittedChangesStrategyJsonConverter : JsonConverter<NativeUncommittedChangesStrategy>
+{
+    public override NativeUncommittedChangesStrategy Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.String)
+        {
+            reader.Skip();
+            return NativeUncommittedChangesStrategy.AskForConfirmation;
+        }
+
+        var value = reader.GetString();
+        return Enum.TryParse<NativeUncommittedChangesStrategy>(value, ignoreCase: true, out var strategy)
+            && Enum.IsDefined(strategy)
+            ? strategy
+            : NativeUncommittedChangesStrategy.AskForConfirmation;
+    }
+
+    public override void Write(
+        Utf8JsonWriter writer,
+        NativeUncommittedChangesStrategy value,
+        JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(
+            NativeSettingsStore.NormalizeUncommittedChangesStrategy(value).ToString());
+    }
 }
 
 internal sealed class NativeSettings
@@ -29,6 +67,36 @@ internal sealed class NativeSettings
     public bool HideWhitespaceChanges { get; set; }
 
     public bool NotificationsEnabled { get; set; } = true;
+
+    public bool RepositoryIndicatorsEnabled { get; set; } = true;
+
+    public bool UseWindowsOpenSSH { get; set; } = IsWindowsOpenSSHAvailable();
+
+    public bool UseExternalCredentialHelper { get; set; }
+
+    public bool ConfirmRepositoryRemoval { get; set; } = true;
+
+    public bool ConfirmDiscardChanges { get; set; } = true;
+
+    public bool ConfirmDiscardChangesPermanently { get; set; } = true;
+
+    public bool ConfirmDiscardStash { get; set; } = true;
+
+    public bool ConfirmForcePush { get; set; } = true;
+
+    public bool ConfirmUndoCommit { get; set; } = true;
+
+    public bool ConfirmCommitMessageOverride { get; set; } = true;
+
+    public bool ConfirmWorktreeRemoval { get; set; } = true;
+
+    public bool ConfirmCommitFilteredChanges { get; set; } = true;
+
+    public bool ShowCommitLengthWarning { get; set; } = true;
+
+    [JsonConverter(typeof(NativeUncommittedChangesStrategyJsonConverter))]
+    public NativeUncommittedChangesStrategy UncommittedChangesStrategy { get; set; } =
+        NativeUncommittedChangesStrategy.AskForConfirmation;
 
     public string? EditorId { get; set; }
 
@@ -69,6 +137,17 @@ internal sealed class NativeSettings
     /// can include unstaged content.
     /// </summary>
     public Dictionary<string, DateTimeOffset> CodexSelectedChangesReviewConsentTimestamps { get; set; } = [];
+
+    internal static bool IsWindowsOpenSSHAvailable()
+    {
+        var windowsDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        return !string.IsNullOrWhiteSpace(windowsDirectory)
+            && File.Exists(Path.Combine(
+                windowsDirectory,
+                "System32",
+                "OpenSSH",
+                "ssh.exe"));
+    }
 }
 
 /// <summary>
@@ -164,6 +243,20 @@ internal static class NativeSettingsStore
                 TextDiffMode = settings.TextDiffMode,
                 HideWhitespaceChanges = settings.HideWhitespaceChanges,
                 NotificationsEnabled = settings.NotificationsEnabled,
+                RepositoryIndicatorsEnabled = settings.RepositoryIndicatorsEnabled,
+                UseWindowsOpenSSH = settings.UseWindowsOpenSSH,
+                UseExternalCredentialHelper = settings.UseExternalCredentialHelper,
+                ConfirmRepositoryRemoval = settings.ConfirmRepositoryRemoval,
+                ConfirmDiscardChanges = settings.ConfirmDiscardChanges,
+                ConfirmDiscardChangesPermanently = settings.ConfirmDiscardChangesPermanently,
+                ConfirmDiscardStash = settings.ConfirmDiscardStash,
+                ConfirmForcePush = settings.ConfirmForcePush,
+                ConfirmUndoCommit = settings.ConfirmUndoCommit,
+                ConfirmCommitMessageOverride = settings.ConfirmCommitMessageOverride,
+                ConfirmWorktreeRemoval = settings.ConfirmWorktreeRemoval,
+                ConfirmCommitFilteredChanges = settings.ConfirmCommitFilteredChanges,
+                ShowCommitLengthWarning = settings.ShowCommitLengthWarning,
+                UncommittedChangesStrategy = settings.UncommittedChangesStrategy,
                 EditorId = settings.EditorId,
                 ShellId = settings.ShellId,
                 RecentRepositories = settings.RecentRepositories is null
@@ -172,6 +265,9 @@ internal static class NativeSettingsStore
                 RepositoryAliases = settings.RepositoryAliases is null
                     ? new(StringComparer.OrdinalIgnoreCase)
                     : new(settings.RepositoryAliases, StringComparer.OrdinalIgnoreCase),
+                ForkContributionTargets = settings.ForkContributionTargets is null
+                    ? new(StringComparer.OrdinalIgnoreCase)
+                    : new(settings.ForkContributionTargets, StringComparer.OrdinalIgnoreCase),
                 CodexModelId = settings.CodexModelId,
                 CodexReasoningEffort = settings.CodexReasoningEffort,
                 CodexCommitMessageConsentTimestamps = settings.CodexCommitMessageConsentTimestamps is null
@@ -388,6 +484,10 @@ internal static class NativeSettingsStore
         settings.Theme = settings.Theme is "System" or "Light" or "Dark" ? settings.Theme : "System";
         settings.ImageDiffMode = NormalizeImageDiffMode(settings.ImageDiffMode);
         settings.TextDiffMode = NormalizeTextDiffMode(settings.TextDiffMode);
+        settings.UseWindowsOpenSSH = settings.UseWindowsOpenSSH
+            && NativeSettings.IsWindowsOpenSSHAvailable();
+        settings.UncommittedChangesStrategy = NormalizeUncommittedChangesStrategy(
+            settings.UncommittedChangesStrategy);
         settings.EditorId = NormalizeSelectionValue(settings.EditorId);
         settings.ShellId = NormalizeSelectionValue(settings.ShellId);
         settings.RecentRepositories ??= [];
@@ -495,6 +595,12 @@ internal static class NativeSettingsStore
         value is "Unified" or "Split"
             ? value
             : NativeSettings.DefaultTextDiffMode;
+
+    internal static NativeUncommittedChangesStrategy NormalizeUncommittedChangesStrategy(
+        NativeUncommittedChangesStrategy value) =>
+        Enum.IsDefined(value)
+            ? value
+            : NativeUncommittedChangesStrategy.AskForConfirmation;
 
     private static string? NormalizeRepositoryAlias(string? alias)
     {

@@ -97,7 +97,11 @@ public sealed partial class GitRepositoryService
                 arguments.Add(destinationPath);
                 try
                 {
-                    await RunRemoteCommandAsync(workingDirectory, arguments, cancellationToken).ConfigureAwait(false);
+                    await RunRemoteCommandAsync(
+                        workingDirectory,
+                        arguments,
+                        cancellationToken,
+                        remoteUrl: remoteUrl).ConfigureAwait(false);
                 }
                 catch (GitCommandException exception)
                 {

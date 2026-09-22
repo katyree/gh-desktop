@@ -11,6 +11,7 @@ namespace WinGit.Native;
 public static class NativeGitRuntime
 {
     public const string RuntimeDirectoryName = "git";
+    public const string SystemOpenSshRelativePath = "System32\\OpenSSH\\ssh.exe";
     private static readonly TimeSpan VersionProbeTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan VersionOutputTimeout = TimeSpan.FromSeconds(1);
 
@@ -65,10 +66,77 @@ public static class NativeGitRuntime
         return await ProbeVersionAsync(executable).ConfigureAwait(true);
     }
 
+    public static bool IsSystemOpenSshAvailable()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        try
+        {
+            return File.Exists(GetSystemOpenSshPath());
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    public static string ResolveSystemOpenSshExecutable()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException(
+                "System OpenSSH is available only on Windows.");
+        }
+
+        var executable = GetSystemOpenSshPath();
+        if (!File.Exists(executable))
+        {
+            throw new InvalidOperationException(
+                $"The Windows OpenSSH executable is missing at '{executable}'.");
+        }
+
+        return executable;
+    }
+
+    public static GitProcessOptions CreateGitProcessOptions(
+        bool useSystemOpenSsh,
+        bool useExternalCredentialHelper = false)
+    {
+        if (!useSystemOpenSsh
+            && !useExternalCredentialHelper)
+        {
+            return GitProcessOptions.Default;
+        }
+
+        return new GitProcessOptions
+        {
+            SshMode = useSystemOpenSsh ? GitSshMode.SystemOpenSsh : GitSshMode.Bundled,
+            SshExecutablePath = useSystemOpenSsh
+                ? ResolveSystemOpenSshExecutable()
+                : null,
+            UseExternalCredentialHelper = useExternalCredentialHelper,
+        };
+    }
+
     /// <summary>Creates the repository service with the contained Git executable.</summary>
     public static GitRepositoryService CreateRepositoryService(
-        string? applicationRoot = null) =>
-        new(ResolveGitExecutable(applicationRoot));
+        string? applicationRoot = null,
+        GitProcessOptions? processOptions = null) =>
+        new(ResolveGitExecutable(applicationRoot), processOptions);
+
+    private static string GetSystemOpenSshPath()
+    {
+        var windowsDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        if (string.IsNullOrWhiteSpace(windowsDirectory))
+        {
+            throw new InvalidOperationException("The Windows directory is unavailable.");
+        }
+
+        return Path.GetFullPath(Path.Combine(windowsDirectory, SystemOpenSshRelativePath));
+    }
 
     private static string GetExpectedGitExecutablePath(string? applicationRoot)
     {

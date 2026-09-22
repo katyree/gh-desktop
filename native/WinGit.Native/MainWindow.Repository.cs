@@ -681,9 +681,14 @@ public sealed partial class MainWindow
         BranchCheckoutStrategy? strategy = null;
         if (hasChanges)
         {
-            var selectedStrategy = await ChooseDirtyBranchCheckoutStrategyAsync(
-                targetBranchName,
-                sourceStatus.Changes.Count);
+            var selectedStrategy = settings.UncommittedChangesStrategy switch
+            {
+                NativeUncommittedChangesStrategy.BringChanges => (BranchCheckoutStrategy?)BranchCheckoutStrategy.BringChanges,
+                NativeUncommittedChangesStrategy.StashAndLeave => BranchCheckoutStrategy.StashChanges,
+                _ => await ChooseDirtyBranchCheckoutStrategyAsync(
+                    targetBranchName,
+                    sourceStatus.Changes.Count),
+            };
             if (selectedStrategy is null)
             {
                 return false;
@@ -1203,17 +1208,20 @@ public sealed partial class MainWindow
             return;
         }
 
-        var dialog = CreateDialog(
-            "Remove worktree?",
-            "Remove",
-            new TextBlock
-            {
-                Text = $"Remove the worktree folder \"{worktree.Path}\" and delete its files? Git will refuse while the worktree has uncommitted changes; this action never forces removal.",
-                TextWrapping = TextWrapping.Wrap,
-            });
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        if (settings.ConfirmWorktreeRemoval)
         {
-            return;
+            var dialog = CreateDialog(
+                "Remove worktree?",
+                "Remove",
+                new TextBlock
+                {
+                    Text = $"Remove the worktree folder \"{worktree.Path}\" and delete its files? Git will refuse while the worktree has uncommitted changes; this action never forces removal.",
+                    TextWrapping = TextWrapping.Wrap,
+                });
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
         }
 
         await RunRepositoryWriteAsync(
@@ -1365,17 +1373,20 @@ public sealed partial class MainWindow
             return;
         }
 
-        var dialog = CreateDialog(
-            "Drop stash?",
-            "Drop",
-            new TextBlock
-            {
-                Text = $"Drop the stash \"{stash.Reference}\" ({ShortObjectId(stash.CommitId)})? This removes that stash entry from the reflog.",
-                TextWrapping = TextWrapping.Wrap,
-            });
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        if (settings.ConfirmDiscardStash)
         {
-            return;
+            var dialog = CreateDialog(
+                "Drop stash?",
+                "Drop",
+                new TextBlock
+                {
+                    Text = $"Drop the stash \"{stash.Reference}\" ({ShortObjectId(stash.CommitId)})? This removes that stash entry from the reflog.",
+                    TextWrapping = TextWrapping.Wrap,
+                });
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
         }
 
         var expectedReference = stash.Stash.Reference;

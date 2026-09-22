@@ -342,35 +342,38 @@ public sealed partial class MainWindow
             ? "Your working files stay in place. Existing staged changes, and the undone commit's changes, remain in the working tree and become unstaged."
             : "Your working files stay in place; the undone commit's changes become unstaged working changes.";
 
-        var dialog = CreateDialog(
-            "Undo current commit?",
-            "Undo commit",
-            new StackPanel
-            {
-                Spacing = 10,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = $"Move the attached branch \"{currentStatus.Branch}\" back from {targetLabel}?",
-                        TextWrapping = TextWrapping.Wrap,
-                    },
-                    new TextBlock
-                    {
-                        Text = effects,
-                        TextWrapping = TextWrapping.Wrap,
-                    },
-                    new TextBlock
-                    {
-                        Text = "Git uses the current commit's first parent. For a merge commit, this removes the merge from the branch; review the resulting changes before committing again.",
-                        TextWrapping = TextWrapping.Wrap,
-                    },
-                },
-            });
-        dialog.DefaultButton = ContentDialogButton.Primary;
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        if (settings.ConfirmUndoCommit)
         {
-            return;
+            var dialog = CreateDialog(
+                "Undo current commit?",
+                "Undo commit",
+                new StackPanel
+                {
+                    Spacing = 10,
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = $"Move the attached branch \"{currentStatus.Branch}\" back from {targetLabel}?",
+                            TextWrapping = TextWrapping.Wrap,
+                        },
+                        new TextBlock
+                        {
+                            Text = effects,
+                            TextWrapping = TextWrapping.Wrap,
+                        },
+                        new TextBlock
+                        {
+                            Text = "Git uses the current commit's first parent. For a merge commit, this removes the merge from the branch; review the resulting changes before committing again.",
+                            TextWrapping = TextWrapping.Wrap,
+                        },
+                    },
+                });
+            dialog.DefaultButton = ContentDialogButton.Primary;
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
         }
 
         mutationInProgress = true;

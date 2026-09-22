@@ -80,7 +80,9 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         RootGrid.Loaded += MainWindow_Loaded;
+        Activated += MainWindow_Activated;
         Closed += MainWindow_Closed;
+        RepositoryIndicatorUpdated += MainWindow_RepositoryIndicatorUpdated;
 
         StagedChangesList.ItemsSource = stagedChangeRows;
         UnstagedChangesList.ItemsSource = unstagedChangeRows;
@@ -144,11 +146,18 @@ public sealed partial class MainWindow : Window
         RefreshRecentRepositories();
         InitializeIntegrationControls();
         InitializeGitConfigControls();
+        InitializePromptControls();
+        ApplyGitProcessOptions();
 
         if (captureOptions is not null)
         {
             await RunCaptureAsync(captureOptions);
             return;
+        }
+
+        if (settings.RepositoryIndicatorsEnabled)
+        {
+            _ = StartRepositoryIndicatorsAsync();
         }
 
         var arguments = App.CommandLineArguments;
@@ -181,6 +190,26 @@ public sealed partial class MainWindow : Window
                 await OpenRepositoryAsync(repositoryPath);
             }
         }
+    }
+
+    private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+    {
+        if (args.WindowActivationState == WindowActivationState.Deactivated)
+        {
+            PauseRepositoryIndicators();
+        }
+        else
+        {
+            ResumeRepositoryIndicators();
+        }
+    }
+
+    private void ApplyGitProcessOptions()
+    {
+        var options = NativeGitRuntime.CreateGitProcessOptions(
+            settings.UseWindowsOpenSSH,
+            settings.UseExternalCredentialHelper);
+        repositoryService.UpdateProcessOptions(options);
     }
 
     private static bool IsUnsupportedStartupUri(string value)
@@ -249,6 +278,7 @@ public sealed partial class MainWindow : Window
         }
 
         appWindowCloseCleanupStarted = true;
+        var indicatorCleanup = StopRepositoryIndicatorsAsync();
         var reviewCleanup = CancelSelectedChangesReviewAndWaitAsync();
         CancelCommitMessageGeneration();
         operationCancellation?.Cancel();
@@ -258,7 +288,7 @@ public sealed partial class MainWindow : Window
         var githubCleanup = DisposeGitHubAccountsAsync();
         try
         {
-            await Task.WhenAll(reviewCleanup, codexCleanup, githubCleanup);
+            await Task.WhenAll(reviewCleanup, codexCleanup, githubCleanup, indicatorCleanup);
         }
         catch (Exception)
         {
@@ -281,9 +311,12 @@ public sealed partial class MainWindow : Window
         }
 
         DisposeThemeSynchronization();
+        Activated -= MainWindow_Activated;
+        RepositoryIndicatorUpdated -= MainWindow_RepositoryIndicatorUpdated;
 
         CancelCommitMessageGeneration();
         var reviewCleanup = CancelSelectedChangesReviewAndWaitAsync();
+        var indicatorCleanup = StopRepositoryIndicatorsAsync();
         operationCancellation?.Cancel();
         operationCancellation?.Dispose();
         operationCancellation = null;
@@ -291,7 +324,7 @@ public sealed partial class MainWindow : Window
         var githubCleanup = DisposeGitHubAccountsAsync();
         try
         {
-            await Task.WhenAll(reviewCleanup, codexCleanup, githubCleanup);
+            await Task.WhenAll(reviewCleanup, codexCleanup, githubCleanup, indicatorCleanup);
         }
         catch (Exception)
         {
@@ -1545,11 +1578,13 @@ public sealed partial class MainWindow : Window
 
     private void RefreshRecentRepositories()
     {
+        ClearStaleRepositoryIndicatorSnapshots();
         RecentRepositoriesList.ItemsSource = settings.RecentRepositories
             .Select(path => new RepositoryChooserRow(
                 path,
                 repositoryRoot,
-                NativeSettingsStore.GetRepositoryAlias(settings, path)))
+                NativeSettingsStore.GetRepositoryAlias(settings, path),
+                GetRepositoryIndicatorSnapshot(path)))
             .ToArray();
         RefreshRepositoryChooserRows();
     }

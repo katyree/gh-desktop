@@ -20,6 +20,17 @@ public sealed partial class MainWindow
         string LoadedSummary,
         string LoadedDescription);
 
+    private sealed record CommitConfirmationSnapshot(
+        string Root,
+        string? HeadId,
+        IReadOnlyList<FileChange> StagedChanges,
+        string FilterText,
+        string SummaryText,
+        string DescriptionText,
+        string CoAuthorsText,
+        bool SignOff,
+        bool Amend);
+
     private async void StageButton_Click(object sender, RoutedEventArgs e)
     {
         await RunFileMutationAsync(stage: true);
@@ -63,6 +74,7 @@ public sealed partial class MainWindow
     private void CommitSummaryBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         UpdateMutationButtons();
+        UpdateCommitLengthWarning();
     }
 
     private async void AmendCheckBox_Click(object sender, RoutedEventArgs e)
@@ -290,6 +302,35 @@ public sealed partial class MainWindow
             return;
         }
 
+        var confirmationSnapshot = new CommitConfirmationSnapshot(
+            repositoryRoot,
+            currentStatus?.HeadId,
+            CaptureStagedChangeSnapshot(currentStatus),
+            ChangesFilterBox?.Text?.Trim() ?? string.Empty,
+            CommitSummaryBox.Text,
+            CommitDescriptionBox.Text,
+            CoAuthorsBox.Text ?? string.Empty,
+            SignOffCheckBox.IsChecked == true,
+            AmendCheckBox.IsChecked == true);
+        if (!await ConfirmCommitFilteredChangesAsync(confirmationSnapshot))
+        {
+            return;
+        }
+
+        if (mutationInProgress || repositoryRoot is null || activeGitOperationKind != GitOperationKind.None)
+        {
+            return;
+        }
+
+        if (!IsCommitConfirmationSnapshotCurrent(confirmationSnapshot))
+        {
+            ShowError(
+                "Commit state changed",
+                new InvalidOperationException(
+                    "The repository, staged changes, filter, or commit draft changed while confirmation was open. Review the current state and try again."));
+            return;
+        }
+
         List<CommitTrailer> trailers;
         try
         {
@@ -432,6 +473,76 @@ public sealed partial class MainWindow
         }
     }
 
+    private async Task<bool> ConfirmCommitFilteredChangesAsync(
+        CommitConfirmationSnapshot snapshot)
+    {
+        if (!settings.ConfirmCommitFilteredChanges)
+        {
+            return true;
+        }
+
+        var query = snapshot.FilterText;
+        if (query.Length == 0)
+        {
+            return true;
+        }
+
+        var hiddenStagedRows = changeRows
+            .Where(row => !IsConflictChange(row.Change)
+                && row.HasStagedChanges
+                && !row.SearchText.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (hiddenStagedRows.Length == 0)
+        {
+            return true;
+        }
+
+        var hiddenPaths = string.Join(
+            Environment.NewLine,
+            hiddenStagedRows.Select(row => $"• {row.Path}"));
+        var content = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = $"The current filter hides {hiddenStagedRows.Length} staged file{(hiddenStagedRows.Length == 1 ? string.Empty : "s")}. Committing now includes all staged changes.",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new ScrollViewer
+                {
+                    MaxHeight = 240,
+                    Content = new TextBlock
+                    {
+                        Text = hiddenPaths,
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                },
+            },
+        };
+        var dialog = CreateDialog(
+            "Staged changes are hidden",
+            "Commit all staged changes",
+            content);
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
+    private bool IsCommitConfirmationSnapshotCurrent(
+        CommitConfirmationSnapshot snapshot) =>
+        string.Equals(repositoryRoot, snapshot.Root, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(currentStatus?.HeadId, snapshot.HeadId, StringComparison.OrdinalIgnoreCase)
+        && CaptureStagedChangeSnapshot(currentStatus).SequenceEqual(snapshot.StagedChanges)
+        && string.Equals(
+            ChangesFilterBox?.Text?.Trim() ?? string.Empty,
+            snapshot.FilterText,
+            StringComparison.Ordinal)
+        && string.Equals(CommitSummaryBox.Text, snapshot.SummaryText, StringComparison.Ordinal)
+        && string.Equals(CommitDescriptionBox.Text, snapshot.DescriptionText, StringComparison.Ordinal)
+        && string.Equals(CoAuthorsBox.Text ?? string.Empty, snapshot.CoAuthorsText, StringComparison.Ordinal)
+        && SignOffCheckBox.IsChecked == snapshot.SignOff
+        && AmendCheckBox.IsChecked == snapshot.Amend;
+
     private async Task RefreshAfterMutationAsync(string expectedRoot)
     {
         if (repositoryRoot is null
@@ -480,6 +591,17 @@ public sealed partial class MainWindow
         !string.IsNullOrWhiteSpace(change.IndexStatus)
         && !string.Equals(change.IndexStatus, "?", StringComparison.Ordinal)
         && !string.Equals(change.IndexStatus, "!", StringComparison.Ordinal);
+
+    private static IReadOnlyList<FileChange> CaptureStagedChangeSnapshot(
+        RepositoryStatus? status) =>
+        status?.Changes
+            .Where(HasIndexChanges)
+            .OrderBy(change => change.Path, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(change => change.OldPath ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(change => change.IndexStatus, StringComparer.Ordinal)
+            .ThenBy(change => change.WorkTreeStatus, StringComparer.Ordinal)
+            .ToArray()
+        ?? [];
 
     private void UpdateAmendCommitPresentation()
     {

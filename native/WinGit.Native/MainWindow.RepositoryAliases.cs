@@ -58,11 +58,21 @@ public sealed partial class MainWindow
         _ = SaveSettingsAsync();
     }
 
-    private void RecentRepositoryRemoveButton_Click(
+    private async void RecentRepositoryRemoveButton_Click(
         object sender,
         RoutedEventArgs args)
     {
         if (sender is not Button { Tag: RepositoryChooserRow row })
+        {
+            return;
+        }
+
+        if (!await ConfirmRepositoryRemovalAsync(row))
+        {
+            return;
+        }
+
+        if (!IsRecentRepositoryRowCurrent(row))
         {
             return;
         }
