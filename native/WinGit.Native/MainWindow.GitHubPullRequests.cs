@@ -1336,6 +1336,11 @@ public sealed partial class MainWindow
                     return;
                 }
 
+                if (result.IsComplete)
+                {
+                    CacheNotificationPullRequests(repository, result.PullRequests);
+                }
+
                 foreach (var pullRequest in result.PullRequests)
                 {
                     pullRequestRows.Add(
@@ -1479,6 +1484,8 @@ public sealed partial class MainWindow
                     openRulesButton.IsEnabled = false;
                     return;
                 }
+
+                CacheNotificationPullRequest(repository, pullRequest);
 
                 selectedPullRequest = row;
                 pullRequestDetailText.Text = FormatPullRequestDetail(pullRequest);

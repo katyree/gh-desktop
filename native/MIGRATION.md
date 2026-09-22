@@ -90,6 +90,22 @@ These files are local verification artifacts and are ignored by
 repository loading, and rendering for the captured views. They do not prove
 full staging, history search, authentication, or accessibility behavior.
 
+Task 75 notification evidence includes the final Release `win-x64` build,
+which passed with zero warnings and errors, the source publish at
+`native/artifacts/task75-notifications-win-x64`, and focused notification tests
+passing 8/8. The full Core suite passed 223/223 in 1 minute 24 seconds. An app
+copied to a temporary path launched with an isolated settings profile,
+`NotificationsEnabled=false`, opened a synthetic repository, saved that
+repository as a recent repository, preserved the disabled setting after
+restart, and rendered `native/artifacts/task75-settings-disabled.png`. The
+default no-settings-file capture also rendered at
+`native/artifacts/task75-settings-default.png`. The temporary copy and checks
+are recorded in `native/artifacts/task75-verification.json`. Interactive
+checkbox clicks, Windows notification settings, Windows toast delivery and
+activation, and live GitHub event delivery remain unverified. The adapter
+targets a safe GitHub pull-request URL in the standard browser; cold-launch
+activation is not handled. Prompt and advanced settings remain in work unit 76.
+
 Rows 21 and 33 now have native UI and Core API coverage. `MainWindow.UndoTags.cs`
 uses `UndoCommitAsync` with the expected HEAD guard and uses `GetTagsAsync`,
 `CreateTagAsync`, and `DeleteTagAsync` with the tag object ID guard. The History
@@ -431,7 +447,7 @@ unverified. The post-await workspace guard passed its later build check (Release
 | 53 | Provide one light palette, one dark palette, and a `System` choice between them; use `app/src/ui/preferences/appearance.tsx` and `app/src/ui/lib/application-theme.ts`. | 3 | Partial | Changing the theme updates the whole native window and persists across restart. The `9B98` artifact retained Light after restart, but its caption buttons and History dialog exposed theme mismatches. Current source adds effective-theme, system-color, high-contrast, inactive-titlebar, and dialog or popup synchronization; the DC114 dark Settings capture is recorded at `native/artifacts/screenshots/native-dc114-settings-dark-20260905.jpg`, while an actual High Contrast switch and the next current-source visual pass remain unverified. |
 | 54 | Persist native settings and recent repositories; use `native/WinGit.Native/NativeSettings.cs` and `app/src/lib/databases/repositories-database.ts` as references. | 4, 53 | Partial | Native settings are stored under the `WinGit.Native` data boundary, recover from malformed data, and never import Electron or GitHub auth state. |
 | 55 | Provide Git identity, editor, and integration settings; use `app/src/ui/preferences/git.tsx`, `app/src/ui/editor`, and `app/src/ui/preferences/integrations.tsx`. | 3 | Partial | A setting change is visible to the next matching Git or editor action and reports invalid configuration before execution. Core reads and writes scoped Git identity and default-branch values while preserving unrelated configuration, covered by `GitRepositoryConfigurationTests`; Native discovers and persists stable editor and built-in shell selections, validates the selected executable and repository containment before launch, and reports a saved selection that is no longer available before launch. Electron preferences replace an unavailable saved editor with the first discovered option; native requires a new selection. Native does not expose Electron custom-editor or custom-shell paths and arguments, including `%TARGET_PATH%`. Full Settings UI coverage, next-action desktop proof, and invalid-configuration interaction remain unverified. |
-| 56 | Provide notification, prompt, and advanced settings; use `app/src/ui/preferences/notifications.tsx`, `prompts.tsx`, and `advanced.tsx`. | 53 | Remaining | Each setting changes its documented notification or prompt behavior and remains stable after restart. |
+| 56 | Provide notification, prompt, and advanced settings; use `app/src/ui/preferences/notifications.tsx`, `prompts.tsx`, and `advanced.tsx`. | 53 | Partial | Native implements persisted GitHub notifications with an enabled-by-default setting, a Settings control with Windows availability status, bounded current-repository monitoring for pull-request comments, reviews, and failed checks, and safe pull-request browser targets. The evidence section records the final build and Core suite, focused notification tests, the source publish, and isolated settings captures. Interactive checkbox clicks, Windows notification settings, Windows toast delivery and activation, and live GitHub event delivery remain unverified. Cold-launch activation is not handled, and prompt and advanced settings remain in work unit 76. |
 | 57 | Provide accessibility, keyboard, and zoom settings; use `app/src/ui/preferences/accessibility.tsx`, `app/src/ui/keyboard-shortcut`, and `app/src/ui/window/zoom-info.tsx`. | 3 | Remaining | Keyboard navigation reaches every action, controls expose accessible names, and zoom changes are visible without layout loss. |
 
 ## 9. Codex account and review features
