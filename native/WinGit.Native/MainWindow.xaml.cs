@@ -134,6 +134,7 @@ public sealed partial class MainWindow : Window
 
         settings = await NativeSettingsStore.LoadAsync();
         NormalizeSettings();
+        RestoreNavigationPane();
         ApplyImageDiffModeToControls();
         ApplyTextDiffSettingsToControls();
         if (captureOptions?.Theme is string captureTheme)
@@ -1549,6 +1550,36 @@ public sealed partial class MainWindow : Window
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private void RestoreNavigationPane()
+    {
+        MainNavigation.PaneDisplayMode = settings.NavigationPaneExpanded
+            ? NavigationViewPaneDisplayMode.Left
+            : NavigationViewPaneDisplayMode.LeftCompact;
+        MainNavigation.IsPaneOpen = settings.NavigationPaneExpanded;
+        MainNavigation.PaneOpened += MainNavigation_PaneOpened;
+        MainNavigation.PaneClosed += MainNavigation_PaneClosed;
+    }
+
+    private void MainNavigation_PaneOpened(NavigationView sender, object args)
+    {
+        sender.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
+        if (!settings.NavigationPaneExpanded)
+        {
+            settings.NavigationPaneExpanded = true;
+            _ = SaveSettingsAsync();
+        }
+    }
+
+    private void MainNavigation_PaneClosed(NavigationView sender, object args)
+    {
+        sender.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftCompact;
+        if (settings.NavigationPaneExpanded)
+        {
+            settings.NavigationPaneExpanded = false;
+            _ = SaveSettingsAsync();
+        }
     }
 
     private void ApplyTheme()

@@ -66,6 +66,8 @@ internal sealed class NativeSettings
 
     public double ZoomFactor { get; set; } = NativeZoomLevels.Default;
 
+    public bool NavigationPaneExpanded { get; set; }
+
     public bool HideWhitespaceChanges { get; set; }
 
     public bool UnderlineLinks { get; set; } = true;
@@ -248,6 +250,7 @@ internal static class NativeSettingsStore
                 ImageDiffMode = settings.ImageDiffMode,
                 TextDiffMode = settings.TextDiffMode,
                 ZoomFactor = settings.ZoomFactor,
+                NavigationPaneExpanded = settings.NavigationPaneExpanded,
                 HideWhitespaceChanges = settings.HideWhitespaceChanges,
                 UnderlineLinks = settings.UnderlineLinks,
                 ShowDiffCheckMarks = settings.ShowDiffCheckMarks,
