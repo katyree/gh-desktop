@@ -36,6 +36,7 @@ public sealed record NativeUpdateOptions(
 public interface INativeUpdateSignatureVerifier
 {
     Task<bool> IsValidAsync(string executablePath, string expectedSignerSubject, CancellationToken cancellationToken);
+    Task<bool> IsPackageValidAsync(string packageDirectory, string expectedSignerSubject, CancellationToken cancellationToken);
 }
 
 public sealed record NativeUpdateInstallPlan(
@@ -255,7 +256,7 @@ public sealed class NativeUpdateClient
 
             File.Move(partialPath, verifiedPath, true);
             verifiedArchive = (verifiedPath, manifest.Sha256.ToUpperInvariant());
-            SetState(new(NativeUpdateStatus.Downloaded, "Update downloaded and verified. Ready to install.", checkedAt, Version: manifest.Version));
+            SetState(new(NativeUpdateStatus.Downloaded, "Update downloaded. Package verification runs before installation.", checkedAt, Version: manifest.Version));
         }
         finally
         {
@@ -362,6 +363,11 @@ public sealed class NativeUpdateClient
                 }
             }
 
+            if (!await signatureVerifier.IsPackageValidAsync(stagedDirectory, options.ExpectedSignerSubject, cancellationToken))
+            {
+                throw new InvalidDataException("The staged update package has no valid signed file catalog.");
+            }
+
             return new NativeUpdateInstallPlan(downloaded.Path, downloaded.Sha256, stagedDirectory, target,
                 options.ExpectedSignerSubject);
         }
@@ -424,7 +430,8 @@ public sealed class NativeUpdateClient
             "git/LICENSE.txt", "git/dugite-LICENSE", "git/cmd/git.exe",
             "git/mingw64/bin/git.exe", "git/mingw64/libexec/git-core/git-lfs.exe",
             "git/mingw64/libexec/git-core/git-credential-wincred.exe", "git/usr/bin/sh.exe",
-            "verify-update-signature.ps1", "apply-native-update.ps1"
+            "verify-update-signature.ps1", "verify-update-package.ps1",
+            "apply-native-update.ps1", "UpdateCatalog.cat"
         ];
         var entries = archive.Entries;
         if (entries.Count > 10_000

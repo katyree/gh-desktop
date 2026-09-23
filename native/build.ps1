@@ -79,6 +79,7 @@ try {
         'Assets\icon-logo.ico',
         'WinGit.Native.exe',
         'apply-native-update.ps1',
+        'verify-update-package.ps1',
         'ReleaseNotes.txt',
         'Acknowledgements.txt',
         'LICENSE.txt',

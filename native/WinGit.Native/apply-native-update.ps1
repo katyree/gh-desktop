@@ -56,6 +56,17 @@ try {
         throw 'The staged executable is not signed by the expected signer.'
     }
 
+    $catalog = Join-Path $stage 'UpdateCatalog.cat'
+    $catalogSignature = Get-AuthenticodeSignature -LiteralPath $catalog
+    $catalogValidation = Test-FileCatalog -Path $stage -CatalogFilePath $catalog -Detailed
+    if ($catalogSignature.Status -ne 'Valid' -or
+        $null -eq $catalogSignature.SignerCertificate -or
+        $catalogSignature.SignerCertificate.Subject -cne $ExpectedSignerSubject -or
+        $catalogValidation.Status -ne 'Valid' -or
+        $catalogValidation.HashAlgorithm -ne 'SHA256') {
+        throw 'The staged package has no valid signed file catalog.'
+    }
+
     Move-Item -LiteralPath $target -Destination $previous
     $movedPrevious = $true
     Move-Item -LiteralPath $stage -Destination $target

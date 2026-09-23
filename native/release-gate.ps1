@@ -70,6 +70,24 @@ if ($Mode -eq 'Release') {
     }
 }
 
+function Sign-NativeFile([string] $FilePath) {
+    $metadataPath = Join-Path $env:TEMP ([System.IO.Path]::GetRandomFileName())
+    try {
+        @{
+            Endpoint = $endpoint
+            CodeSigningAccountName = [Environment]::GetEnvironmentVariable('WINGIT_AZURE_SIGNING_ACCOUNT')
+            CertificateProfileName = [Environment]::GetEnvironmentVariable('WINGIT_AZURE_SIGNING_PROFILE')
+        } | ConvertTo-Json | Set-Content -LiteralPath $metadataPath -Encoding utf8
+        & $SignToolPath sign /v /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 /dlib $SigningClientPath /dmdf $metadataPath $FilePath
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Native release signing failed'
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $metadataPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
 if ($Sign) {
     if ($Mode -ne 'Release') {
         throw 'Sign requires Release mode'
@@ -80,21 +98,7 @@ if ($Sign) {
         -not (Test-Path -LiteralPath $SigningClientPath -PathType Leaf)) {
         throw 'SignToolPath and SigningClientPath must name existing files'
     }
-    $metadataPath = Join-Path $env:TEMP ([System.IO.Path]::GetRandomFileName())
-    try {
-        @{
-            Endpoint = $endpoint
-            CodeSigningAccountName = [Environment]::GetEnvironmentVariable('WINGIT_AZURE_SIGNING_ACCOUNT')
-            CertificateProfileName = [Environment]::GetEnvironmentVariable('WINGIT_AZURE_SIGNING_PROFILE')
-        } | ConvertTo-Json | Set-Content -LiteralPath $metadataPath -Encoding utf8
-        & $SignToolPath sign /v /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 /dlib $SigningClientPath /dmdf $metadataPath $executable
-        if ($LASTEXITCODE -ne 0) {
-            throw 'Native executable signing failed'
-        }
-    }
-    finally {
-        Remove-Item -LiteralPath $metadataPath -Force -ErrorAction SilentlyContinue
-    }
+    Sign-NativeFile $executable
 }
 
 $signature = Get-AuthenticodeSignature -LiteralPath $executable
@@ -106,4 +110,33 @@ if ($Mode -eq 'Release' -and -not $releaseReady) {
 }
 if ($releaseReady) {
     $null = Write-SigningStatus -Gate 'Passed'
+    $catalog = Join-Path $publishDirectory 'UpdateCatalog.cat'
+    $temporaryCatalog = Join-Path $env:TEMP ([System.IO.Path]::GetRandomFileName() + '.cat')
+    try {
+        if ($Sign) {
+            if (Test-Path -LiteralPath $catalog) {
+                throw 'Remove the existing update catalog before signing a new release candidate'
+            }
+            New-FileCatalog -Path $publishDirectory -CatalogFilePath $temporaryCatalog -CatalogVersion 2.0 | Out-Null
+            Sign-NativeFile $temporaryCatalog
+            Move-Item -LiteralPath $temporaryCatalog -Destination $catalog
+        }
+
+        $catalogSignature = Get-AuthenticodeSignature -LiteralPath $catalog
+        $catalogValidation = Test-FileCatalog -Path $publishDirectory -CatalogFilePath $catalog -Detailed
+        if ($catalogSignature.Status -ne 'Valid' -or
+            $null -eq $catalogSignature.SignerCertificate -or
+            $catalogSignature.SignerCertificate.Subject -cne $ExpectedSignerSubject -or
+            $catalogValidation.Status -ne 'Valid' -or
+            $catalogValidation.HashAlgorithm -ne 'SHA256') {
+            throw 'Native release candidate requires a valid signed catalog for the entire publish output'
+        }
+    }
+    catch {
+        $null = Write-SigningStatus -Gate 'Blocked'
+        throw
+    }
+    finally {
+        Remove-Item -LiteralPath $temporaryCatalog -Force -ErrorAction SilentlyContinue
+    }
 }

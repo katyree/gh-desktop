@@ -112,8 +112,8 @@ public sealed partial class MainWindow
 
         var confirmation = new ContentDialog
         {
-            Title = "Install verified update?",
-            Content = "WinGit will prepare the update, close, replace its app files, and restart. Keep WinGit open while preparation runs.",
+            Title = "Install downloaded update?",
+            Content = "WinGit will verify the package, close, replace its app files, and restart. Keep WinGit open while preparation runs.",
             PrimaryButtonText = "Quit and install",
             SecondaryButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Secondary,
@@ -125,7 +125,6 @@ public sealed partial class MainWindow
             return;
         }
 
-        nativeUpdateTimer?.Stop();
         var plan = await nativeUpdateClient.PrepareInstallationAsync(AppContext.BaseDirectory, nativeUpdateCancellation.Token);
         if (plan is null)
         {
@@ -163,6 +162,8 @@ public sealed partial class MainWindow
             {
                 throw new InvalidOperationException("The update installer did not start.");
             }
+
+            nativeUpdateTimer?.Stop();
 
         }
         catch (Exception)

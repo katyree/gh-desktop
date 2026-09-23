@@ -239,6 +239,35 @@ public sealed class NativeUpdateClientTests
         }
     }
 
+    [Fact]
+    public async Task PackageWithoutValidCatalogCannotBeStaged()
+    {
+        var directory = CreateDirectory();
+        try
+        {
+            var target = Path.Combine(directory, "current-app");
+            Directory.CreateDirectory(target);
+            File.WriteAllText(Path.Combine(target, "WinGit.Native.exe"), "existing installation");
+            var archive = CreateArchive(installable: true);
+            var hash = Convert.ToHexString(SHA256.HashData(archive));
+            using var httpClient = new HttpClient(new UpdateHandler(request => request.RequestUri!.AbsolutePath == "/feed"
+                ? JsonResponse($$"""
+                    {"version":"2.0.0-beta.1","channel":"beta","assetUrl":"https://updates.test/update.zip","sha256":"{{hash}}"}
+                    """)
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(archive) }));
+            var client = CreateClient(directory, httpClient, new TestVerifier(true, packageValid: false));
+            await client.CheckAsync(manual: true);
+
+            Assert.Null(await client.PrepareInstallationAsync(target));
+            Assert.Equal(NativeUpdateStatus.Failed, client.State.Status);
+            Assert.Equal("existing installation", File.ReadAllText(Path.Combine(target, "WinGit.Native.exe")));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static NativeUpdateClient CreateClient(string directory, HttpClient httpClient, INativeUpdateSignatureVerifier verifier) =>
         new(httpClient, verifier, new NativeUpdateOptions(
             new Uri("https://updates.test/feed"), "beta", "CN=Test Signer", "1.0.0",
@@ -291,7 +320,8 @@ public sealed class NativeUpdateClientTests
                     "git/LICENSE.txt", "git/dugite-LICENSE", "git/cmd/git.exe",
                     "git/mingw64/bin/git.exe", "git/mingw64/libexec/git-core/git-lfs.exe",
                     "git/mingw64/libexec/git-core/git-credential-wincred.exe", "git/usr/bin/sh.exe",
-                    "verify-update-signature.ps1", "apply-native-update.ps1"
+                    "verify-update-signature.ps1", "verify-update-package.ps1",
+                    "apply-native-update.ps1", "UpdateCatalog.cat"
                 })
                 {
                     using var requiredFile = archive.CreateEntry(path).Open();
@@ -314,13 +344,20 @@ public sealed class NativeUpdateClientTests
             Task.FromResult(respond(request));
     }
 
-    private sealed class TestVerifier(bool valid) : INativeUpdateSignatureVerifier
+    private sealed class TestVerifier(bool valid, bool packageValid = true) : INativeUpdateSignatureVerifier
     {
         public Task<bool> IsValidAsync(string executablePath, string expectedSignerSubject, CancellationToken cancellationToken)
         {
             Assert.Equal("CN=Test Signer", expectedSignerSubject);
             Assert.True(File.Exists(executablePath));
             return Task.FromResult(valid);
+        }
+
+        public Task<bool> IsPackageValidAsync(string packageDirectory, string expectedSignerSubject, CancellationToken cancellationToken)
+        {
+            Assert.Equal("CN=Test Signer", expectedSignerSubject);
+            Assert.True(File.Exists(Path.Combine(packageDirectory, "UpdateCatalog.cat")));
+            return Task.FromResult(packageValid);
         }
     }
 }

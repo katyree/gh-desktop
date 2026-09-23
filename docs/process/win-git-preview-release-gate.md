@@ -25,11 +25,13 @@ Set `WINGIT_AZURE_SIGNING_ENDPOINT`, `WINGIT_AZURE_SIGNING_ACCOUNT`, and
 `WINGIT_AZURE_SIGNING_PROFILE` to the WinGit-owned Artifact Signing profile.
 Pass the expected certificate subject through `-ExpectedSignerSubject`.
 `-Sign` additionally requires paths to SignTool and the Azure signing client
-DLL; it signs only `WinGit.Native.exe`. Without `-Sign`, the gate checks an
-already signed executable. The gate requires a valid Authenticode signature
-whose subject matches the expected subject. It writes `SigningStatus.json`
-with `releaseGate: Blocked` before checking release prerequisites and changes
-the result to `Passed` only after every check succeeds.
+DLL. It signs `WinGit.Native.exe` and a SHA-256 file catalog covering the
+published directory. Without `-Sign`, the gate checks both existing
+signatures and the catalog's file hashes. Both signatures must have the
+expected subject. The gate writes `SigningStatus.json` with
+`releaseGate: Blocked` before checking release prerequisites. If catalog
+signing or verification fails, the gate stays blocked. Build the update ZIP
+from the exact directory that passed this gate, including `UpdateCatalog.cat`.
 
 This is a local candidate gate, not proof that the evidence is accurate or
 that a hosted runner signed an artifact. The owner must review the evidence,
