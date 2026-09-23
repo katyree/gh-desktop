@@ -15,6 +15,7 @@ Use these tools on Windows:
 - Windows 10 version 1809 or later ([Windows App SDK versioning](https://learn.microsoft.com/en-us/windows/apps/get-started/versioning-overview)).
 - .NET SDK 8.0.423 or another compatible .NET 8 SDK.
 - Git for Windows with `git.exe` on `PATH`.
+- Codex CLI on `PATH` to use the Codex features. The published app does not include it.
 
 The native project uses Microsoft.WindowsAppSDK `2.2.0` and
 Microsoft.Windows.SDK.BuildTools `10.0.26100.4654`. Restore these pinned
@@ -90,9 +91,10 @@ surfaces. They are local verification artifacts and are ignored by
 
 ## History selection verification (task 13)
 
-From the task worktree, build with the runtime package roots set to the existing
-`app/node_modules/dugite` and `app/node_modules/@openai/codex-win32-x64`
-packages in the main checkout. Keep auditing and runtime integrity enabled.
+From the task worktree, build with the Git runtime package root set to the
+existing `app/node_modules/dugite` package in the main checkout. Keep auditing
+and Git runtime integrity enabled. Codex features use an installed Codex CLI
+available on `PATH`; the native package does not contain Codex.
 
 ```powershell
 ./native/build.ps1 -Configuration Release -Runtime win-x64 -OutputPath ./native/artifacts/task13-verified-20260917

@@ -9,7 +9,5 @@ This native output also includes the following separately licensed software:
 - Git for Windows through Dugite. Read git/LICENSE.txt and
   git/dugite-LICENSE. Runtime provenance is in
   git/GitRuntimeProvenance.txt.
-- OpenAI Codex runtime. Read codex/codex-LICENSE.txt. Runtime provenance is
-  in codex/CodexRuntimeProvenance.txt.
 
 These paths are relative to the directory containing WinGit.Native.exe.

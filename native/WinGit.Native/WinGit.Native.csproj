@@ -70,7 +70,6 @@
     </ItemGroup>
   </Target>
 
-  <Import Project="CodexRuntime.targets" />
   <Import Project="NativeGitRuntime.targets" />
 
 </Project>

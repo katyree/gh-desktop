@@ -47,9 +47,7 @@ public sealed class CodexAppServerClient : IAsyncDisposable
     {
         this.options = options ?? new CodexAppServerClientOptions();
         ValidateOptions(this.options);
-        executablePath = CodexExecutableLocator.Resolve(
-            this.options.ExecutablePath,
-            this.options.ApplicationRoot);
+        executablePath = CodexExecutableLocator.Resolve(this.options.ExecutablePath);
     }
 
     /// <summary>Raised after a known or unknown server notification is sanitized.</summary>
@@ -1582,14 +1580,6 @@ public sealed class CodexAppServerClient : IAsyncDisposable
             throw new ArgumentException(
                 "Codex generation working directory must be absolute.",
                 nameof(values.GenerationWorkingDirectory));
-        }
-
-        if (values.ApplicationRoot is not null &&
-            !Path.IsPathFullyQualified(values.ApplicationRoot))
-        {
-            throw new ArgumentException(
-                "Codex application root must be absolute.",
-                nameof(values.ApplicationRoot));
         }
 
         if (values.CodexHomePath is not null &&

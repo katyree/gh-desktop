@@ -163,7 +163,6 @@ public sealed partial class MainWindow
                 codexClient = new CodexAppServerClient(
                     new CodexAppServerClientOptions
                     {
-                        ApplicationRoot = AppContext.BaseDirectory,
                         CodexHomePath = codexHome,
                         WorkingDirectory = codexHome,
                         ClientName = "wingit-native",
@@ -861,7 +860,7 @@ public sealed partial class MainWindow
 
     private static string GetCodexFailureMessage(Exception exception) => exception switch
     {
-        FileNotFoundException => "The Codex executable was not found.",
+        FileNotFoundException => "Install the Codex CLI and add it to PATH to use Codex features.",
         System.ComponentModel.Win32Exception => "Windows could not start the Codex app server.",
         _ => "The Codex app server is unavailable.",
     };

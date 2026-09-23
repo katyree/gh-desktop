@@ -233,7 +233,7 @@ public sealed record CodexServerNotification(
 /// <summary>Options for one owned local app-server process.</summary>
 public sealed record CodexAppServerClientOptions
 {
-    /// <summary>Optional absolute path; when omitted, the packaged/PATH locator is used.</summary>
+    /// <summary>Optional executable path; when omitted, the installed CLI is found on PATH.</summary>
     public string? ExecutablePath { get; init; }
 
     /// <summary>
@@ -241,9 +241,6 @@ public sealed record CodexAppServerClientOptions
     /// profile. When omitted, `%LOCALAPPDATA%\\WinGit.Native\\codex` is used.
     /// </summary>
     public string? CodexHomePath { get; init; }
-
-    /// <summary>Optional application root containing the packaged Codex runtime.</summary>
-    public string? ApplicationRoot { get; init; }
 
     /// <summary>Working directory for the app-server process.</summary>
     public string? WorkingDirectory { get; init; }
