@@ -1716,6 +1716,14 @@
                             <StackPanel MaxWidth="820" Spacing="14">
                                 <TextBlock Text="Settings" Style="{StaticResource PanelTitleStyle}" />
                                 <TextBlock Text="Native preferences are stored separately for this WinUI app." Style="{StaticResource SecondaryTextStyle}" />
+                                <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Updates" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="UpdateStatusText" Text="Updates have not been checked." TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                                        <ProgressBar x:Name="UpdateProgressBar" Visibility="Collapsed" IsIndeterminate="True" AutomationProperties.Name="Update download progress" />
+                                        <Button x:Name="CheckForUpdatesButton" Content="Check for Updates" Click="CheckForUpdatesButton_Click" AutomationProperties.Name="Check for Updates" HorizontalAlignment="Left" />
+                                    </StackPanel>
+                                </Border>
                                 <TextBlock Text="Theme" FontWeight="SemiBold" Margin="0,10,0,0" />
                                 <ComboBox x:Name="ThemeComboBox" Width="220" SelectedValuePath="Tag" SelectionChanged="ThemeComboBox_SelectionChanged" AutomationProperties.Name="Native app theme">
                                     <ComboBoxItem Content="Use system setting" Tag="System" />

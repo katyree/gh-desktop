@@ -578,11 +578,38 @@ notes, acknowledgements, and license files. Hosted CI, artifact upload, and
 runner-side package installation remain unverified until this workflow runs
 remotely. This task adds no signing or updater gate.
 
+Task 84 starts from task 83's `6ac2cbfdc1` signing-gate commit. The native
+updater is disabled until `WINGIT_NATIVE_UPDATE_FEED_URL`,
+`WINGIT_NATIVE_UPDATE_CHANNEL` (`production`, `beta`, or `test`), and
+`WINGIT_NATIVE_UPDATE_SIGNER_SUBJECT` are configured. The signer subject must
+match the subject used by the task 83 release gate. The feed must use HTTPS and
+return either 204/404 for no update or JSON with `version`, `channel`,
+`assetUrl`, and `sha256`. The asset is a ZIP on the same HTTPS host. Beta and
+production check at startup and every four hours; a manual check includes
+`skipGuidCheck=1`. A stable GUID is stored in the native profile's `.update-id`.
+The settings view shows checking, byte download progress, errors, and the
+downloaded result. It offers no install action.
+
+Before retaining a download, the client checks the channel and version, the
+archive SHA-256, safe ZIP paths, required WinUI files, task 83's
+`SigningStatus.json` with `releaseGate=Passed`, its executable hash and signer,
+and the executable's real Authenticode status. Failed checks remove the partial
+archive. Five focused tests cover manual and background checks, download
+progress, no update, hash mismatch, unsigned executable, and a blocked signing
+gate. The full Core suite passed 231/231. A Release `win-x64` build and publish
+passed with 0 warnings and 0 errors. A copied published app rendered the
+disabled-channel Settings state in `native/artifacts/task84-settings-verified.png`;
+the copied unsigned `WinGit.Native.exe` returned exit code 1 from the shipped
+signature verifier. The task 83 audit gate marked the new published executable
+`NotSigned` and `Blocked`, with a matching SHA-256. No hosted feed, real signed
+update, network download in the running UI, installed-app replacement, hosted
+CI, or public release was verified. Task 85 owns installation.
+
 | # | Work unit and source | Depends on | Native status | Acceptance criteria |
 | --- | --- | --- | --- | --- |
 | 64 | Package the native app (task 80) and publish release notes and acknowledgements (task 81); use `native/build.ps1`, `script/package.ts`, `app/src/ui/release-notes`, and `app/src/ui/acknowledgements`. | 1, 3 | Partial | Task 80 proves a clean `win-x64` output can be unpacked and launched without changing the Electron package. Task 81 adds root-level `ReleaseNotes.txt`, `Acknowledgements.txt`, and `LICENSE.txt` to the native output. The notes explicitly identify the WinUI 3 native preview and local Release win-x64 build. A Release build and publish passed with 0 warnings and 0 errors; an independent clean copy contained 915 files, including all three root documents and the bundled Git, Dugite, and Codex license files at the paths named in the acknowledgements. The Electron package was unchanged. No public release, signing, installer, or updater was produced or verified; task 65 and task 66 own those gates. |
 | 65 | Establish native signing and release gates; use `script/release-config.ts`, `README.md`, and `docs/process/win-git-preview-release-gate.md`. | 64 | Partial | Task 83 adds `native/release-gate.ps1` and records `SigningStatus.json` in the native CI artifact. Release mode requires a WinGit signing configuration, an expected signer subject, four nonempty evidence records, and a valid Authenticode signature from that subject. It can sign `WinGit.Native.exe` with the existing Azure signing client or check an already signed executable. The local Release `win-x64` build and publish passed with 0 warnings and 0 errors; the real executable reported `NotSigned`, the status hash matched the file, and the release gate remained `Blocked`. Missing evidence and missing signing configuration each failed; synthetic evidence and configuration still failed on the unsigned executable. PowerShell and workflow YAML syntax passed. No production signing, hosted CI, installer, clean-machine evidence review, or public release was exercised. The Electron release path was unchanged. |
-| 66 | Provide an update channel and update progress; use `app/src/main-process/squirrel-updater.ts`, `app/src/ui/installing-update`, `app/src/ui/lib/update-store.ts`, and `app/src/lib/get-updater-guid.ts`. | 64, 65 | Remaining | An available update can be verified, downloaded, and installed with visible progress, and an unavailable or unsigned update is not applied silently. |
+| 66 | Provide an update channel and update progress; use `app/src/main-process/squirrel-updater.ts`, `app/src/ui/installing-update`, `app/src/ui/lib/update-store.ts`, and `app/src/lib/get-updater-guid.ts`. | 64, 65 | Partial | Task 84 implements discovery, validation, download, and visible progress on a configured signed channel. Invalid, unavailable, blocked, or unsigned updates never become downloaded. The Settings view has no install action. Task 85 still owns installation, and the hosted signed-update path remains unverified. |
 
 Rows marked `Partial` have useful native code or evidence, but their
 acceptance criteria still have open work. Rows marked `Remaining` are part of
