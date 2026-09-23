@@ -152,6 +152,7 @@ public sealed partial class MainWindow : Window
         InitializeZoomControls();
         ApplyGitProcessOptions();
         InitializeNativeUpdates();
+        await ShowPreviousInstallResultAsync();
 
         if (captureOptions is not null)
         {

@@ -1744,6 +1744,7 @@
                                         <TextBlock x:Name="UpdateStatusText" Text="Updates have not been checked." TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
                                         <ProgressBar x:Name="UpdateProgressBar" Visibility="Collapsed" IsIndeterminate="True" AutomationProperties.Name="Update download progress" />
                                         <Button x:Name="CheckForUpdatesButton" Content="Check for Updates" Click="CheckForUpdatesButton_Click" AutomationProperties.Name="Check for Updates" HorizontalAlignment="Left" />
+                                        <Button x:Name="InstallUpdateButton" Content="Quit and install update" Click="InstallUpdateButton_Click" AutomationProperties.Name="Quit and install verified update" Visibility="Collapsed" HorizontalAlignment="Left" />
                                     </StackPanel>
                                 </Border>
                                 <TextBlock Text="Theme" FontWeight="SemiBold" Margin="0,10,0,0" />

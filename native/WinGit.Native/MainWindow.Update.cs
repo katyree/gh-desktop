@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WinGit.Core;
@@ -84,7 +85,10 @@ public sealed partial class MainWindow
 
         CheckForUpdatesButton.IsEnabled = state.Status is NativeUpdateStatus.NotChecked
             or NativeUpdateStatus.NotAvailable or NativeUpdateStatus.Failed;
+        InstallUpdateButton.Visibility = state.Status == NativeUpdateStatus.Downloaded
+            ? Visibility.Visible : Visibility.Collapsed;
         UpdateProgressBar.Visibility = state.Status is NativeUpdateStatus.Checking or NativeUpdateStatus.Downloading
+            or NativeUpdateStatus.Installing
             ? Visibility.Visible : Visibility.Collapsed;
         UpdateProgressBar.IsIndeterminate = state.Status is NativeUpdateStatus.Checking
             || state.TotalBytes is not > 0;
@@ -97,6 +101,105 @@ public sealed partial class MainWindow
             ? $"Downloading update {state.Version}: {state.DownloadedBytes / 1024:N0} KB"
                 + (state.TotalBytes is > 0 ? $" of {state.TotalBytes.Value / 1024:N0} KB" : string.Empty)
             : state.Message;
+    }
+
+    private async void InstallUpdateButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (nativeUpdateClient?.State.Status != NativeUpdateStatus.Downloaded)
+        {
+            return;
+        }
+
+        var confirmation = new ContentDialog
+        {
+            Title = "Install verified update?",
+            Content = "WinGit will prepare the update, close, replace its app files, and restart. Keep WinGit open while preparation runs.",
+            PrimaryButtonText = "Quit and install",
+            SecondaryButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Secondary,
+            XamlRoot = RootGrid.XamlRoot,
+            RequestedTheme = RootGrid.ActualTheme
+        };
+        if (await confirmation.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        nativeUpdateTimer?.Stop();
+        var plan = await nativeUpdateClient.PrepareInstallationAsync(AppContext.BaseDirectory, nativeUpdateCancellation.Token);
+        if (plan is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var helperSource = Path.Combine(AppContext.BaseDirectory, "apply-native-update.ps1");
+            var helperCopy = Path.Combine(NativeSettingsStore.ProfileDirectory, "updates",
+                $"apply-native-update-{Guid.NewGuid():N}.ps1");
+            File.Copy(helperSource, helperCopy);
+            var resultPath = Path.Combine(NativeSettingsStore.ProfileDirectory, "update-install-result.txt");
+            var start = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            foreach (var argument in new[]
+            {
+                "-NoProfile", "-NonInteractive", "-File", helperCopy,
+                "-ArchivePath", plan.ArchivePath,
+                "-ArchiveSha256", plan.ArchiveSha256,
+                "-StagedDirectory", plan.StagedDirectory,
+                "-InstallationDirectory", plan.InstallationDirectory,
+                "-ExpectedSignerSubject", plan.ExpectedSignerSubject,
+                "-ParentProcessId", Environment.ProcessId.ToString(),
+                "-ResultPath", resultPath
+            })
+            {
+                start.ArgumentList.Add(argument);
+            }
+            if (Process.Start(start) is null)
+            {
+                throw new InvalidOperationException("The update installer did not start.");
+            }
+
+        }
+        catch (Exception)
+        {
+            nativeUpdateClient.ReportInstallHandoffFailure(plan);
+            return;
+        }
+
+        UpdateStatusText.Text = "Update prepared. Closing WinGit to install and restart...";
+        Close();
+    }
+
+    private async Task ShowPreviousInstallResultAsync()
+    {
+        if (diagnosticCaptureMode)
+        {
+            return;
+        }
+        var resultPath = Path.Combine(NativeSettingsStore.ProfileDirectory, "update-install-result.txt");
+        if (!File.Exists(resultPath))
+        {
+            return;
+        }
+
+        var message = File.ReadAllText(resultPath).Trim();
+        UpdateStatusText.Text = message;
+        File.Delete(resultPath);
+        var dialog = new ContentDialog
+        {
+            Title = message.StartsWith("Update files installed", StringComparison.Ordinal)
+                ? "WinGit update installed" : "WinGit update failed",
+            Content = message,
+            CloseButtonText = "Continue",
+            XamlRoot = RootGrid.XamlRoot,
+            RequestedTheme = RootGrid.ActualTheme
+        };
+        await dialog.ShowAsync();
     }
 
     private void StopNativeUpdates()

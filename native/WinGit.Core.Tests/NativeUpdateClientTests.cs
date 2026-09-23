@@ -142,6 +142,103 @@ public sealed class NativeUpdateClientTests
         }
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task OnlyCompleteVerifiedArchiveCanBeStagedWithoutReplacingCurrentApp(bool installable, bool canStage)
+    {
+        var directory = CreateDirectory();
+        try
+        {
+            var target = Path.Combine(directory, "current-app");
+            Directory.CreateDirectory(target);
+            File.WriteAllText(Path.Combine(target, "WinGit.Native.exe"), "existing installation");
+            var archive = CreateArchive(installable: installable);
+            var hash = Convert.ToHexString(SHA256.HashData(archive));
+            using var httpClient = new HttpClient(new UpdateHandler(request => request.RequestUri!.AbsolutePath == "/feed"
+                ? JsonResponse($$"""
+                    {"version":"2.0.0-beta.1","channel":"beta","assetUrl":"https://updates.test/update.zip","sha256":"{{hash}}"}
+                    """)
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(archive) }));
+            var client = CreateClient(directory, httpClient, new TestVerifier(true));
+            await client.CheckAsync(manual: true);
+            Assert.Equal(NativeUpdateStatus.Downloaded, client.State.Status);
+
+            var plan = await client.PrepareInstallationAsync(target);
+
+            Assert.Equal(canStage, plan is not null);
+            Assert.Equal("existing installation", File.ReadAllText(Path.Combine(target, "WinGit.Native.exe")));
+            if (plan is not null)
+            {
+                Assert.Equal(hash, plan.ArchiveSha256);
+                Assert.True(File.Exists(Path.Combine(plan.StagedDirectory, "WinGit.Native.exe")));
+                Directory.Delete(plan.StagedDirectory, recursive: true);
+            }
+            else
+            {
+                Assert.Equal(NativeUpdateStatus.Failed, client.State.Status);
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallCannotStartWithoutVerifiedDownload()
+    {
+        var directory = CreateDirectory();
+        try
+        {
+            var target = Path.Combine(directory, "current-app");
+            Directory.CreateDirectory(target);
+            File.WriteAllText(Path.Combine(target, "WinGit.Native.exe"), "existing installation");
+            using var httpClient = new HttpClient(new UpdateHandler(_ => throw new InvalidOperationException("No download expected")));
+            var client = CreateClient(directory, httpClient, new TestVerifier(true));
+
+            Assert.Null(await client.PrepareInstallationAsync(target));
+            Assert.Equal(NativeUpdateStatus.Failed, client.State.Status);
+            Assert.Equal("existing installation", File.ReadAllText(Path.Combine(target, "WinGit.Native.exe")));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ChangedDownloadedArchiveCannotBeStaged()
+    {
+        var directory = CreateDirectory();
+        try
+        {
+            var target = Path.Combine(directory, "current-app");
+            Directory.CreateDirectory(target);
+            File.WriteAllText(Path.Combine(target, "WinGit.Native.exe"), "existing installation");
+            var archive = CreateArchive(installable: true);
+            var hash = Convert.ToHexString(SHA256.HashData(archive));
+            using var httpClient = new HttpClient(new UpdateHandler(request => request.RequestUri!.AbsolutePath == "/feed"
+                ? JsonResponse($$"""
+                    {"version":"2.0.0-beta.1","channel":"beta","assetUrl":"https://updates.test/update.zip","sha256":"{{hash}}"}
+                    """)
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(archive) }));
+            var client = CreateClient(directory, httpClient, new TestVerifier(true));
+            await client.CheckAsync(manual: true);
+            File.WriteAllText(Path.Combine(directory, "updates", $"{hash.ToLowerInvariant()}.zip"), "changed archive");
+
+            var plan = await client.PrepareInstallationAsync(target);
+
+            Assert.Null(plan);
+            Assert.Equal(NativeUpdateStatus.Failed, client.State.Status);
+            Assert.Equal("existing installation", File.ReadAllText(Path.Combine(target, "WinGit.Native.exe")));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static NativeUpdateClient CreateClient(string directory, HttpClient httpClient, INativeUpdateSignatureVerifier verifier) =>
         new(httpClient, verifier, new NativeUpdateOptions(
             new Uri("https://updates.test/feed"), "beta", "CN=Test Signer", "1.0.0",
@@ -154,7 +251,7 @@ public sealed class NativeUpdateClientTests
         return directory;
     }
 
-    private static byte[] CreateArchive(string releaseGate = "Passed")
+    private static byte[] CreateArchive(string releaseGate = "Passed", bool installable = false)
     {
         var executableBytes = Encoding.UTF8.GetBytes("synthetic signed executable");
         var executableHash = Convert.ToHexString(SHA256.HashData(executableBytes));
@@ -177,6 +274,29 @@ public sealed class NativeUpdateClientTests
             {
                 using var requiredFile = archive.CreateEntry(path).Open();
                 requiredFile.WriteByte(1);
+            }
+            if (installable)
+            {
+                foreach (var path in new[]
+                {
+                    "WinGit.Native.dll", "WinGit.Core.dll", "WinGit.Native.deps.json",
+                    "WinGit.Native.runtimeconfig.json", "NativeImageDiffView.xbf", "NativeSubmoduleDiffView.xbf",
+                    "Assets/icon-logo.ico", "ReleaseNotes.txt", "Acknowledgements.txt", "LICENSE.txt",
+                    "codex/codex-LICENSE.txt", "codex/package.json",
+                    "codex/vendor/x86_64-pc-windows-msvc/bin/codex.exe",
+                    "codex/vendor/x86_64-pc-windows-msvc/bin/codex-code-mode-host.exe",
+                    "codex/vendor/x86_64-pc-windows-msvc/codex-path/rg.exe",
+                    "codex/vendor/x86_64-pc-windows-msvc/codex-resources/codex-command-runner.exe",
+                    "codex/vendor/x86_64-pc-windows-msvc/codex-resources/codex-windows-sandbox-setup.exe",
+                    "git/LICENSE.txt", "git/dugite-LICENSE", "git/cmd/git.exe",
+                    "git/mingw64/bin/git.exe", "git/mingw64/libexec/git-core/git-lfs.exe",
+                    "git/mingw64/libexec/git-core/git-credential-wincred.exe", "git/usr/bin/sh.exe",
+                    "verify-update-signature.ps1", "apply-native-update.ps1"
+                })
+                {
+                    using var requiredFile = archive.CreateEntry(path).Open();
+                    requiredFile.WriteByte(1);
+                }
             }
         }
 

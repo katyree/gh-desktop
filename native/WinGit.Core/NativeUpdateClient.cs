@@ -13,6 +13,7 @@ public enum NativeUpdateStatus
     NotAvailable,
     Downloading,
     Downloaded,
+    Installing,
     Failed
 }
 
@@ -37,9 +38,17 @@ public interface INativeUpdateSignatureVerifier
     Task<bool> IsValidAsync(string executablePath, string expectedSignerSubject, CancellationToken cancellationToken);
 }
 
+public sealed record NativeUpdateInstallPlan(
+    string ArchivePath,
+    string ArchiveSha256,
+    string StagedDirectory,
+    string InstallationDirectory,
+    string ExpectedSignerSubject);
+
 public sealed class NativeUpdateClient
 {
     private const long MaximumArchiveBytes = 1024L * 1024 * 1024;
+    private const long MaximumExtractedBytes = 4L * 1024 * 1024 * 1024;
     private static readonly Regex VersionPattern = new(
         @"^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<label>beta|test)\.(?<revision>0|[1-9]\d*))?$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -47,6 +56,7 @@ public sealed class NativeUpdateClient
     private readonly INativeUpdateSignatureVerifier signatureVerifier;
     private readonly NativeUpdateOptions options;
     private readonly SemaphoreSlim checkGate = new(1, 1);
+    private (string Path, string Sha256)? verifiedArchive;
 
     public NativeUpdateState State { get; private set; } = new(NativeUpdateStatus.NotChecked, "Updates have not been checked.");
     public event Action<NativeUpdateState>? StateChanged;
@@ -82,6 +92,7 @@ public sealed class NativeUpdateClient
                 return;
             }
 
+            verifiedArchive = null;
             SetState(new(NativeUpdateStatus.Checking, "Checking for updates...", State.LastSuccessfulCheck));
             var requestUrl = await CreateRequestUrlAsync(manual, cancellationToken);
             using var response = await httpClient.GetAsync(requestUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -243,11 +254,187 @@ public sealed class NativeUpdateClient
             }
 
             File.Move(partialPath, verifiedPath, true);
-            SetState(new(NativeUpdateStatus.Downloaded, "Update downloaded and verified. Installation is not available in this preview.", checkedAt, Version: manifest.Version));
+            verifiedArchive = (verifiedPath, manifest.Sha256.ToUpperInvariant());
+            SetState(new(NativeUpdateStatus.Downloaded, "Update downloaded and verified. Ready to install.", checkedAt, Version: manifest.Version));
         }
         finally
         {
             File.Delete(partialPath);
+        }
+    }
+
+    public async Task<NativeUpdateInstallPlan?> PrepareInstallationAsync(
+        string installationDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await checkGate.WaitAsync(0, cancellationToken))
+        {
+            return null;
+        }
+
+        string? stagedDirectory = null;
+        try
+        {
+            if (State.Status != NativeUpdateStatus.Downloaded || verifiedArchive is not { } downloaded)
+            {
+                SetState(new(NativeUpdateStatus.Failed, "No verified update is ready to install.", State.LastSuccessfulCheck));
+                return null;
+            }
+
+            var fullTarget = Path.GetFullPath(installationDirectory);
+            var target = fullTarget.TrimEnd(Path.DirectorySeparatorChar);
+            if (!Path.IsPathFullyQualified(installationDirectory)
+                || Path.GetPathRoot(fullTarget) == fullTarget
+                || !File.Exists(Path.Combine(target, "WinGit.Native.exe")))
+            {
+                throw new InvalidDataException("The current installation directory is invalid.");
+            }
+
+            SetState(new(NativeUpdateStatus.Installing, "Verifying the downloaded update before installation...",
+                State.LastSuccessfulCheck, Version: State.Version));
+            await using (var archiveStream = File.OpenRead(downloaded.Path))
+            {
+                var actualHash = Convert.ToHexString(await SHA256.HashDataAsync(archiveStream, cancellationToken));
+                if (!actualHash.Equals(downloaded.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidDataException("The downloaded update changed after verification.");
+                }
+            }
+
+            var parent = Path.GetDirectoryName(target)!;
+            stagedDirectory = Path.Combine(parent, $".{Path.GetFileName(target)}.update-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(stagedDirectory);
+            using (var archive = ZipFile.OpenRead(downloaded.Path))
+            {
+                ValidateInstallArchive(archive);
+                var totalBytes = archive.Entries.Sum(entry => entry.Length);
+                long extractedBytes = 0;
+                foreach (var entry in archive.Entries)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var destination = Path.Combine(stagedDirectory, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
+                    if (entry.FullName.EndsWith('/'))
+                    {
+                        Directory.CreateDirectory(destination);
+                        continue;
+                    }
+
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                    await using var source = entry.Open();
+                    await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                    var buffer = new byte[81920];
+                    long fileBytes = 0;
+                    int count;
+                    while ((count = await source.ReadAsync(buffer, cancellationToken)) > 0)
+                    {
+                        fileBytes += count;
+                        extractedBytes += count;
+                        if (fileBytes > entry.Length || extractedBytes > MaximumExtractedBytes)
+                        {
+                            throw new InvalidDataException("The update archive exceeds its declared size.");
+                        }
+                        await output.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
+                    }
+                    if (fileBytes != entry.Length)
+                    {
+                        throw new InvalidDataException("The update archive has an incomplete file.");
+                    }
+                    SetState(new(NativeUpdateStatus.Installing, "Preparing update files...",
+                        State.LastSuccessfulCheck, extractedBytes, totalBytes, State.Version));
+                }
+            }
+
+            var executablePath = Path.Combine(stagedDirectory, "WinGit.Native.exe");
+            await using (var signingStream = File.OpenRead(Path.Combine(stagedDirectory, "SigningStatus.json")))
+            {
+                var signingStatus = await JsonSerializer.DeserializeAsync<SigningStatus>(
+                    signingStream, new JsonSerializerOptions(JsonSerializerDefaults.Web), cancellationToken);
+                await using var executableStream = File.OpenRead(executablePath);
+                var executableHash = Convert.ToHexString(await SHA256.HashDataAsync(executableStream, cancellationToken));
+                if (signingStatus?.Artifact != "WinGit.Native.exe"
+                    || signingStatus.ReleaseGate != "Passed"
+                    || signingStatus.SignatureStatus != "Valid"
+                    || signingStatus.SignerSubject != options.ExpectedSignerSubject
+                    || !executableHash.Equals(signingStatus.Sha256, StringComparison.OrdinalIgnoreCase)
+                    || !await signatureVerifier.IsValidAsync(executablePath, options.ExpectedSignerSubject, cancellationToken))
+                {
+                    throw new InvalidDataException("The staged update has invalid signing evidence or signature.");
+                }
+            }
+
+            return new NativeUpdateInstallPlan(downloaded.Path, downloaded.Sha256, stagedDirectory, target,
+                options.ExpectedSignerSubject);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            RemoveStagedDirectory(stagedDirectory);
+            SetState(new(NativeUpdateStatus.Failed, "Update installation was cancelled before any files were replaced.", State.LastSuccessfulCheck));
+            return null;
+        }
+        catch (Exception exception)
+        {
+            RemoveStagedDirectory(stagedDirectory);
+            SetState(new(NativeUpdateStatus.Failed, $"Update installation could not start: {exception.Message}", State.LastSuccessfulCheck));
+            return null;
+        }
+        finally
+        {
+            checkGate.Release();
+        }
+    }
+
+    public void ReportInstallHandoffFailure(NativeUpdateInstallPlan plan)
+    {
+        RemoveStagedDirectory(plan.StagedDirectory);
+        SetState(new(NativeUpdateStatus.Failed, "Update installation could not start. The current installation is unchanged.", State.LastSuccessfulCheck));
+    }
+
+    private static void RemoveStagedDirectory(string? stagedDirectory)
+    {
+        if (stagedDirectory is not null && Directory.Exists(stagedDirectory))
+        {
+            try
+            {
+                Directory.Delete(stagedDirectory, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
+    private static void ValidateInstallArchive(ZipArchive archive)
+    {
+        string[] requiredFiles =
+        [
+            "WinGit.Native.exe", "WinGit.Native.dll", "WinGit.Core.dll",
+            "WinGit.Native.deps.json", "WinGit.Native.runtimeconfig.json", "SigningStatus.json",
+            "App.xbf", "MainWindow.xbf",
+            "NativeImageDiffView.xbf", "NativeSubmoduleDiffView.xbf", "WinGit.Native.pri",
+            "Assets/icon-logo.ico", "ReleaseNotes.txt", "Acknowledgements.txt", "LICENSE.txt",
+            "codex/codex-LICENSE.txt", "codex/package.json",
+            "codex/vendor/x86_64-pc-windows-msvc/bin/codex.exe",
+            "codex/vendor/x86_64-pc-windows-msvc/bin/codex-code-mode-host.exe",
+            "codex/vendor/x86_64-pc-windows-msvc/codex-path/rg.exe",
+            "codex/vendor/x86_64-pc-windows-msvc/codex-resources/codex-command-runner.exe",
+            "codex/vendor/x86_64-pc-windows-msvc/codex-resources/codex-windows-sandbox-setup.exe",
+            "git/LICENSE.txt", "git/dugite-LICENSE", "git/cmd/git.exe",
+            "git/mingw64/bin/git.exe", "git/mingw64/libexec/git-core/git-lfs.exe",
+            "git/mingw64/libexec/git-core/git-credential-wincred.exe", "git/usr/bin/sh.exe",
+            "verify-update-signature.ps1", "apply-native-update.ps1"
+        ];
+        var entries = archive.Entries;
+        if (entries.Count > 10_000
+            || entries.Any(entry => !IsSafeArchivePath(entry.FullName)
+                || (entry.ExternalAttributes >> 16 & 0xF000) == 0xA000)
+            || entries.GroupBy(entry => entry.FullName, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1)
+            || entries.Sum(entry => entry.Length) > MaximumExtractedBytes
+            || requiredFiles.Any(path => archive.GetEntry(path) is not { Length: > 0 }))
+        {
+            throw new InvalidDataException("The update archive is incomplete or has invalid entries.");
         }
     }
 

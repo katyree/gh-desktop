@@ -46,6 +46,7 @@
     <None Include="ReleaseNotes.txt" CopyToPublishDirectory="PreserveNewest" />
     <None Include="Acknowledgements.txt" CopyToPublishDirectory="PreserveNewest" />
     <None Include="verify-update-signature.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="apply-native-update.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <Target Name="IncludeWinUiArtifactsInPublish" AfterTargets="ComputeFilesToPublish">
