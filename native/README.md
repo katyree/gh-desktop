@@ -14,7 +14,7 @@ Use these tools on Windows:
 
 - Windows 10 version 1809 or later ([Windows App SDK versioning](https://learn.microsoft.com/en-us/windows/apps/get-started/versioning-overview)).
 - .NET SDK 8.0.423 or another compatible .NET 8 SDK.
-- Git for Windows with `git.exe` on `PATH`.
+- Git for Windows with `git.exe` on `PATH`. The published app does not include it.
 - Codex CLI on `PATH` to use the Codex features. The published app does not include it.
 
 The native project uses Microsoft.WindowsAppSDK `2.2.0` and

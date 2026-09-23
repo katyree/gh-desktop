@@ -5,62 +5,24 @@ using WinGit.Core;
 namespace WinGit.Native;
 
 /// <summary>
-/// Resolves the Git tree that is shipped beside the native executable. It
-/// never searches the Electron checkout or falls back to the machine PATH.
+/// Resolves and checks the user's installed Git for Windows executable.
 /// </summary>
 public static class NativeGitRuntime
 {
-    public const string RuntimeDirectoryName = "git";
     public const string SystemOpenSshRelativePath = "System32\\OpenSSH\\ssh.exe";
     private static readonly TimeSpan VersionProbeTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan VersionOutputTimeout = TimeSpan.FromSeconds(1);
 
-    public static string ResolveGitRoot(string? applicationRoot = null)
+    public static async Task<NativeGitRuntimeValidation> ValidateAsync()
     {
-        var root = applicationRoot ?? AppContext.BaseDirectory;
-        if (string.IsNullOrWhiteSpace(root))
-        {
-            throw new InvalidOperationException(
-                "The native application root is unavailable.");
-        }
-
-        var gitRoot = Path.GetFullPath(Path.Combine(root, RuntimeDirectoryName));
-        if (!Directory.Exists(gitRoot))
-        {
-            throw new InvalidOperationException(
-                "The bundled Git runtime is missing from the native application output.");
-        }
-
-        return gitRoot;
-    }
-
-    public static string ResolveGitExecutable(string? applicationRoot = null)
-    {
-        var executable = Path.Combine(
-            ResolveGitRoot(applicationRoot),
-            "cmd",
-            "git.exe");
-        if (!File.Exists(executable))
-        {
-            throw new InvalidOperationException(
-                "The bundled Git executable is missing from the native application output.");
-        }
-
-        return executable;
-    }
-
-    public static async Task<NativeGitRuntimeValidation> ValidateAsync(
-        string? applicationRoot = null)
-    {
-        var expectedExecutable = GetExpectedGitExecutablePath(applicationRoot);
         string executable;
         try
         {
-            executable = ResolveGitExecutable(applicationRoot);
+            executable = GitExecutableLocator.Resolve();
         }
-        catch (InvalidOperationException exception)
+        catch (FileNotFoundException exception)
         {
-            return NativeGitRuntimeValidation.Invalid(expectedExecutable, exception.Message);
+            return NativeGitRuntimeValidation.Invalid("git.exe", exception.Message);
         }
 
         return await ProbeVersionAsync(executable).ConfigureAwait(true);
@@ -121,12 +83,6 @@ public static class NativeGitRuntime
         };
     }
 
-    /// <summary>Creates the repository service with the contained Git executable.</summary>
-    public static GitRepositoryService CreateRepositoryService(
-        string? applicationRoot = null,
-        GitProcessOptions? processOptions = null) =>
-        new(ResolveGitExecutable(applicationRoot), processOptions);
-
     private static string GetSystemOpenSshPath()
     {
         var windowsDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
@@ -136,17 +92,6 @@ public static class NativeGitRuntime
         }
 
         return Path.GetFullPath(Path.Combine(windowsDirectory, SystemOpenSshRelativePath));
-    }
-
-    private static string GetExpectedGitExecutablePath(string? applicationRoot)
-    {
-        var root = applicationRoot ?? AppContext.BaseDirectory;
-        if (string.IsNullOrWhiteSpace(root))
-        {
-            return Path.Combine(RuntimeDirectoryName, "cmd", "git.exe");
-        }
-
-        return Path.GetFullPath(Path.Combine(root, RuntimeDirectoryName, "cmd", "git.exe"));
     }
 
     private static async Task<NativeGitRuntimeValidation> ProbeVersionAsync(string executable)
@@ -171,7 +116,7 @@ public static class NativeGitRuntime
             {
                 return NativeGitRuntimeValidation.Invalid(
                     executable,
-                    "The bundled Git executable could not be started.");
+                    "The installed Git executable could not be started.");
             }
 
             var standardOutputTask = process.StandardOutput.ReadToEndAsync();
@@ -186,7 +131,7 @@ public static class NativeGitRuntime
                 Terminate(process);
                 return NativeGitRuntimeValidation.Invalid(
                     executable,
-                    "The bundled Git executable did not finish its version check in time.");
+                    "The installed Git executable did not finish its version check in time.");
             }
 
             try
@@ -200,7 +145,7 @@ public static class NativeGitRuntime
                 Terminate(process);
                 return NativeGitRuntimeValidation.Invalid(
                     executable,
-                    "The bundled Git executable did not return a complete version check.");
+                    "The installed Git executable did not return a complete version check.");
             }
 
             var standardOutput = await standardOutputTask.ConfigureAwait(true);
@@ -209,14 +154,14 @@ public static class NativeGitRuntime
             {
                 return NativeGitRuntimeValidation.Invalid(
                     executable,
-                    "The bundled Git executable returned an error for its version check.");
+                    "The installed Git executable returned an error for its version check.");
             }
 
             if (!IsValidVersionOutput(standardOutput))
             {
                 return NativeGitRuntimeValidation.Invalid(
                     executable,
-                    "The bundled Git executable returned an invalid version check.");
+                    "The installed Git executable returned an invalid version check.");
             }
 
             return NativeGitRuntimeValidation.Valid(executable);
@@ -229,7 +174,7 @@ public static class NativeGitRuntime
         {
             return NativeGitRuntimeValidation.Invalid(
                 executable,
-                $"The bundled Git executable could not be started: {exception.Message}");
+                $"The installed Git executable could not be started: {exception.Message}");
         }
         finally
         {

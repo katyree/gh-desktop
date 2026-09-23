@@ -18,6 +18,9 @@ Microsoft.Windows.SDK.BuildTools `10.0.26100.4654`. Restore may report `NU1900`
 when the NuGet vulnerability service is unavailable. Keep package auditing
 enabled.
 
+The publish output uses the installed Git for Windows and Codex CLI from
+`PATH`; it does not include either runtime. Git is required at startup.
+
 Keep `Platform`, `Configuration`, and `Runtime` consistent across a build and
 the matching `--no-build` publish. With `-p:Platform=x64`, outputs land under
 `bin\x64`; omitting that property can publish a stale `bin\Release` tree.

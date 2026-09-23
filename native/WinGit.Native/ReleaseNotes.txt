@@ -5,8 +5,8 @@ local native package built from this source tree. They do not describe an
 Electron release or announce a public WinGit release.
 
 This package is an unpackaged, self-contained Windows x64 output. Launch
-WinGit.Native.exe from this directory. It includes the native app and its
-bundled Git runtime. Codex features require an installed Codex CLI on PATH.
+WinGit.Native.exe from this directory. Git for Windows must be installed and
+available on PATH. Codex features also require an installed Codex CLI on PATH.
 
 The native migration is in progress. See native/MIGRATION.md in the source
 repository for the current feature inventory and verification limits.

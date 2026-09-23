@@ -311,9 +311,6 @@ public sealed class NativeUpdateClientTests
                     "WinGit.Native.dll", "WinGit.Core.dll", "WinGit.Native.deps.json",
                     "WinGit.Native.runtimeconfig.json", "NativeImageDiffView.xbf", "NativeSubmoduleDiffView.xbf",
                     "Assets/icon-logo.ico", "ReleaseNotes.txt", "Acknowledgements.txt", "LICENSE.txt",
-                    "git/LICENSE.txt", "git/dugite-LICENSE", "git/cmd/git.exe",
-                    "git/mingw64/bin/git.exe", "git/mingw64/libexec/git-core/git-lfs.exe",
-                    "git/mingw64/libexec/git-core/git-credential-wincred.exe", "git/usr/bin/sh.exe",
                     "verify-update-signature.ps1", "verify-update-package.ps1",
                     "apply-native-update.ps1", "UpdateCatalog.cat"
                 })

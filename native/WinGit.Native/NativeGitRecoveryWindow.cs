@@ -29,20 +29,20 @@ internal sealed class NativeGitRecoveryWindow : Window
             {
                 new TextBlock
                 {
-                    Text = "WinGit could not start because its bundled Git runtime is missing or cannot run.",
+                    Text = "WinGit could not start because Git for Windows is missing or cannot run.",
                     FontSize = 22,
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
-                    Text = $"Bundled Git path:\n{gitExecutablePath}",
+                    Text = $"Git path:\n{gitExecutablePath}",
                     TextWrapping = TextWrapping.Wrap,
                     IsTextSelectionEnabled = true,
                 },
                 new TextBlock
                 {
-                    Text = $"{failureReason}\n\nRestore or reinstall the complete app bundle, then restart WinGit.",
+                    Text = $"{failureReason}\n\nInstall or repair Git for Windows, then restart WinGit.",
                     TextWrapping = TextWrapping.Wrap,
                 },
                 closeButton,

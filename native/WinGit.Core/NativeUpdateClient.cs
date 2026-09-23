@@ -421,9 +421,6 @@ public sealed class NativeUpdateClient
             "App.xbf", "MainWindow.xbf",
             "NativeImageDiffView.xbf", "NativeSubmoduleDiffView.xbf", "WinGit.Native.pri",
             "Assets/icon-logo.ico", "ReleaseNotes.txt", "Acknowledgements.txt", "LICENSE.txt",
-            "git/LICENSE.txt", "git/dugite-LICENSE", "git/cmd/git.exe",
-            "git/mingw64/bin/git.exe", "git/mingw64/libexec/git-core/git-lfs.exe",
-            "git/mingw64/libexec/git-core/git-credential-wincred.exe", "git/usr/bin/sh.exe",
             "verify-update-signature.ps1", "verify-update-package.ps1",
             "apply-native-update.ps1", "UpdateCatalog.cat"
         ];

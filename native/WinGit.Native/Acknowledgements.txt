@@ -4,10 +4,5 @@ WinGit is based on GitHub Desktop. The WinGit and upstream GitHub Desktop
 source code is covered by the MIT license in LICENSE.txt beside this file.
 Upstream project: https://github.com/desktop/desktop
 
-This native output also includes the following separately licensed software:
-
-- Git for Windows through Dugite. Read git/LICENSE.txt and
-  git/dugite-LICENSE. Runtime provenance is in
-  git/GitRuntimeProvenance.txt.
-
-These paths are relative to the directory containing WinGit.Native.exe.
+Git for Windows and Codex CLI are installed separately and are not included
+in this native output.

@@ -208,7 +208,7 @@ internal sealed class GitProcessRunner
             }
         }
 
-        ConfigureContainedGitEnvironment(startInfo);
+        ConfigureGitEnvironment(startInfo);
         startInfo.Environment["GIT_OPTIONAL_LOCKS"] = "0";
         ApplyEnvironmentOverrides(startInfo, environmentOverrides, nameof(environmentOverrides));
         ConfigureSshEnvironment(startInfo, processOptions, isBackgroundTask);
@@ -364,7 +364,7 @@ internal sealed class GitProcessRunner
         || key.StartsWith("GIT_CONFIG_KEY_", StringComparison.OrdinalIgnoreCase)
         || key.StartsWith("GIT_CONFIG_VALUE_", StringComparison.OrdinalIgnoreCase);
 
-    private void ConfigureContainedGitEnvironment(ProcessStartInfo startInfo)
+    private void ConfigureGitEnvironment(ProcessStartInfo startInfo)
     {
         if (!Path.IsPathRooted(gitExecutable))
         {

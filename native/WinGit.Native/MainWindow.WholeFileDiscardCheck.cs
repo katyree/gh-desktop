@@ -555,10 +555,9 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Normalizes restored worktree line endings before comparison. The pinned
-    /// bundled Git runtime ships core.autocrlf=true, so a Git restore writes
-    /// CRLF while the fixture authors LF. The comparison targets content, not
-    /// the platform checkout convention.
+    /// Normalizes restored worktree line endings before comparison. The installed
+    /// Git may restore CRLF while the fixture authors LF. The comparison targets
+    /// content, not the user's checkout convention.
     /// </summary>
     private static string NormalizeWholeDiscardText(string contents) =>
         contents.Replace("\r\n", "\n", StringComparison.Ordinal);

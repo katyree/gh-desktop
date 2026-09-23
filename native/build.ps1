@@ -4,8 +4,7 @@ param(
     [string] $Configuration = 'Release',
     [ValidateSet('win-x64')]
     [string] $Runtime = 'win-x64',
-    [string] $OutputPath = (Join-Path $PSScriptRoot 'artifacts\win-x64'),
-    [string] $GitRuntimePackageRoot
+    [string] $OutputPath = (Join-Path $PSScriptRoot 'artifacts\win-x64')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,14 +28,6 @@ $msbuildProperties = @(
     '-p:Platform=x64',
     "-p:RuntimeIdentifier=$Runtime"
 )
-
-if (-not [string]::IsNullOrWhiteSpace($GitRuntimePackageRoot)) {
-    if (-not (Test-Path -LiteralPath $GitRuntimePackageRoot -PathType Container)) {
-        throw "GitRuntimePackageRoot does not exist: $GitRuntimePackageRoot"
-    }
-
-    $msbuildProperties += "-p:GitRuntimePackageRoot=$GitRuntimePackageRoot"
-}
 
 function Invoke-Dotnet {
     param(
@@ -76,14 +67,7 @@ try {
         'verify-update-package.ps1',
         'ReleaseNotes.txt',
         'Acknowledgements.txt',
-        'LICENSE.txt',
-        'git\LICENSE.txt',
-        'git\dugite-LICENSE',
-        'git\cmd\git.exe',
-        'git\mingw64\bin\git.exe',
-        'git\mingw64\libexec\git-core\git-lfs.exe',
-        'git\mingw64\libexec\git-core\git-credential-wincred.exe',
-        'git\usr\bin\sh.exe'
+        'LICENSE.txt'
     )
 
     foreach ($relativePath in $requiredPublishFiles) {
