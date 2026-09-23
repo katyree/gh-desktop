@@ -562,10 +562,48 @@ signed-in verification. |
 
 ## 10. Packaging, release, and updates
 
+Task 80 packaging evidence uses `native/build.ps1` with `Configuration=Release`,
+`Runtime=win-x64`, and `Platform=x64`. The command passed the matching Codex and
+Git runtime package roots from
+`E:\WinGit\gh-desktop\app\node_modules`, restored the native project, built it
+with 0 warnings and 0 errors, and published a clean tree at
+`native/artifacts/task80-packaging-win-x64`. The tree contains 912 files,
+including `App.xbf`, `MainWindow.xbf`, `NativeImageDiffView.xbf`,
+`NativeSubmoduleDiffView.xbf`, `WinGit.Native.pri`, `Assets/icon-logo.ico`,
+`WinGit.Native.exe`, the Codex runtime entry points, and the Git runtime entry
+points. A complete copy at
+`C:\Users\kylea\AppData\Local\Temp\wingit-task80-run-17a6b130737841bb8423f4f4d0f94b6c`
+also contains 912 files, and the required source and copy hashes match.
+
+The copied executable launched in capture mode with an isolated settings
+directory, returned exit code 0, and wrote a 55,476-byte settings capture
+outside the copied tree at
+`C:\Users\kylea\AppData\Local\Temp\wingit-task80-capture-6d31d24ff9e34bf89ea94e9365502423.png`.
+This proves that a user can unpack the native directory and start the copied
+executable. No installer, MSI, install or uninstall flow, normal interactive
+launch, signing, or updater was produced or tested. Task 81's native release
+notes, acknowledgements, and license evidence is recorded below. The Electron
+package and `script/package.ts` were not changed.
+
+Task 82 adds `.github/workflows/native-ci.yml` for Windows x64 pull requests and
+pushes to `development`. It runs the Release Core tests, calls `native/build.ps1`
+to build and publish the Release `win-x64` app, and uploads the published tree.
+The build script fails when required package files are missing; artifact upload
+also fails when the publish directory has no files. Locally, the workflow YAML
+parsed, the matching Core test command passed 226/226, and the build script
+restored, built, and published with 0 warnings and 0 errors. The local build
+used the pinned Codex and Git runtime package roots from
+`E:\WinGit\gh-desktop\app\node_modules`. The output at
+`native/artifacts/win-x64` contains 915 files, including the WinUI XBF and PRI
+resources, `WinGit.Native.exe`, both bundled runtime entry points, release
+notes, acknowledgements, and license files. Hosted CI, artifact upload, and
+runner-side package installation remain unverified until this workflow runs
+remotely. This task adds no signing or updater gate.
+
 | # | Work unit and source | Depends on | Native status | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| 64 | Package the native app and publish release notes and acknowledgements; use `native/build.ps1`, `script/package.ts`, `app/src/ui/release-notes`, and `app/src/ui/acknowledgements`. | 1, 3 | Remaining | A clean `win-x64` output can be installed or unpacked by a user, and release notes identify the native build without changing the Electron package. |
-| 65 | Establish native signing and release gates; use `script/release-config.ts`, `README.md`, and `docs/process/win-git-preview-release-gate.md`. | 64 | Remaining | A release records signing status and fails closed when the required certificate or release evidence is absent. |
+| 64 | Package the native app (task 80) and publish release notes and acknowledgements (task 81); use `native/build.ps1`, `script/package.ts`, `app/src/ui/release-notes`, and `app/src/ui/acknowledgements`. | 1, 3 | Partial | Task 80 proves a clean `win-x64` output can be unpacked and launched without changing the Electron package. Task 81 adds root-level `ReleaseNotes.txt`, `Acknowledgements.txt`, and `LICENSE.txt` to the native output. The notes explicitly identify the WinUI 3 native preview and local Release win-x64 build. A Release build and publish passed with 0 warnings and 0 errors; an independent clean copy contained 915 files, including all three root documents and the bundled Git, Dugite, and Codex license files at the paths named in the acknowledgements. The Electron package was unchanged. No public release, signing, installer, or updater was produced or verified; task 65 and task 66 own those gates. |
+| 65 | Establish native signing and release gates; use `script/release-config.ts`, `README.md`, and `docs/process/win-git-preview-release-gate.md`. | 64 | Partial | Task 83 adds `native/release-gate.ps1` and records `SigningStatus.json` in the native CI artifact. Release mode requires a WinGit signing configuration, an expected signer subject, four nonempty evidence records, and a valid Authenticode signature from that subject. It can sign `WinGit.Native.exe` with the existing Azure signing client or check an already signed executable. The local Release `win-x64` build and publish passed with 0 warnings and 0 errors; the real executable reported `NotSigned`, the status hash matched the file, and the release gate remained `Blocked`. Missing evidence and missing signing configuration each failed; synthetic evidence and configuration still failed on the unsigned executable. PowerShell and workflow YAML syntax passed. No production signing, hosted CI, installer, clean-machine evidence review, or public release was exercised. The Electron release path was unchanged. |
 | 66 | Provide an update channel and update progress; use `app/src/main-process/squirrel-updater.ts`, `app/src/ui/installing-update`, `app/src/ui/lib/update-store.ts`, and `app/src/lib/get-updater-guid.ts`. | 64, 65 | Remaining | An available update can be verified, downloaded, and installed with visible progress, and an unavailable or unsigned update is not applied silently. |
 
 Rows marked `Partial` have useful native code or evidence, but their

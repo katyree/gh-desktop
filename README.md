@@ -16,6 +16,10 @@ WinGit is currently a private development build. The local installers are
 unsigned, automatic updates are disabled, and public distribution remains
 blocked on the release gates in
 [`docs/process/win-git-preview-release-gate.md`](docs/process/win-git-preview-release-gate.md).
+Native CI records `SigningStatus.json` beside its unpackaged `win-x64` output.
+The native release gate requires a valid WinGit signature and the evidence named
+in the preview release gate before that output can be treated as a release
+candidate. An unsigned CI artifact remains a private verification build.
 
 ## Build on Windows
 

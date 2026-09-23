@@ -1,0 +1,43 @@
+name: Native CI
+
+on:
+  push:
+    branches:
+      - development
+  pull_request:
+
+jobs:
+  native-win-x64:
+    name: Native Release win-x64
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Install native runtime packages
+        run: yarn --frozen-lockfile
+      - name: Run native Core tests
+        run: |
+          dotnet test .\native\WinGit.Core.Tests\WinGit.Core.Tests.csproj --configuration Release --runtime win-x64
+      - name: Build and package native app
+        shell: pwsh
+        run: |
+          .\native\build.ps1 -Configuration Release -Runtime win-x64 -OutputPath .\native\artifacts\win-x64
+      - name: Record native signing status
+        shell: pwsh
+        run: |
+          .\native\release-gate.ps1 -PublishPath .\native\artifacts\win-x64
+      - name: Upload native package
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-win-x64
+          path: native/artifacts/win-x64/
+          if-no-files-found: error
