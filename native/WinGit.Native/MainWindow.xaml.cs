@@ -151,6 +151,7 @@ public sealed partial class MainWindow : Window
         InitializeAccessibilityControls();
         InitializeZoomControls();
         ApplyGitProcessOptions();
+        InitializeNativeUpdates();
 
         if (captureOptions is not null)
         {
@@ -308,6 +309,7 @@ public sealed partial class MainWindow : Window
 
     private async void MainWindow_Closed(object sender, WindowEventArgs args)
     {
+        StopNativeUpdates();
         if (appWindow is { } window)
         {
             window.Closing -= AppWindow_Closing;
