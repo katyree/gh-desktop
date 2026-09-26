@@ -29,26 +29,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            remoteRows.Clear();
-            foreach (var remote in remotes)
-            {
-                remoteRows.Add(new RemoteRow(remote));
-            }
-
-            remotesLoaded = true;
-            selectedRemote = null;
-            RemoteList.SelectedIndex = -1;
-            RemoteEmptyText.Visibility = remoteRows.Count == 0
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-            if (remoteRows.Count > 0)
-            {
-                RemoteList.SelectedIndex = 0;
-            }
-            else
-            {
-                UpdateRemoteDetails();
-            }
+            ApplyRemoteRows(remotes);
 
             StatusText.Text = remoteRows.Count == 0
                 ? "No remotes configured"
@@ -74,9 +55,34 @@ public sealed partial class MainWindow
         }
     }
 
+    private void ApplyRemoteRows(IReadOnlyList<RemoteSummary> remotes)
+    {
+        remoteRows.Clear();
+        foreach (var remote in remotes)
+        {
+            remoteRows.Add(new RemoteRow(remote));
+        }
+
+        remotesLoaded = true;
+        selectedRemote = null;
+        RemoteList.SelectedIndex = -1;
+        RemoteEmptyText.Visibility = remoteRows.Count == 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        if (remoteRows.Count > 0)
+        {
+            RemoteList.SelectedIndex = 0;
+        }
+        else
+        {
+            UpdateRemoteDetails();
+        }
+    }
+
     private void RemoteList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         selectedRemote = RemoteList.SelectedItem as RemoteRow;
+        ToolbarRemotePicker.SelectedItem = selectedRemote;
         UpdateRemoteDetails();
         UpdateRepositoryCommandStates();
     }

@@ -101,6 +101,7 @@ public sealed partial class MainWindow : Window
         StashesList.ItemsSource = stashRows;
         SubmodulesList.ItemsSource = submoduleRows;
         RemoteList.ItemsSource = remoteRows;
+        ToolbarRemotePicker.ItemsSource = remoteRows;
         TagsList.ItemsSource = tagRows;
         GitHubAccountsList.ItemsSource = githubAccountRows;
         CodexModelComboBox.ItemsSource = codexModelRows;
@@ -134,7 +135,7 @@ public sealed partial class MainWindow : Window
 
         settings = await NativeSettingsStore.LoadAsync();
         NormalizeSettings();
-        RestoreNavigationPane();
+        InitializeWorkspaceNavigation();
         ApplyImageDiffModeToControls();
         ApplyTextDiffSettingsToControls();
         if (captureOptions?.Theme is string captureTheme)
@@ -405,20 +406,34 @@ public sealed partial class MainWindow : Window
         NavigationView sender,
         NavigationViewSelectionChangedEventArgs args)
     {
-        showingSettings = args.IsSettingsSelected;
+        var tag = args.IsSettingsSelected ? "settings" : (args.SelectedItem as NavigationViewItem)?.Tag as string;
+        if (tag == "repository")
+        {
+            tag = (RepositoryNavigation.SelectedItem as NavigationViewItem)?.Tag as string ?? "branches";
+            RepositoryNavigation.SelectedItem ??= RepositoryNavigation.MenuItems[0];
+        }
+        await NavigateWorkspaceAsync(tag ?? "changes");
+    }
+
+    private async void RepositoryNavigation_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        if ((MainNavigation.SelectedItem as NavigationViewItem)?.Tag as string == "repository"
+            && args.SelectedItem is NavigationViewItem { Tag: string tag })
+        {
+            await NavigateWorkspaceAsync(tag);
+        }
+    }
+
+    private async Task NavigateWorkspaceAsync(string tag)
+    {
+        showingSettings = tag == "settings";
+        ShowWorkspace(tag);
         if (showingSettings)
         {
-            ShowWorkspace("settings");
-            latestOperationTask = Task.WhenAll(
-                EnsureCodexSettingsLoadedAsync(),
-                EnsureGitHubAccountsLoadedAsync(),
-                EnsureGitConfigLoadedAsync());
+            latestOperationTask = Task.WhenAll(EnsureCodexSettingsLoadedAsync(), EnsureGitHubAccountsLoadedAsync(), EnsureGitConfigLoadedAsync());
             await latestOperationTask;
             return;
         }
-
-        var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
-        ShowWorkspace(tag ?? "changes");
 
         if (tag == "history" && repositoryRoot is not null)
         {
@@ -439,7 +454,7 @@ public sealed partial class MainWindow : Window
             latestOperationTask = LoadBranchesAsync();
             await latestOperationTask;
         }
-        else if (tag == "worktrees" && repositoryRoot is not null
+        else if ((tag is "worktrees" or "stashes") && repositoryRoot is not null
             && (!worktreesLoaded || !stashesLoaded))
         {
             latestOperationTask = LoadWorktreesAndStashesAsync();
@@ -527,7 +542,7 @@ public sealed partial class MainWindow : Window
         BranchesWorkspace.Visibility = hasRepository && workspace == "branches"
             ? Visibility.Visible
             : Visibility.Collapsed;
-        WorktreesWorkspace.Visibility = hasRepository && workspace == "worktrees"
+        WorktreesWorkspace.Visibility = hasRepository && (workspace is "worktrees" or "stashes")
             ? Visibility.Visible
             : Visibility.Collapsed;
         SubmodulesWorkspace.Visibility = hasRepository && workspace == "submodules"
@@ -543,6 +558,11 @@ public sealed partial class MainWindow : Window
             ? Visibility.Visible
             : Visibility.Collapsed;
 
+        RepositoryNavigation.Visibility = workspace is "branches" or "worktrees" or "stashes" or "remotes" or "tags" or "submodules"
+            ? Visibility.Visible : Visibility.Collapsed;
+        WorktreePanel.Visibility = workspace == "worktrees" ? Visibility.Visible : Visibility.Collapsed;
+        StashPanel.Visibility = workspace == "stashes" ? Visibility.Visible : Visibility.Collapsed;
+        ToolbarBranchText.Text = $"Branch: {currentStatus?.Branch ?? "None"}";
         currentWorkspace = workspace;
 
         if (showingChanges && selectedChange is null && changeRows.Count > 0)
@@ -600,6 +620,7 @@ public sealed partial class MainWindow : Window
         {
             var status = await repositoryService.OpenAsync(fullPath, operation.Token);
             var operationState = await ReadGitOperationStateAsync(status.RootPath, operation.Token);
+            var remotes = await repositoryService.GetRemotesAsync(status.RootPath, operation.Token);
             if (!IsCurrent(operation.Generation, operation.Token))
             {
                 return;
@@ -619,6 +640,7 @@ public sealed partial class MainWindow : Window
                 _ = SaveSettingsAsync();
             }
             ApplyStatus(status);
+            ApplyRemoteRows(remotes);
             ApplyGitOperationState(operationState);
             MainNavigation.SelectedItem = MainNavigation.MenuItems[0];
             ShowWorkspace("changes");
@@ -1552,33 +1574,33 @@ public sealed partial class MainWindow : Window
             .ToList();
     }
 
-    private void RestoreNavigationPane()
+    private void InitializeWorkspaceNavigation()
     {
-        MainNavigation.PaneDisplayMode = settings.NavigationPaneExpanded
-            ? NavigationViewPaneDisplayMode.Left
-            : NavigationViewPaneDisplayMode.LeftCompact;
-        MainNavigation.IsPaneOpen = settings.NavigationPaneExpanded;
-        MainNavigation.PaneOpened += MainNavigation_PaneOpened;
-        MainNavigation.PaneClosed += MainNavigation_PaneClosed;
+        MainNavigation.PaneDisplayMode = NavigationViewPaneDisplayMode.Top;
+        RepositoryNavigation.SelectedItem = RepositoryNavigation.MenuItems[0];
+        SettingsCategoryList.SelectedIndex = 0;
     }
 
-    private void MainNavigation_PaneOpened(NavigationView sender, object args)
+    private void SettingsCategoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        sender.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
-        if (!settings.NavigationPaneExpanded)
+        if (SettingsPages is null)
         {
-            settings.NavigationPaneExpanded = true;
-            _ = SaveSettingsAsync();
+            return;
+        }
+        for (var index = 0; index < SettingsPages.Children.Count; index++)
+        {
+            SettingsPages.Children[index].Visibility = index == SettingsCategoryList.SelectedIndex
+                ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 
-    private void MainNavigation_PaneClosed(NavigationView sender, object args)
+    private void ToolbarBranchButton_Click(object sender, RoutedEventArgs e) => SelectWorkspaceFromAppCommand("branches");
+
+    private void ToolbarRemotePicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        sender.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftCompact;
-        if (settings.NavigationPaneExpanded)
+        if (RemoteList is not null && !ReferenceEquals(RemoteList.SelectedItem, ToolbarRemotePicker.SelectedItem))
         {
-            settings.NavigationPaneExpanded = false;
-            _ = SaveSettingsAsync();
+            RemoteList.SelectedItem = ToolbarRemotePicker.SelectedItem;
         }
     }
 
@@ -1756,6 +1778,7 @@ public sealed partial class MainWindow : Window
         CancelOperationButton.Visibility = canCancel ? Visibility.Visible : Visibility.Collapsed;
         CancelOperationButton.IsEnabled = canCancel;
         MainNavigation.IsEnabled = !mutationInProgress;
+        RepositoryNavigation.IsEnabled = !mutationInProgress;
         UpdateMutationButtons();
         UpdateRepositoryCommandStates();
         UpdateSubmoduleDiffInteraction();

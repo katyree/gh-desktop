@@ -208,7 +208,7 @@ public sealed partial class MainWindow
 
     private void ApplyWorkspaceZoomViewportSize()
     {
-        if (WorkspaceZoomViewer is null || MainNavigation is null)
+        if (WorkspaceZoomViewer is null || WorkspaceShell is null)
         {
             return;
         }
@@ -246,16 +246,16 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!double.IsFinite(MainNavigation.Width)
-            || Math.Abs(MainNavigation.Width - logicalWidth) > 0.5)
+        if (!double.IsFinite(WorkspaceShell.Width)
+            || Math.Abs(WorkspaceShell.Width - logicalWidth) > 0.5)
         {
-            MainNavigation.Width = logicalWidth;
+            WorkspaceShell.Width = logicalWidth;
         }
 
-        if (!double.IsFinite(MainNavigation.Height)
-            || Math.Abs(MainNavigation.Height - logicalHeight) > 0.5)
+        if (!double.IsFinite(WorkspaceShell.Height)
+            || Math.Abs(WorkspaceShell.Height - logicalHeight) > 0.5)
         {
-            MainNavigation.Height = logicalHeight;
+            WorkspaceShell.Height = logicalHeight;
         }
     }
 

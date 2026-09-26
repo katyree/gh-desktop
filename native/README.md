@@ -77,6 +77,13 @@ the captured Ahead and Behind counts for that branch. Use `--theme dark` for
 the dark palette. The native appearance scope has one light palette and one
 dark palette. The `System` setting chooses between them.
 
+For navigation changes, run `--view navigation-check --repository <synthetic-repository>`
+with `--capture <absolute-output.png>` and an isolated
+`WINGIT_NATIVE_SETTINGS_DIRECTORY`. The check exercises the main tabs,
+repository tools, menu commands, settings categories, mutation locking, and
+shared remote selection. It writes an assertion report beside the capture as
+`<absolute-output.png>.checks.txt`.
+
 Current workspace capture artifacts include:
 
 - `native/artifacts/screenshots/changes-light-03.png`

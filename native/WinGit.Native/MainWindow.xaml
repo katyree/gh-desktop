@@ -551,22 +551,12 @@
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator />
-                <MenuFlyoutItem x:Name="OpenRepositoryEditorMenuItem"
-                                Text="Open repository in editor"
-                                Tag="OpenRepositoryEditor"
-                                Click="IntegrationMenuItem_Click" />
+
                 <MenuFlyoutItem x:Name="OpenSelectedFileEditorMenuItem"
                                 Text="Open selected file in editor"
                                 Tag="OpenSelectedFileEditor"
                                 Click="IntegrationMenuItem_Click" />
-                <MenuFlyoutItem x:Name="OpenRepositoryShellMenuItem"
-                                Text="Open repository shell"
-                                Tag="OpenRepositoryShell"
-                                Click="IntegrationMenuItem_Click" />
-                <MenuFlyoutItem x:Name="RevealRepositoryMenuItem"
-                                Text="Reveal repository in File Explorer"
-                                Tag="RevealRepository"
-                                Click="IntegrationMenuItem_Click" />
+
                 <MenuFlyoutItem x:Name="RevealSelectedFileMenuItem"
                                 Text="Reveal selected file in File Explorer"
                                 Tag="RevealSelectedFile"
@@ -611,7 +601,7 @@
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
                 <MenuFlyoutItem x:Name="WorktreesMenuItem"
-                                Text="Worktrees &amp; stashes"
+                                Text="Worktrees"
                                 Tag="Worktrees"
                                 Click="AppCommandMenuItem_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
@@ -643,55 +633,12 @@
                       VerticalScrollBarVisibility="Auto"
                       Loaded="WorkspaceZoomViewer_Loaded"
                       SizeChanged="WorkspaceZoomViewer_SizeChanged">
-            <NavigationView x:Name="MainNavigation" IsBackButtonVisible="Collapsed" IsSettingsVisible="True" IsPaneToggleButtonVisible="True" OpenPaneLength="200" PaneDisplayMode="LeftCompact" SelectionChanged="MainNavigation_SelectionChanged" AutomationProperties.Name="WinGit navigation">
-            <NavigationView.MenuItems>
-                <NavigationViewItem Content="Changes" Tag="changes">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Document" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="History" Tag="history">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Clock" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Branches" Tag="branches">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="List" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Worktrees &amp; stashes" Tag="worktrees">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Folder" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Submodules" Tag="submodules">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Folder" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Remotes" Tag="remotes">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Link" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Tags" Tag="tags">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Tag" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-            </NavigationView.MenuItems>
-            <NavigationView.Content>
-                <Grid x:Name="WorkspaceRoot" Padding="0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="54" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="32" />
-                    </Grid.RowDefinitions>
-
-                    <Grid Grid.Row="0" Padding="12,0" Background="Transparent">
+            <Grid x:Name="WorkspaceShell" MinWidth="1100">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Padding="12,8" Background="Transparent">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -708,42 +655,83 @@
                                                VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="OpenRepositoryButton" Click="OpenRepositoryButton_Click" AutomationProperties.Name="Open repository">
-                                <StackPanel Orientation="Horizontal" Spacing="7">
-                                    <TextBlock Text="▣" FontSize="15" VerticalAlignment="Center" />
-                                    <TextBlock Text="Open repository" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                            <Button x:Name="CreateRepositoryButton" Content="Create" Click="CreateRepositoryButton_Click" AutomationProperties.Name="Create repository" />
-                            <Button x:Name="CloneRepositoryButton" Content="Clone" Click="CloneRepositoryButton_Click" AutomationProperties.Name="Clone repository" />
-                            <Button x:Name="RefreshButton" Click="RefreshButton_Click" AutomationProperties.Name="Refresh repository">
+                        <DropDownButton Content="Add repository" AutomationProperties.Name="Add repository">
+    <DropDownButton.Flyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem x:Name="OpenRepositoryButton" Text="Open repository…" Click="OpenRepositoryButton_Click" />
+                                    <MenuFlyoutItem x:Name="CreateRepositoryButton" Text="Create repository…" Click="CreateRepositoryButton_Click" />
+                                    <MenuFlyoutItem x:Name="CloneRepositoryButton" Text="Clone repository…" Click="CloneRepositoryButton_Click" />
+                                </MenuFlyout>
+                            </DropDownButton.Flyout>
+                        </DropDownButton>
+                        <Button x:Name="ToolbarBranchButton" Click="ToolbarBranchButton_Click" AutomationProperties.Name="Choose branch">
+                            <TextBlock x:Name="ToolbarBranchText" Text="Branch" MaxWidth="170" TextTrimming="CharacterEllipsis" />
+                        </Button>
+                        <ComboBox x:Name="ToolbarRemotePicker" Width="120" PlaceholderText="Remote" DisplayMemberPath="Name" SelectionChanged="ToolbarRemotePicker_SelectionChanged" AutomationProperties.Name="Remote for fetch pull and push" />
+                        <Button x:Name="FetchRemoteButton" Content="Fetch" Click="FetchRemoteButton_Click" AutomationProperties.Name="Fetch selected remote" />
+                        <Button x:Name="PullRemoteButton" Content="Pull" Click="PullRemoteButton_Click" AutomationProperties.Name="Pull selected remote fast-forward only" />
+                        <Button x:Name="PushRemoteButton" Content="Push" Click="PushRemoteButton_Click" AutomationProperties.Name="Push selected remote" />
+
+
+                            <DropDownButton Content="Open in" AutomationProperties.Name="Open repository in external tools">
+                            <DropDownButton.Flyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem x:Name="OpenRepositoryEditorMenuItem"
+                                Text="Open repository in editor"
+                                Tag="OpenRepositoryEditor"
+                                Click="IntegrationMenuItem_Click" />
+                                    <MenuFlyoutItem x:Name="OpenRepositoryShellMenuItem"
+                                Text="Open repository shell"
+                                Tag="OpenRepositoryShell"
+                                Click="IntegrationMenuItem_Click" />
+                                    <MenuFlyoutItem x:Name="RevealRepositoryMenuItem"
+                                Text="Reveal repository in File Explorer"
+                                Tag="RevealRepository"
+                                Click="IntegrationMenuItem_Click" />
+                                </MenuFlyout>
+                            </DropDownButton.Flyout>
+                        </DropDownButton>
+                        <Button x:Name="RefreshButton" Click="RefreshButton_Click" AutomationProperties.Name="Refresh repository">
                                 <StackPanel Orientation="Horizontal" Spacing="7">
                                     <TextBlock Text="↻" FontSize="17" VerticalAlignment="Center" />
                                     <TextBlock Text="Refresh" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="StageButton" Click="StageButton_Click" AutomationProperties.Name="Stage selected files">
-                                <StackPanel Orientation="Horizontal" Spacing="7">
-                                    <TextBlock Text="↑" FontSize="17" VerticalAlignment="Center" />
-                                    <TextBlock Text="Stage selected" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                            <Button x:Name="UnstageButton" Click="UnstageButton_Click" AutomationProperties.Name="Unstage selected files">
-                                <StackPanel Orientation="Horizontal" Spacing="7">
-                                    <TextBlock Text="↓" FontSize="17" VerticalAlignment="Center" />
-                                    <TextBlock Text="Unstage selected" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
+
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" VerticalAlignment="Center">
                             <Button x:Name="CancelOperationButton" Content="Cancel" Click="CancelOperationButton_Click" Visibility="Collapsed" AutomationProperties.Name="Cancel current operation" />
                             <ProgressRing x:Name="BusyRing" Width="18" Height="18" IsActive="False" Visibility="Collapsed" />
                         </StackPanel>
                     </Grid>
+                <NavigationView Grid.Row="1" x:Name="MainNavigation" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" IsPaneToggleButtonVisible="False" PaneDisplayMode="Top" SelectionChanged="MainNavigation_SelectionChanged" AutomationProperties.Name="WinGit navigation">
+            <NavigationView.MenuItems>
+    <NavigationViewItem Content="Changes" Tag="changes" />
+    <NavigationViewItem Content="History" Tag="history" />
+    <NavigationViewItem Content="Repository" Tag="repository" />
+                    </NavigationView.MenuItems>
+                    <NavigationView.FooterMenuItems>
+                        <NavigationViewItem x:Name="SettingsNavigationItem" Content="Settings" Tag="settings">
+                            <NavigationViewItem.Icon>
+                                <SymbolIcon Symbol="Setting" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                    </NavigationView.FooterMenuItems>
+            <NavigationView.Content>
+                <Grid x:Name="WorkspaceRoot" Padding="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="0" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                        <RowDefinition Height="32" />
+                    </Grid.RowDefinitions>
+
 
                     <InfoBar x:Name="ErrorBar" Grid.Row="1" Margin="12,0,12,8" IsOpen="False" IsClosable="True" Severity="Error" Closing="ErrorBar_Closing" AutomationProperties.Name="Repository error" />
 
-                    <Grid x:Name="RepositoryHeader" Grid.Row="2" Padding="18,8,18,12" Visibility="Collapsed">
+                    <Grid x:Name="RepositoryHeader" Grid.Row="2" Padding="12,4" Visibility="Collapsed">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -753,8 +741,8 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Spacing="3">
-                            <TextBlock x:Name="RepositoryPathText" Text="Choose a repository to begin" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
-                            <TextBlock x:Name="BranchText" Text="" Style="{StaticResource SecondaryTextStyle}" />
+                            <TextBlock x:Name="RepositoryPathText" Text="Choose a repository to begin" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="BranchText" Visibility="Collapsed" Text="" Style="{StaticResource SecondaryTextStyle}" />
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="18" VerticalAlignment="Center">
                             <StackPanel Spacing="2">
@@ -846,18 +834,30 @@
                         </Border>
                     </Grid>
 
-                    <Grid x:Name="ChangesWorkspace" Grid.Row="3" Visibility="Collapsed">
+                    <NavigationView x:Name="RepositoryNavigation" Grid.Row="3" PaneDisplayMode="Top" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" IsPaneToggleButtonVisible="False" Visibility="Collapsed" SelectionChanged="RepositoryNavigation_SelectionChanged" AutomationProperties.Name="Repository tools">
+                                <NavigationView.MenuItems>
+                                    <NavigationViewItem Content="Branches" Tag="branches" />
+                                    <NavigationViewItem Content="Worktrees" Tag="worktrees" />
+                                    <NavigationViewItem Content="Stashes" Tag="stashes" />
+                                    <NavigationViewItem Content="Remotes" Tag="remotes" />
+                                    <NavigationViewItem Content="Tags" Tag="tags" />
+                                    <NavigationViewItem Content="Submodules" Tag="submodules" />
+                                </NavigationView.MenuItems>
+                            </NavigationView>
+                            <Grid x:Name="ChangesWorkspace" Grid.Row="4" Visibility="Collapsed">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="340" />
+                            <ColumnDefinition Width="260" />
                             <ColumnDefinition Width="1" />
                             <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="1" />
+                                    <ColumnDefinition x:Name="ChangesCommitColumn" Width="300" />
                         </Grid.ColumnDefinitions>
                         <Grid Grid.Column="0" Padding="8,0,8,8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="42" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="34" />
-                                <RowDefinition Height="150" />
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="34" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
@@ -865,7 +865,23 @@
                                 <TextBlock Text="Working changes" Style="{StaticResource PanelTitleStyle}" VerticalAlignment="Center" />
                                 <TextBlock x:Name="FilteredChangeCountText" Text="" Style="{StaticResource SecondaryTextStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" />
                             </Grid>
-                            <TextBox x:Name="ChangesFilterBox" Grid.Row="1" Margin="8,0,8,8" PlaceholderText="Filter paths" TextChanged="ChangesFilterBox_TextChanged" AutomationProperties.Name="Filter changed files" />
+                            <StackPanel Grid.Row="1">
+                                        <TextBox x:Name="ChangesFilterBox"  Margin="8,0,8,8" PlaceholderText="Filter paths" TextChanged="ChangesFilterBox_TextChanged" AutomationProperties.Name="Filter changed files" />
+                                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="8,0,8,8">
+                                            <Button x:Name="StageButton" Click="StageButton_Click" AutomationProperties.Name="Stage files">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <TextBlock Text="↑" FontSize="17" VerticalAlignment="Center" />
+                                    <TextBlock Text="Stage" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                                            <Button x:Name="UnstageButton" Click="UnstageButton_Click" AutomationProperties.Name="Unstage files">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <TextBlock Text="↓" FontSize="17" VerticalAlignment="Center" />
+                                    <TextBlock Text="Unstage" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                                        </StackPanel>
+                                    </StackPanel>
                             <Grid Grid.Row="2" Padding="8,0">
                                 <TextBlock Text="Staged" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
@@ -879,7 +895,7 @@
                                                VerticalAlignment="Center" />
                                 </StackPanel>
                             </Grid>
-                            <ListView x:Name="StagedChangesList" Grid.Row="3" ItemTemplate="{StaticResource ChangeRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="StagedChangesList_SelectionChanged" SelectionMode="Multiple" AutomationProperties.Name="Staged changed files" />
+                            <ListView MaxHeight="180" x:Name="StagedChangesList" Grid.Row="3" ItemTemplate="{StaticResource ChangeRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="StagedChangesList_SelectionChanged" SelectionMode="Multiple" AutomationProperties.Name="Staged changed files" />
                             <Grid Grid.Row="4" Padding="8,0">
                                 <TextBlock Text="Unstaged" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
@@ -896,11 +912,11 @@
                             <ListView x:Name="UnstagedChangesList" Grid.Row="5" ItemTemplate="{StaticResource ChangeRowTemplate}" ItemContainerStyle="{StaticResource ListItemStyle}" SelectionChanged="UnstagedChangesList_SelectionChanged" SelectionMode="Multiple" AutomationProperties.Name="Unstaged changed files" />
                         </Grid>
                         <Border Grid.Column="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
-                        <Grid Grid.Column="2" Padding="18,0,18,8">
+                        <Grid Grid.Column="2" Padding="12,0,12,8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="48" />
                                 <RowDefinition Height="*" />
-                                 <RowDefinition x:Name="ChangesCommitRow" Height="Auto" />
+
                             </Grid.RowDefinitions>
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -975,12 +991,22 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0"
-                                            Orientation="Horizontal"
-                                            Spacing="8"
+                                <Grid Grid.Row="0"
+                                            ColumnSpacing="6" RowSpacing="6"
                                             Margin="0,0,0,8"
                                             AutomationProperties.Name="Changes diff controls">
-                                    <TextBlock Text="View" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" />
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+
                                     <ComboBox x:Name="DiffModeComboBox"
                                               Width="110"
                                               SelectionChanged="DiffModeComboBox_SelectionChanged"
@@ -988,30 +1014,30 @@
                                         <ComboBoxItem Content="Unified" Tag="Unified" />
                                         <ComboBoxItem Content="Split" Tag="Split" />
                                     </ComboBox>
-                                    <CheckBox x:Name="HideWhitespaceChangesCheckBox"
-                                              Content="Hide whitespace changes"
+                                    <CheckBox Grid.Column="1" Grid.ColumnSpan="3" x:Name="HideWhitespaceChangesCheckBox"
+                                              Content="Ignore whitespace"
                                               Click="HideWhitespaceChangesCheckBox_Click"
                                               VerticalAlignment="Center"
                                               AutomationProperties.Name="Hide whitespace changes in Changes diff" />
-                                    <TextBox x:Name="DiffSearchBox"
-                                             Width="220"
+                                    <TextBox Grid.Row="1" Grid.ColumnSpan="2" HorizontalAlignment="Stretch" x:Name="DiffSearchBox"
+
                                              PlaceholderText="Find in diff"
                                              TextChanged="DiffSearchBox_TextChanged"
                                              KeyDown="DiffSearchBox_KeyDown"
                                              AutomationProperties.Name="Search current Changes diff" />
-                                    <Button x:Name="DiffSearchPreviousButton"
+                                    <Button Grid.Row="1" Grid.Column="2" x:Name="DiffSearchPreviousButton"
                                             Content="Previous"
                                             Click="DiffSearchPreviousButton_Click"
                                             AutomationProperties.Name="Find previous Changes diff match" />
-                                    <Button x:Name="DiffSearchNextButton"
+                                    <Button Grid.Row="1" Grid.Column="3" x:Name="DiffSearchNextButton"
                                             Content="Next"
                                             Click="DiffSearchNextButton_Click"
                                             AutomationProperties.Name="Find next Changes diff match" />
-                                    <TextBlock x:Name="DiffSearchStatusText"
+                                    <TextBlock Grid.Row="2" Grid.ColumnSpan="4" x:Name="DiffSearchStatusText"
                                                Style="{StaticResource SecondaryTextStyle}"
                                                VerticalAlignment="Center"
                                                AutomationProperties.Name="Changes diff search status" />
-                                </StackPanel>
+                                </Grid>
                                 <Border x:Name="PartialSelectionBar"
                                         Grid.Row="1"
                                         Margin="0,0,0,8"
@@ -1192,19 +1218,29 @@
                                     </Border>
                                 </Grid>
                             </Grid>
-                            <Border x:Name="CommitPanel" Grid.Row="2" Margin="0,10,0,0" Padding="12,10" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="8">
-                                <Grid>
+
+                        </Grid>
+                    <Border Grid.Column="3" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                                <ScrollViewer x:Name="CommitScroller" Grid.Column="4" VerticalScrollBarVisibility="Auto">
+                                    <Border x:Name="CommitPanel"  Margin="0" Padding="12,10" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="8">
+                                <StackPanel Spacing="12">
+                                            <TextBlock Text="Commit" FontSize="20" FontWeight="SemiBold" />
+                                            <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="58" />
+                                        <RowDefinition Height="120" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <Grid ColumnSpacing="8">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto" />
+                                                        <RowDefinition Height="Auto" />
+                                                    </Grid.RowDefinitions>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="0" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Spacing="4">
                                             <TextBox x:Name="CommitSummaryBox" PlaceholderText="Commit summary" MaxLength="200" TextChanged="CommitSummaryBox_TextChanged" AutomationProperties.Name="Commit summary" />
@@ -1216,13 +1252,15 @@
                                                        AutomationProperties.Name="Commit summary length warning"
                                                        AutomationProperties.LiveSetting="Polite" />
                                         </StackPanel>
-                                        <Button x:Name="GenerateCommitMessageButton" Grid.Column="1" Content="Generate with Codex" Click="GenerateCommitMessageButton_Click" AutomationProperties.Name="Generate commit message with Codex" />
+                                        <Button x:Name="GenerateCommitMessageButton" Grid.Row="1" Margin="0,8,0,0" Content="Generate with Codex" Click="GenerateCommitMessageButton_Click" AutomationProperties.Name="Generate commit message with Codex" />
                                     </Grid>
                                     <TextBox x:Name="CommitDescriptionBox" Grid.Row="1" Margin="0,8,0,0" PlaceholderText="Description (optional)" AcceptsReturn="True" TextWrapping="Wrap" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Commit description" />
-                                    <StackPanel Grid.Row="2" Margin="0,8,0,0" Spacing="6">
+                                    <Expander Grid.Row="2" Header="Commit options" HorizontalAlignment="Stretch">
+                                                    <StackPanel Spacing="6">
                                         <TextBox x:Name="CoAuthorsBox" PlaceholderText="Co-authors (one per line: Name &lt;email&gt;)" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="2000" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Co-authors" />
                                         <CheckBox x:Name="SignOffCheckBox" IsChecked="False" Content="Add Signed-off-by trailer" ToolTipService.ToolTip="Append a Signed-off-by trailer with the configured Git identity." AutomationProperties.Name="Add Signed-off-by trailer" />
                                     </StackPanel>
+                                                </Expander>
                                     <StackPanel Grid.Row="3" Margin="0,8,0,0" Spacing="4">
                                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                             <ProgressRing x:Name="CommitMessageGenerationRing" Width="18" Height="18" IsActive="False" Visibility="Collapsed" />
@@ -1230,17 +1268,18 @@
                                         </StackPanel>
                                         <TextBlock x:Name="CommitMessageGenerationAvailabilityText" Text="Stage changes first, or sign in to Codex in Settings." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.Name="Commit message generation status" />
                                     </StackPanel>
-                                    <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="14" Margin="0,8,0,0" VerticalAlignment="Center">
+                                    <StackPanel Grid.Row="4" Spacing="10" Margin="0,8,0,0" VerticalAlignment="Center">
                                         <CheckBox x:Name="AmendCheckBox" IsChecked="False" Content="Amend previous commit" Click="AmendCheckBox_Click" ToolTipService.ToolTip="Replace the current HEAD commit, including a message-only amend." AutomationProperties.Name="Amend previous commit" />
-                                        <Button x:Name="CommitButton" Content="Commit staged changes" Click="CommitButton_Click" AutomationProperties.Name="Commit staged changes" />
+                                        <Button x:Name="CommitButton" Content="Commit staged changes" HorizontalAlignment="Stretch" Style="{StaticResource AccentButtonStyle}" Click="CommitButton_Click" AutomationProperties.Name="Commit staged changes" />
                                         <TextBlock x:Name="CommitIdentityText" Text="" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                 </Grid>
-                            </Border>
-                        </Grid>
-                    </Grid>
+                            </StackPanel>
+                                    </Border>
+                                </ScrollViewer>
+                            </Grid>
 
-                    <Grid x:Name="HistoryWorkspace" Grid.Row="3" Visibility="Collapsed">
+                    <Grid x:Name="HistoryWorkspace" Grid.Row="4" Visibility="Collapsed">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="340" />
                             <ColumnDefinition Width="1" />
@@ -1470,7 +1509,7 @@
                         </Grid>
                     </Grid>
 
-                    <Grid x:Name="BranchesWorkspace" Grid.Row="3" Visibility="Collapsed">
+                    <Grid x:Name="BranchesWorkspace" Grid.Row="4" Visibility="Collapsed">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="390" />
                             <ColumnDefinition Width="1" />
@@ -1509,13 +1548,11 @@
                         </Grid>
                     </Grid>
 
-                    <Grid x:Name="WorktreesWorkspace" Grid.Row="3" Visibility="Collapsed">
+                    <Grid x:Name="WorktreesWorkspace" Grid.Row="4" Visibility="Collapsed">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1*" />
-                            <ColumnDefinition Width="1" />
-                            <ColumnDefinition Width="1*" />
-                        </Grid.ColumnDefinitions>
-                        <Grid Grid.Column="0" Padding="8,0,8,8">
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                        <Grid x:Name="WorktreePanel" Grid.Column="0" Padding="8,0,8,8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="54" />
                                 <RowDefinition Height="*" />
@@ -1532,8 +1569,8 @@
                                 <Button x:Name="RemoveWorktreeButton" Content="Remove selected" Click="RemoveWorktreeButton_Click" AutomationProperties.Name="Remove selected worktree" />
                             </StackPanel>
                         </Grid>
-                        <Border Grid.Column="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
-                        <Grid Grid.Column="2" Padding="8,0,8,8">
+
+                        <Grid x:Name="StashPanel" Grid.Column="0" Padding="8,0,8,8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="54" />
                                 <RowDefinition Height="*" />
@@ -1555,7 +1592,7 @@
                         </Grid>
                     </Grid>
 
-                    <Grid x:Name="SubmodulesWorkspace" Grid.Row="3" Visibility="Collapsed">
+                    <Grid x:Name="SubmodulesWorkspace" Grid.Row="4" Visibility="Collapsed">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="390" />
                             <ColumnDefinition Width="1" />
@@ -1642,7 +1679,7 @@
                         </Grid>
                     </Grid>
 
-                    <Grid x:Name="RemotesWorkspace" Grid.Row="3" Visibility="Collapsed">
+                    <Grid x:Name="RemotesWorkspace" Grid.Row="4" Visibility="Collapsed">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="390" />
                             <ColumnDefinition Width="1" />
@@ -1678,9 +1715,8 @@
                                 <TextBlock x:Name="SelectedRemoteUrlText" Text="Choose a remote to view its URL and run a transport action." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
                                 <TextBlock x:Name="RemoteTransportBranchText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
                                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
-                                    <Button x:Name="FetchRemoteButton" Content="Fetch" Click="FetchRemoteButton_Click" AutomationProperties.Name="Fetch selected remote" />
-                                    <Button x:Name="PullRemoteButton" Content="Pull (fast-forward only)" Click="PullRemoteButton_Click" AutomationProperties.Name="Pull selected remote fast-forward only" />
-                                    <Button x:Name="PushRemoteButton" Content="Push" Click="PushRemoteButton_Click" AutomationProperties.Name="Push selected remote" />
+
+
                                     <Button x:Name="BrowsePullRequestsButton" Content="Browse pull requests" Click="BrowsePullRequestsButton_Click" AutomationProperties.Name="Browse pull requests for selected remote" />
                                 </StackPanel>
                                 <TextBlock Text="Fetch, pull, and push always name the selected remote and target branch. Pull refuses divergence instead of rebasing or forcing; push never uses force." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" Margin="0,12,0,0" />
@@ -1695,7 +1731,7 @@
                         </Grid>
                     </Grid>
 
-                    <Grid x:Name="TagsWorkspace" Grid.Row="3" Visibility="Collapsed">
+                    <Grid x:Name="TagsWorkspace" Grid.Row="4" Visibility="Collapsed">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="390" />
                             <ColumnDefinition Width="1" />
@@ -1731,28 +1767,34 @@
                         </Grid>
                     </Grid>
 
-                    <Grid x:Name="SettingsWorkspace" Grid.Row="3" Padding="30,18" Visibility="Collapsed">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel MaxWidth="820" Spacing="14">
-                                <TextBlock Text="Settings" Style="{StaticResource PanelTitleStyle}" />
-                                <TextBlock Text="Native preferences are stored separately for this WinUI app." Style="{StaticResource SecondaryTextStyle}" />
-                                <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
-                                    <StackPanel Spacing="8">
-                                        <TextBlock Text="Updates" FontSize="16" FontWeight="SemiBold" />
-                                        <TextBlock x:Name="UpdateStatusText" Text="Updates have not been checked." TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
-                                        <ProgressBar x:Name="UpdateProgressBar" Visibility="Collapsed" IsIndeterminate="True" AutomationProperties.Name="Update download progress" />
-                                        <Button x:Name="CheckForUpdatesButton" Content="Check for Updates" Click="CheckForUpdatesButton_Click" AutomationProperties.Name="Check for Updates" HorizontalAlignment="Left" />
-                                        <Button x:Name="InstallUpdateButton" Content="Quit and install update" Click="InstallUpdateButton_Click" AutomationProperties.Name="Quit and install downloaded update" Visibility="Collapsed" HorizontalAlignment="Left" />
-                                    </StackPanel>
-                                </Border>
-                                <TextBlock Text="Theme" FontWeight="SemiBold" Margin="0,10,0,0" />
-                                <ComboBox x:Name="ThemeComboBox" Width="220" SelectedValuePath="Tag" SelectionChanged="ThemeComboBox_SelectionChanged" AutomationProperties.Name="Native app theme">
+                    <Grid x:Name="SettingsWorkspace" Grid.Row="4" Padding="30,18" Visibility="Collapsed">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="190" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="Settings" FontSize="24" FontWeight="SemiBold" />
+                                    <ListView x:Name="SettingsCategoryList" SelectionChanged="SettingsCategoryList_SelectionChanged" AutomationProperties.Name="Settings categories">
+                                        <ListViewItem Content="Appearance" />
+                                        <ListViewItem Content="Git" />
+                                        <ListViewItem Content="Accounts &amp; AI" />
+                                        <ListViewItem Content="External tools" />
+                                        <ListViewItem Content="Notifications" />
+                                        <ListViewItem Content="Updates &amp; usage" />
+                                        <ListViewItem Content="Repositories" />
+                                    </ListView>
+                                </StackPanel>
+                                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="SettingsPages" Margin="24,0,0,0" MaxWidth="850" HorizontalAlignment="Left">
+                                        <StackPanel Spacing="10" Visibility="Collapsed">
+                                            <TextBlock Text="Appearance" FontSize="24" FontWeight="SemiBold" />
+                                            <TextBlock Text="Theme" FontWeight="SemiBold" Margin="0,10,0,0" />
+                                            <ComboBox x:Name="ThemeComboBox" Width="220" SelectedValuePath="Tag" SelectionChanged="ThemeComboBox_SelectionChanged" AutomationProperties.Name="Native app theme">
                                     <ComboBoxItem Content="Use system setting" Tag="System" />
                                     <ComboBoxItem Content="Light" Tag="Light" />
                                     <ComboBoxItem Content="Dark" Tag="Dark" />
                                 </ComboBox>
-
-                                <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                            <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                     <StackPanel Spacing="8">
                                         <TextBlock Text="Accessibility" FontSize="16" FontWeight="SemiBold" />
                                         <CheckBox x:Name="UnderlineLinksCheckBox"
@@ -1777,8 +1819,10 @@
                                                    TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
-
-                                <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                        </StackPanel>
+                                        <StackPanel Spacing="10" Visibility="Collapsed">
+                                            <TextBlock Text="Git" FontSize="24" FontWeight="SemiBold" />
+                                            <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                     <StackPanel Spacing="8">
                                         <TextBlock Text="Prompts" FontSize="16" FontWeight="SemiBold" />
                                         <TextBlock Text="Choose which actions need confirmation before they run." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
@@ -1836,31 +1880,7 @@
                                                   AutomationProperties.Name="Show commit length warning" />
                                     </StackPanel>
                                 </Border>
-
-                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
-                                    <StackPanel Spacing="8">
-                                        <TextBlock Text="Background updates" FontSize="16" FontWeight="SemiBold" />
-                                        <CheckBox x:Name="RepositoryIndicatorsEnabledCheckBox"
-                                                  Content="Show status icons in the repository list"
-                                                  Click="RepositoryIndicatorsEnabledCheckBox_Click"
-                                                  AutomationProperties.Name="Show status icons in the repository list" />
-                                        <TextBlock Text="These icons are refreshed for recent repositories other than the selected repository. The selected repository does not use this background indicator fetch."
-                                                   Style="{StaticResource SecondaryTextStyle}"
-                                                   TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
-                                    <StackPanel Spacing="8">
-                                        <TextBlock Text="Usage" FontSize="16" FontWeight="SemiBold" />
-                                        <TextBlock Text="WinGit usage reporting is disabled."
-                                                   Style="{StaticResource SecondaryTextStyle}"
-                                                   TextWrapping="Wrap"
-                                                   AutomationProperties.Name="WinGit usage reporting status" />
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                            <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                     <StackPanel Spacing="8">
                                         <TextBlock Text="Network and credentials" FontSize="16" FontWeight="SemiBold" />
                                         <CheckBox x:Name="UseWindowsOpenSSHCheckBox"
@@ -1880,83 +1900,7 @@
                                                    TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
-
-                                <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
-                                    <StackPanel Spacing="8">
-                                        <TextBlock Text="Notifications" FontSize="16" FontWeight="SemiBold" />
-                                        <CheckBox x:Name="NotificationsEnabledCheckBox"
-                                                  Content="Enable notifications"
-                                                  Click="NotificationsEnabledCheckBox_Click"
-                                                  AutomationProperties.Name="Enable notifications" />
-                                        <TextBlock Text="Shows alerts for pull request comments, reviews, and failed checks in the current repository."
-                                                   Style="{StaticResource SecondaryTextStyle}"
-                                                   TextWrapping="Wrap" />
-                                        <TextBlock x:Name="NotificationStatusText"
-                                                   Text="Notifications are disabled in WinGit settings."
-                                                   Style="{StaticResource SecondaryTextStyle}"
-                                                   TextWrapping="Wrap"
-                                                   AutomationProperties.Name="Desktop notification status"
-                                                   AutomationProperties.LiveSetting="Polite" />
-                                        <Button x:Name="OpenNotificationSettingsButton"
-                                                Content="Open Windows notification settings"
-                                                Click="OpenNotificationSettingsButton_Click"
-                                                HorizontalAlignment="Left"
-                                                AutomationProperties.Name="Open Windows notification settings" />
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
-                                    <StackPanel Spacing="8">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Spacing="3">
-                                                <TextBlock Text="External tools" FontSize="16" FontWeight="SemiBold" />
-                                                <TextBlock Text="Choose an installed supported editor and shell for repository actions." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                            <Button x:Name="RefreshIntegrationsButton"
-                                                    Grid.Column="1"
-                                                    Content="Refresh"
-                                                    Click="RefreshIntegrationsButton_Click"
-                                                    VerticalAlignment="Top"
-                                                    AutomationProperties.Name="Refresh supported external tools" />
-                                        </Grid>
-                                        <TextBlock Text="Editor" FontWeight="SemiBold" />
-                                        <ComboBox x:Name="EditorIntegrationComboBox"
-                                                  DisplayMemberPath="DisplayName"
-                                                  SelectionChanged="IntegrationComboBox_SelectionChanged"
-                                                  AutomationProperties.Name="Selected editor" />
-                                        <TextBlock x:Name="EditorIntegrationStatusText"
-                                                   Text="No supported editor is installed."
-                                                   Style="{StaticResource SecondaryTextStyle}"
-                                                   TextWrapping="Wrap"
-                                                   AutomationProperties.Name="Editor discovery status" />
-                                        <TextBlock x:Name="EditorIntegrationDiagnosticsText"
-                                                   Text=""
-                                                   Style="{StaticResource SecondaryTextStyle}"
-                                                   TextWrapping="Wrap"
-                                                   AutomationProperties.Name="Unavailable editor choices" />
-                                        <TextBlock Text="Shell" FontWeight="SemiBold" Margin="0,6,0,0" />
-                                        <ComboBox x:Name="ShellIntegrationComboBox"
-                                                  DisplayMemberPath="DisplayName"
-                                                  SelectionChanged="IntegrationComboBox_SelectionChanged"
-                                                  AutomationProperties.Name="Selected shell" />
-                                        <TextBlock x:Name="ShellIntegrationStatusText"
-                                                   Text="No supported shell is installed."
-                                                   Style="{StaticResource SecondaryTextStyle}"
-                                                   TextWrapping="Wrap"
-                                                   AutomationProperties.Name="Shell discovery status" />
-                                        <TextBlock x:Name="ShellIntegrationDiagnosticsText"
-                                                   Text=""
-                                                   Style="{StaticResource SecondaryTextStyle}"
-                                                   TextWrapping="Wrap"
-                                                   AutomationProperties.Name="Unavailable shell choices" />
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                            <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                     <StackPanel Spacing="8">
                                         <TextBlock Text="Git configuration" FontSize="16" FontWeight="SemiBold" />
                                         <TextBlock Text="Edit the selected Git scope. Local values apply to the open repository; global values provide the fallback for repositories without a local value." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
@@ -2010,8 +1954,10 @@
                                         </StackPanel>
                                     </StackPanel>
                                 </Border>
-
-                                <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                        </StackPanel>
+                                        <StackPanel Spacing="10" Visibility="Collapsed">
+                                            <TextBlock Text="Accounts &amp; AI" FontSize="24" FontWeight="SemiBold" />
+                                            <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                     <StackPanel Spacing="10">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
@@ -2046,8 +1992,7 @@
                                         <ProgressRing x:Name="CodexLoadingRing" Width="20" Height="20" IsActive="False" Visibility="Collapsed" HorizontalAlignment="Left" />
                                     </StackPanel>
                                 </Border>
-
-                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                            <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                     <StackPanel Spacing="10">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
@@ -2097,8 +2042,7 @@
                                         </StackPanel>
                                     </StackPanel>
                                 </Border>
-
-                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                            <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                     <StackPanel Spacing="8">
                                         <TextBlock Text="Usage" FontSize="16" FontWeight="SemiBold" />
                                         <TextBlock x:Name="CodexUsageStatusText" Text="Usage is unavailable until Codex responds." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" AutomationProperties.Name="Codex usage status" />
@@ -2125,8 +2069,7 @@
                                         <TextBlock x:Name="CodexUsageResetText" Text="" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
-
-                                <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                            <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                     <StackPanel Spacing="10">
                                         <TextBlock Text="AI assistance" FontSize="16" FontWeight="SemiBold" />
                                         <TextBlock Text="Use one model and reasoning choice for future commit and review actions." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
@@ -2138,15 +2081,130 @@
                                         <TextBlock x:Name="CodexCatalogStatusText" Text="Model choices are unavailable until Codex responds." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
+                                        </StackPanel>
+                                        <StackPanel Spacing="10" Visibility="Collapsed">
+                                            <TextBlock Text="External tools" FontSize="24" FontWeight="SemiBold" />
+                                            <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Text="External tools" FontSize="16" FontWeight="SemiBold" />
+                                                <TextBlock Text="Choose an installed supported editor and shell for repository actions." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <Button x:Name="RefreshIntegrationsButton"
+                                                    Grid.Column="1"
+                                                    Content="Refresh"
+                                                    Click="RefreshIntegrationsButton_Click"
+                                                    VerticalAlignment="Top"
+                                                    AutomationProperties.Name="Refresh supported external tools" />
+                                        </Grid>
+                                        <TextBlock Text="Editor" FontWeight="SemiBold" />
+                                        <ComboBox x:Name="EditorIntegrationComboBox"
+                                                  DisplayMemberPath="DisplayName"
+                                                  SelectionChanged="IntegrationComboBox_SelectionChanged"
+                                                  AutomationProperties.Name="Selected editor" />
+                                        <TextBlock x:Name="EditorIntegrationStatusText"
+                                                   Text="No supported editor is installed."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Editor discovery status" />
+                                        <TextBlock x:Name="EditorIntegrationDiagnosticsText"
+                                                   Text=""
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Unavailable editor choices" />
+                                        <TextBlock Text="Shell" FontWeight="SemiBold" Margin="0,6,0,0" />
+                                        <ComboBox x:Name="ShellIntegrationComboBox"
+                                                  DisplayMemberPath="DisplayName"
+                                                  SelectionChanged="IntegrationComboBox_SelectionChanged"
+                                                  AutomationProperties.Name="Selected shell" />
+                                        <TextBlock x:Name="ShellIntegrationStatusText"
+                                                   Text="No supported shell is installed."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Shell discovery status" />
+                                        <TextBlock x:Name="ShellIntegrationDiagnosticsText"
+                                                   Text=""
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Unavailable shell choices" />
+                                    </StackPanel>
+                                </Border>
+                                        </StackPanel>
+                                        <StackPanel Spacing="10" Visibility="Collapsed">
+                                            <TextBlock Text="Notifications" FontSize="24" FontWeight="SemiBold" />
+                                            <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Background updates" FontSize="16" FontWeight="SemiBold" />
+                                        <CheckBox x:Name="RepositoryIndicatorsEnabledCheckBox"
+                                                  Content="Show status icons in the repository list"
+                                                  Click="RepositoryIndicatorsEnabledCheckBox_Click"
+                                                  AutomationProperties.Name="Show status icons in the repository list" />
+                                        <TextBlock Text="These icons are refreshed for recent repositories other than the selected repository. The selected repository does not use this background indicator fetch."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                                            <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Notifications" FontSize="16" FontWeight="SemiBold" />
+                                        <CheckBox x:Name="NotificationsEnabledCheckBox"
+                                                  Content="Enable notifications"
+                                                  Click="NotificationsEnabledCheckBox_Click"
+                                                  AutomationProperties.Name="Enable notifications" />
+                                        <TextBlock Text="Shows alerts for pull request comments, reviews, and failed checks in the current repository."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock x:Name="NotificationStatusText"
+                                                   Text="Notifications are disabled in WinGit settings."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Desktop notification status"
+                                                   AutomationProperties.LiveSetting="Polite" />
+                                        <Button x:Name="OpenNotificationSettingsButton"
+                                                Content="Open Windows notification settings"
+                                                Click="OpenNotificationSettingsButton_Click"
+                                                HorizontalAlignment="Left"
+                                                AutomationProperties.Name="Open Windows notification settings" />
+                                    </StackPanel>
+                                </Border>
+                                        </StackPanel>
+                                        <StackPanel Spacing="10" Visibility="Collapsed">
+                                            <TextBlock Text="Updates &amp; usage" FontSize="24" FontWeight="SemiBold" />
+                                            <Border Margin="0,12,0,0" Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Updates" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="UpdateStatusText" Text="Updates have not been checked." TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                                        <ProgressBar x:Name="UpdateProgressBar" Visibility="Collapsed" IsIndeterminate="True" AutomationProperties.Name="Update download progress" />
+                                        <Button x:Name="CheckForUpdatesButton" Content="Check for Updates" Click="CheckForUpdatesButton_Click" AutomationProperties.Name="Check for Updates" HorizontalAlignment="Left" />
+                                        <Button x:Name="InstallUpdateButton" Content="Quit and install update" Click="InstallUpdateButton_Click" AutomationProperties.Name="Quit and install downloaded update" Visibility="Collapsed" HorizontalAlignment="Left" />
+                                    </StackPanel>
+                                </Border>
+                                            <Border Padding="16,14" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Usage" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock Text="WinGit usage reporting is disabled."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="WinGit usage reporting status" />
+                                    </StackPanel>
+                                </Border>
+                                        </StackPanel>
+                                        <StackPanel Spacing="10" Visibility="Collapsed">
+                                            <TextBlock Text="Repositories" FontSize="24" FontWeight="SemiBold" />
+                                            <TextBlock Text="Recent repositories" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                            <TextBlock Text="Removing a row only forgets it from native recents. It does not delete repository files." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
+                                            <ListView x:Name="RecentRepositoriesList" ItemTemplate="{StaticResource RepositoryRecentRowTemplate}" MaxHeight="220" SelectionMode="Single" SelectionChanged="RecentRepositoriesList_SelectionChanged" AutomationProperties.Name="Recent repositories" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Grid>
 
-                                <TextBlock Text="Recent repositories" FontWeight="SemiBold" Margin="0,4,0,0" />
-                                <TextBlock Text="Removing a row only forgets it from native recents. It does not delete repository files." Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" />
-                                <ListView x:Name="RecentRepositoriesList" ItemTemplate="{StaticResource RepositoryRecentRowTemplate}" MaxHeight="220" SelectionMode="Single" SelectionChanged="RecentRepositoriesList_SelectionChanged" AutomationProperties.Name="Recent repositories" />
-                            </StackPanel>
-                        </ScrollViewer>
-                    </Grid>
-
-                    <Grid x:Name="WelcomePanel" Grid.Row="3" Padding="28" Visibility="Visible">
+                    <Grid x:Name="WelcomePanel" Grid.Row="4" Padding="28" Visibility="Visible">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel MaxWidth="600" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
                                 <Image Source="ms-appx:///Assets/icon-logo.ico" Width="64" Height="64" Stretch="Uniform" HorizontalAlignment="Center" AutomationProperties.Name="WinGit logo" />
@@ -2172,13 +2230,14 @@
                         </ScrollViewer>
                     </Grid>
 
-                    <Grid Grid.Row="4" Padding="18,0" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+                    <Grid Grid.Row="5" Padding="18,0" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
                         <TextBlock x:Name="StatusText" Text="Ready" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite" />
                         <TextBlock x:Name="NativeVersionText" Text="Native preview" Style="{StaticResource SecondaryTextStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" />
                     </Grid>
                 </Grid>
             </NavigationView.Content>
             </NavigationView>
+                </Grid>
         </ScrollViewer>
         <Border x:Name="ZoomInfoBorder"
                 Grid.Row="2"
@@ -2196,4 +2255,4 @@
                        Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
         </Border>
     </Grid>
-</Window>
+    </Window>

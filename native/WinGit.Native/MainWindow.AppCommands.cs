@@ -107,7 +107,7 @@ public sealed partial class MainWindow
                         return;
                     }
 
-                    MainNavigation.SelectedItem = MainNavigation.SettingsItem;
+                    MainNavigation.SelectedItem = SettingsNavigationItem;
                     break;
                 case NativeAppCommand.Changes:
                     if (!MainNavigation.IsEnabled)
@@ -161,16 +161,16 @@ public sealed partial class MainWindow
 
     private void SelectWorkspaceFromAppCommand(string tag)
     {
-        var item = MainNavigation.MenuItems
-            .OfType<NavigationViewItem>()
-            .FirstOrDefault(candidate =>
-                string.Equals(
-                    candidate.Tag as string,
-                    tag,
-                    StringComparison.Ordinal));
-        if (item is not null)
+        var repositoryItem = RepositoryNavigation.MenuItems.OfType<NavigationViewItem>()
+            .FirstOrDefault(candidate => string.Equals(candidate.Tag as string, tag, StringComparison.Ordinal));
+        if (repositoryItem is not null)
         {
-            MainNavigation.SelectedItem = item;
+            RepositoryNavigation.SelectedItem = repositoryItem;
+            MainNavigation.SelectedItem = MainNavigation.MenuItems[2];
+            return;
         }
+        var item = MainNavigation.MenuItems.OfType<NavigationViewItem>()
+            .FirstOrDefault(candidate => string.Equals(candidate.Tag as string, tag, StringComparison.Ordinal));
+        if (item is not null) MainNavigation.SelectedItem = item;
     }
 }

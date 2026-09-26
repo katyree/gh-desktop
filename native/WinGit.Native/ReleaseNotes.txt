@@ -1,5 +1,10 @@
 WinGit Native preview - Release win-x64 build
 
+This preview adds the Option B navigation layout: Changes, History, and
+Repository tabs, a shared repository toolbar, grouped repository tools, and
+settings categories. The commit form sits beside the diff. It also includes
+the pastel WinGit icon.
+
 This is the separate WinUI 3 native application. These notes describe the
 local native package built from this source tree. They do not describe an
 Electron release or announce a public WinGit release.

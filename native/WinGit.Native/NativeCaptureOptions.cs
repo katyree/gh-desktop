@@ -95,9 +95,9 @@ internal sealed record NativeCaptureOptions(
         }
 
         view = string.IsNullOrWhiteSpace(view) ? "changes" : view.ToLowerInvariant();
-        if (view is not ("changes" or "history" or "settings" or "branches" or "worktrees" or "stashes" or "remotes" or "tags" or "submodules" or "repository-open-check" or "repository-picker-check" or "history-selection-check" or "history-comparison-check" or "whole-file-staging-check" or "partial-staging-check" or "partial-discard-check" or "commit-composer-check" or "whole-file-discard-check" or "hook-failure-check"))
+        if (view is not ("navigation-check" or "changes" or "history" or "settings" or "branches" or "worktrees" or "stashes" or "remotes" or "tags" or "submodules" or "repository-open-check" or "repository-picker-check" or "history-selection-check" or "history-comparison-check" or "whole-file-staging-check" or "partial-staging-check" or "partial-discard-check" or "commit-composer-check" or "whole-file-discard-check" or "hook-failure-check"))
         {
-            error = "--view must be changes, history, settings, branches, worktrees, stashes, remotes, tags, submodules, repository-open-check, repository-picker-check, history-selection-check, history-comparison-check, whole-file-staging-check, partial-staging-check, partial-discard-check, commit-composer-check, whole-file-discard-check, or hook-failure-check.";
+            error = "--view must be navigation-check, changes, history, settings, branches, worktrees, stashes, remotes, tags, submodules, repository-open-check, repository-picker-check, history-selection-check, history-comparison-check, whole-file-staging-check, partial-staging-check, partial-discard-check, commit-composer-check, whole-file-discard-check, or hook-failure-check.";
             return false;
         }
 

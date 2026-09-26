@@ -331,9 +331,9 @@ public sealed partial class MainWindow
             DiffMessagePanel.Visibility = Visibility.Collapsed;
         }
         CommitPanel.Visibility = editorVisible ? Visibility.Collapsed : Visibility.Visible;
-        ChangesCommitRow.Height = editorVisible
+        ChangesCommitColumn.Width = editorVisible
             ? new GridLength(0)
-            : GridLength.Auto;
+            : new GridLength(300);
         ConflictStaleDraftPanel.Visibility = conflictEditorStale && editorVisible
             ? Visibility.Visible
             : Visibility.Collapsed;

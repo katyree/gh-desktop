@@ -43,6 +43,10 @@ process does not redirect Windows `Environment.GetFolderPath`.
 
 ## Native-specific pitfalls
 
+- Repository tools use `RepositoryNavigation` beneath the main Repository tab.
+  Route them by tag through `SelectWorkspaceFromAppCommand`, not a main-menu
+  index. Use `--view navigation-check` with an isolated profile and a synthetic
+  repository to verify navigation, settings pages, and mutation locking.
 - Normalize CRLF and lone CR from WinUI multiline `TextBox` values to LF at the
   Core Git-message boundary before composing commit or amend messages. Preserve
   the existing NUL and summary validation.

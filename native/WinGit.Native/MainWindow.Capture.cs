@@ -13,6 +13,17 @@ public sealed partial class MainWindow
     {
         try
         {
+            if (options.View == "navigation-check")
+            {
+                if (string.IsNullOrWhiteSpace(options.RepositoryPath))
+                {
+                    await FailCaptureAsync("navigation-check requires --repository <fixture repository>.", App.CommandLineArguments);
+                    return;
+                }
+                await RunNavigationCheckAsync(options);
+                return;
+            }
+
             if (options.View == "history-comparison-check")
             {
                 if (string.IsNullOrWhiteSpace(options.RepositoryPath))
@@ -142,29 +153,27 @@ public sealed partial class MainWindow
                 }
                 else if (options.View == "branches")
                 {
-                    MainNavigation.SelectedItem = MainNavigation.MenuItems[2];
+                    SelectWorkspaceFromAppCommand("branches");
                     ShowWorkspace("branches");
                 }
                 else if (options.View is "worktrees" or "stashes")
                 {
-                    MainNavigation.SelectedItem = MainNavigation.MenuItems[3];
-                    ShowWorkspace("worktrees");
+                    SelectWorkspaceFromAppCommand(options.View);
+                    ShowWorkspace(options.View);
                 }
                 else if (options.View == "remotes")
                 {
-                    // Navigation items: 0 changes, 1 history, 2 branches,
-                    // 3 worktrees, 4 submodules, 5 remotes, 6 tags.
-                    MainNavigation.SelectedItem = MainNavigation.MenuItems[5];
+                    SelectWorkspaceFromAppCommand("remotes");
                     ShowWorkspace("remotes");
                 }
                 else if (options.View == "tags")
                 {
-                    MainNavigation.SelectedItem = MainNavigation.MenuItems[6];
+                    SelectWorkspaceFromAppCommand("tags");
                     ShowWorkspace("tags");
                 }
                 else if (options.View == "submodules")
                 {
-                    MainNavigation.SelectedItem = MainNavigation.MenuItems[4];
+                    SelectWorkspaceFromAppCommand("submodules");
                     ShowWorkspace("submodules");
                 }
                 else
@@ -175,7 +184,7 @@ public sealed partial class MainWindow
             }
             else
             {
-                MainNavigation.SelectedItem = MainNavigation.SettingsItem;
+                MainNavigation.SelectedItem = SettingsNavigationItem;
                 ShowWorkspace("settings");
                 latestOperationTask = Task.WhenAll(
                     EnsureCodexSettingsLoadedAsync(),

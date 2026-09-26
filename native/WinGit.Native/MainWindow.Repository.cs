@@ -283,11 +283,13 @@ public sealed partial class MainWindow
             && activeGitOperationKind == GitOperationKind.None;
         var branchesView = currentWorkspace == "branches";
         var worktreesView = currentWorkspace == "worktrees";
+        var stashesView = currentWorkspace == "stashes";
         var remotesView = currentWorkspace == "remotes";
         var tagsView = currentWorkspace == "tags";
         var historyView = currentWorkspace == "history";
+        ToolbarBranchButton.IsEnabled = canInteract;
+        ToolbarRemotePicker.IsEnabled = canInteract && remoteRows.Count > 0;
         var transportReady = canInteract
-            && remotesView
             && selectedRemote is not null;
         var branchTransportReady = transportReady
             && currentStatus is not null
@@ -317,12 +319,12 @@ public sealed partial class MainWindow
             && selectedWorktree is not null
             && !selectedWorktree.IsCurrent;
         CreateStashButton.IsEnabled = canInteract
-            && worktreesView
+            && stashesView
             && currentStatus is not null
             && currentStatus.Changes.Count > 0;
-        ApplyStashButton.IsEnabled = canInteract && worktreesView && selectedStash is not null;
-        PopStashButton.IsEnabled = canInteract && worktreesView && selectedStash is not null;
-        DropStashButton.IsEnabled = canInteract && worktreesView && selectedStash is not null;
+        ApplyStashButton.IsEnabled = canInteract && stashesView && selectedStash is not null;
+        PopStashButton.IsEnabled = canInteract && stashesView && selectedStash is not null;
+        DropStashButton.IsEnabled = canInteract && stashesView && selectedStash is not null;
 
         AddRemoteButton.IsEnabled = canInteract && remotesView;
         PublishBranchButton.IsEnabled = canInteract
@@ -332,8 +334,8 @@ public sealed partial class MainWindow
             && !currentStatus.IsDetached
             && !string.IsNullOrWhiteSpace(currentStatus.Branch)
             && !string.IsNullOrWhiteSpace(currentStatus.HeadId);
-        EditRemoteButton.IsEnabled = transportReady;
-        RemoveRemoteButton.IsEnabled = transportReady;
+        EditRemoteButton.IsEnabled = transportReady && remotesView;
+        RemoveRemoteButton.IsEnabled = transportReady && remotesView;
         FetchRemoteButton.IsEnabled = transportReady;
         PullRemoteButton.IsEnabled = branchTransportReady;
         PushRemoteButton.IsEnabled = branchTransportReady;
