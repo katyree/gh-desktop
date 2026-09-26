@@ -519,9 +519,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <Border Width="28" Height="28" CornerRadius="7" Background="{ThemeResource AccentFillColorDefaultBrush}" VerticalAlignment="Center">
-                <Image Source="ms-appx:///Assets/icon-logo.ico" Width="20" Height="20" Stretch="Uniform" AutomationProperties.Name="WinGit logo" />
-            </Border>
+            <Image Source="ms-appx:///Assets/icon-logo.ico" Width="28" Height="28" Stretch="Uniform" VerticalAlignment="Center" AutomationProperties.Name="WinGit logo" />
             <TextBlock Grid.Column="1" Text="WinGit" Margin="10,0,0,0" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
             <TextBlock Grid.Column="2" Text="Native preview" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" />
         </Grid>
@@ -2151,9 +2149,7 @@
                     <Grid x:Name="WelcomePanel" Grid.Row="3" Padding="28" Visibility="Visible">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel MaxWidth="600" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
-                                <Border Width="64" Height="64" CornerRadius="16" Background="{ThemeResource AccentFillColorDefaultBrush}" HorizontalAlignment="Center">
-                                    <Image Source="ms-appx:///Assets/icon-logo.ico" Width="42" Height="42" Stretch="Uniform" AutomationProperties.Name="WinGit logo" />
-                                </Border>
+                                <Image Source="ms-appx:///Assets/icon-logo.ico" Width="64" Height="64" Stretch="Uniform" HorizontalAlignment="Center" AutomationProperties.Name="WinGit logo" />
                                 <TextBlock Text="Welcome to WinGit" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" />
                                 <TextBlock Text="Choose how you want to start: create a repository, add an existing repository, or clone a repository." Style="{StaticResource SecondaryTextStyle}" TextAlignment="Center" TextWrapping="Wrap" />
                                 <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,10,0,0">
